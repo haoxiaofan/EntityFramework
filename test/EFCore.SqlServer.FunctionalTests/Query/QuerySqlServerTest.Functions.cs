@@ -94,7 +94,7 @@ WHERE (RIGHT([c].[ContactName], LEN(@__LocalMethod2_0)) = @__LocalMethod2_0) OR 
 
         public override void String_Contains_Literal()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains("M")), // case-insensitive
                 cs => cs.Where(c => c.ContactName.Contains("M") || c.ContactName.Contains("m")), // case-sensitive
                 entryCount: 34);
@@ -127,7 +127,7 @@ WHERE (CHARINDEX([c].[ContactName], [c].[ContactName]) > 0) OR ([c].[ContactName
 
         public override void String_Contains_MethodCall()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains(LocalMethod1())), // case-insensitive
                 cs => cs.Where(c => c.ContactName.Contains(LocalMethod1().ToLower()) || c.ContactName.Contains(LocalMethod1().ToUpper())), // case-sensitive
                 entryCount: 34);

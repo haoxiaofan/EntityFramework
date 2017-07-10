@@ -210,7 +210,7 @@ WHERE [t0].[__RowNumber__] > @__p_1");
 
         public override void String_Contains_Literal()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains("M")), // case-insensitive
                 cs => cs.Where(c => c.ContactName.Contains("M") || c.ContactName.Contains("m")), // case-sensitive
                 entryCount: 34);
@@ -223,7 +223,7 @@ WHERE CHARINDEX(N'M', [c].[ContactName]) > 0");
 
         public override void String_Contains_MethodCall()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains(LocalMethod1())), // case-insensitive
                 cs => cs.Where(c => c.ContactName.Contains(LocalMethod1().ToLower()) || c.ContactName.Contains(LocalMethod1().ToUpper())), // case-sensitive
                 entryCount: 34);

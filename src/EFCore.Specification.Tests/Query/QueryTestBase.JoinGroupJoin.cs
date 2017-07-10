@@ -15,7 +15,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_projection()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID
@@ -26,7 +26,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_entities()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID
@@ -38,7 +38,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_select_many()
         {
-            AssertQuery<Customer, Order, Employee>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order, Employee>(
                 (cs, os, es) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID
@@ -51,7 +51,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Client_Join_select_many()
         {
-            AssertQuery<Employee>(
+            Fixture.QueryAsserter.AssertQuery<Employee>(
                 es =>
                     from e1 in es.Take(2)
                     join e2 in es.Take(2) on e1.EmployeeID equals GetEmployeeID(e2)
@@ -69,7 +69,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_select()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID
@@ -82,7 +82,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_with_subquery()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o1 in
@@ -95,7 +95,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_with_subquery_with_take()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o1 in
@@ -108,7 +108,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_with_subquery_anonymous_property_method()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o1 in
@@ -121,7 +121,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_with_subquery_anonymous_property_method_with_take()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o1 in
@@ -134,7 +134,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_with_subquery_predicate()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o1 in
@@ -147,7 +147,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_customers_orders_with_subquery_predicate_with_take()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o1 in
@@ -160,7 +160,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_composite_key()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on new { a = c.CustomerID, b = c.CustomerID }
@@ -173,7 +173,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_complex_condition()
         {
-            AssertQuery<Customer, Order>((cs, os) =>
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>((cs, os) =>
                 from c in cs.Where(c => c.CustomerID == "ALFKI")
                 join o in os.Where(o => o.OrderID < 10250) on true equals true
                 select c.CustomerID);
@@ -182,7 +182,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_client_new_expression()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on new Foo { Bar = c.CustomerID } equals new Foo { Bar = o.CustomerID }
@@ -195,14 +195,14 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var ids = new[] { 1, 2 };
 
-            AssertQuery<Employee>(es =>
+            Fixture.QueryAsserter.AssertQueryScalar<Employee>(es =>
                 from e in es
                 join id in ids on e.EmployeeID equals id
                 select e.EmployeeID);
 
             ids = new[] { 3 };
 
-            AssertQuery<Employee>(es =>
+            Fixture.QueryAsserter.AssertQueryScalar<Employee>(es =>
                 from e in es
                 join id in ids on e.EmployeeID equals id
                 select e.EmployeeID);
@@ -213,14 +213,14 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var ids = "12";
 
-            AssertQuery<Employee>(es =>
+            Fixture.QueryAsserter.AssertQueryScalar<Employee>(es =>
                 from e in es
                 join id in ids on e.EmployeeID equals id
                 select e.EmployeeID);
 
             ids = "3";
 
-            AssertQuery<Employee>(es =>
+            Fixture.QueryAsserter.AssertQueryScalar<Employee>(es =>
                 from e in es
                 join id in ids on e.EmployeeID equals id
                 select e.EmployeeID);
@@ -231,14 +231,14 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var ids = new byte[] { 1, 2 };
 
-            AssertQuery<Employee>(es =>
+            Fixture.QueryAsserter.AssertQueryScalar<Employee>(es =>
                 from e in es
                 join id in ids on e.EmployeeID equals id
                 select e.EmployeeID);
 
             ids = new byte[] { 3 };
 
-            AssertQuery<Employee>(es =>
+            Fixture.QueryAsserter.AssertQueryScalar<Employee>(es =>
                 from e in es
                 join id in ids on e.EmployeeID equals id
                 select e.EmployeeID);
@@ -247,7 +247,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_same_collection_multiple()
         {
-            AssertQuery<Customer, Customer, Customer>((cs1, cs2, cs3) =>
+            Fixture.QueryAsserter.AssertQuery<Customer, Customer, Customer>((cs1, cs2, cs3) =>
                 cs1.Join(cs2, o => o.CustomerID, i => i.CustomerID, (c1, c2) => new { c1, c2 }).Join(cs3, o => o.c1.CustomerID, i => i.CustomerID, (c12, c3) => c3),
                 entryCount: 91);
         }
@@ -255,7 +255,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_same_collection_force_alias_uniquefication()
         {
-            AssertQuery<Order, Order>((os1, os2) =>
+            Fixture.QueryAsserter.AssertQuery<Order, Order>((os1, os2) =>
                 os1.Join(os2, o => o.CustomerID, i => i.CustomerID, (_, o) => new { _, o }),
                 e => e._.OrderID + " " + e.o.OrderID,
                 entryCount: 830);
@@ -264,7 +264,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_customers_orders()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os.OrderBy(o => o.OrderID) on c.CustomerID equals o.CustomerID into orders
@@ -273,7 +273,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 elementAsserter: (e, a) =>
                 {
                     Assert.Equal(e.customer.CustomerID, a.customer.CustomerID);
-                    CollectionAsserter<Order>(o => o.OrderID)(e.orders, a.orders);
+                    QueryTestHelpers.CollectionAsserter<Order>(o => o.OrderID)(e.orders, a.orders);
                 },
                 entryCount: 91);
         }
@@ -281,7 +281,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_customers_orders_count()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -293,7 +293,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_customers_orders_count_preserves_ordering()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs.Where(c => c.CustomerID != "VAFFE").OrderBy(c => c.City).Take(5)
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -305,7 +305,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_customers_employees_shadow()
         {
-            AssertQuery<Customer, Employee>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     (from c in cs
                      join e in es on c.City equals e.City into employees
@@ -323,7 +323,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_customers_employees_subquery_shadow()
         {
-            AssertQuery<Customer, Employee>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     (from c in cs
                      join e in es.OrderBy(e => e.City) on c.City equals e.City into employees
@@ -341,7 +341,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_customers_employees_subquery_shadow_take()
         {
-            AssertQuery<Customer, Employee>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     (from c in cs
                      join e in es.OrderBy(e => e.City).Take(5) on c.City equals e.City into employees
@@ -359,7 +359,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_simple()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -371,7 +371,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_simple2()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -383,7 +383,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_simple3()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -395,20 +395,20 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_tracking_groups()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
                     select orders,
-                elementSorter: CollectionSorter<Order>(),
-                elementAsserter: CollectionAsserter<Order>(o => o.OrderID),
+                elementSorter: QueryTestHelpers.CollectionSorter<Order>(),
+                elementAsserter: QueryTestHelpers.CollectionAsserter<Order>(o => o.OrderID),
                 entryCount: 830);
         }
 
         [ConditionalFact]
         public virtual void GroupJoin_tracking_groups2()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -418,14 +418,14 @@ namespace Microsoft.EntityFrameworkCore.Query
                 elementAsserter: (e, a) =>
                 {
                     Assert.Equal(e.c.CustomerID, a.c.CustomerID);
-                    CollectionAsserter<Order>(o => o.OrderID)(e.orders, a.orders);
+                    QueryTestHelpers.CollectionAsserter<Order>(o => o.OrderID)(e.orders, a.orders);
                 });
         }
 
         [ConditionalFact]
         public virtual void GroupJoin_simple_ordering()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs.OrderBy(c => c.City)
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -437,7 +437,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_simple_subquery()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os.OrderBy(o => o.OrderID).Take(4) on c.CustomerID equals o.CustomerID into orders
@@ -449,7 +449,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_projection()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -462,13 +462,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_outer_projection()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => cs.GroupJoin(os, c => c.CustomerID, o => o.CustomerID, (c, o) => new { c.City, o }),
-                e => e.City + " " + CollectionSorter<Order>()(e.o),
+                e => e.City + " " + QueryTestHelpers.CollectionSorter<Order>()(e.o),
                 elementAsserter: (e, a) =>
                 {
                     Assert.Equal(e.City, a.City);
-                    CollectionAsserter<Order>(o => o.OrderID)(e.o, a.o);
+                    QueryTestHelpers.CollectionAsserter<Order>(o => o.OrderID)(e.o, a.o);
                 },
                 entryCount: 830);
         }
@@ -476,44 +476,44 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_outer_projection2()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => cs.GroupJoin(os, c => c.CustomerID, o => o.CustomerID, (c, g) => new { c.City, g = g.Select(o => o.CustomerID) }),
-                e => e.City + " " + CollectionSorter<string>()(e.g),
+                e => e.City + " " + QueryTestHelpers.CollectionSorter<string>()(e.g),
                 elementAsserter: (e, a) =>
                 {
                     Assert.Equal(e.City, a.City);
-                    CollectionAsserter<string>(s => s)(e.g, a.g);
+                    QueryTestHelpers.CollectionAsserter<string>(s => s)(e.g, a.g);
                 });
         }
 
         [ConditionalFact]
         public virtual void GroupJoin_outer_projection3()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => cs.GroupJoin(os, c => c.CustomerID, o => o.CustomerID, (c, g) => new { g = g.Select(o => o.CustomerID) }),
-                e => CollectionSorter<string>()(e.g),
-                elementAsserter: (e, a) => CollectionAsserter<string>(s => s)(e.g, a.g));
+                e => QueryTestHelpers.CollectionSorter<string>()(e.g),
+                elementAsserter: (e, a) => QueryTestHelpers.CollectionAsserter<string>(s => s)(e.g, a.g));
         }
 
         [ConditionalFact]
         public virtual void GroupJoin_outer_projection4()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => cs.GroupJoin(os, c => c.CustomerID, o => o.CustomerID, (c, g) => g.Select(o => o.CustomerID)),
-                elementSorter: CollectionSorter<string>(),
-                elementAsserter: CollectionAsserter<string>(s => s));
+                elementSorter: QueryTestHelpers.CollectionSorter<string>(),
+                elementAsserter: QueryTestHelpers.CollectionAsserter<string>(s => s));
         }
 
         [ConditionalFact]
         public virtual void GroupJoin_outer_projection_reverse()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => os.GroupJoin(cs, o => o.CustomerID, c => c.CustomerID, (o, c) => new { o.CustomerID, c }),
                 e => e.CustomerID,
                 elementAsserter: (e, a) =>
                 {
                     Assert.Equal(e.CustomerID, a.CustomerID);
-                    CollectionAsserter<Customer>(c => c.CustomerID)(e.c, a.c);
+                    QueryTestHelpers.CollectionAsserter<Customer>(c => c.CustomerID)(e.c, a.c);
                 },
                 entryCount: 89);
         }
@@ -521,20 +521,20 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_outer_projection_reverse2()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => os.GroupJoin(cs, o => o.CustomerID, c => c.CustomerID, (o, g) => new { o.CustomerID, g = g.Select(c => c.City) }),
                 elementSorter: e => e.CustomerID,
                 elementAsserter: (e, a) =>
                 {
                     Assert.Equal(e.CustomerID, a.CustomerID);
-                    CollectionAsserter<string>(s => s)(e.g, a.g);
+                    QueryTestHelpers.CollectionAsserter<string>(s => s)(e.g, a.g);
                 });
         }
 
         [ConditionalFact]
         public virtual void GroupJoin_subquery_projection_outer_mixed()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     from o0 in os.OrderBy(o => o.OrderID).Take(1)
@@ -547,7 +547,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_DefaultIfEmpty()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -560,7 +560,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_DefaultIfEmpty_multiple()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o1 in os on c.CustomerID equals o1.CustomerID into orders1
@@ -575,7 +575,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_DefaultIfEmpty2()
         {
-            AssertQuery<Employee, Order>(
+            Fixture.QueryAsserter.AssertQuery<Employee, Order>(
                 (es, os) =>
                     from e in es
                     join o in os on e.EmployeeID equals o.EmployeeID into orders
@@ -588,7 +588,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_DefaultIfEmpty3()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs.OrderBy(c => c.CustomerID).Take(1)
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -600,7 +600,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_Where()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -613,7 +613,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_Where_OrderBy()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -627,7 +627,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_DefaultIfEmpty_Where()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into orders
@@ -640,7 +640,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_GroupJoin_DefaultIfEmpty_Where()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) =>
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID
@@ -654,7 +654,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_DefaultIfEmpty_Project()
         {
-            AssertQuery<Customer, Order>((cs, os) =>
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>((cs, os) =>
                 from c in cs
                 join o in os on c.CustomerID equals o.CustomerID into orders
                 from o in orders.DefaultIfEmpty()
@@ -664,7 +664,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_with_different_outer_elements_with_same_key()
         {
-            AssertQuery<Order, Customer>(
+            Fixture.QueryAsserter.AssertQuery<Order, Customer>(
                 (os, cs) =>
                     os.GroupJoin(cs,
                         o => o.CustomerID,
@@ -680,7 +680,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_with_different_outer_elements_with_same_key_with_predicate()
         {
-            AssertQuery<Order, Customer>(
+            Fixture.QueryAsserter.AssertQuery<Order, Customer>(
                 (os, cs) =>
                     os.Where(o => o.OrderID > 11500).GroupJoin(cs,
                         o => o.CustomerID,
@@ -696,7 +696,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_with_different_outer_elements_with_same_key_projected_from_another_entity()
         {
-            AssertQuery<OrderDetail, Customer>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail, Customer>(
                 (ods, cs) =>
                     ods.Select(od => od.Order).GroupJoin(cs,
                         o => o.CustomerID,
@@ -712,7 +712,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_SelectMany_subquery_with_filter()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => 
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into lo
@@ -724,7 +724,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_SelectMany_subquery_with_filter_orderby()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => 
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into lo
@@ -736,7 +736,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_SelectMany_subquery_with_filter_and_DefaultIfEmpty()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => 
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into lo
@@ -749,7 +749,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_SelectMany_subquery_with_filter_orderby_and_DefaultIfEmpty()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQuery<Customer, Order>(
                 (cs, os) => 
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into lo
@@ -762,7 +762,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_with_order_by_key_descending1()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQueryScalar<Customer, Order>(
                 (cs, os) => 
                     from c in cs
                     join o in os on c.CustomerID equals o.CustomerID into grouping
@@ -775,7 +775,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void GroupJoin_with_order_by_key_descending2()
         {
-            AssertQuery<Customer, Order>(
+            Fixture.QueryAsserter.AssertQueryScalar<Customer, Order>(
                 (cs, os) => 
                     from c in cs
                     orderby c.CustomerID descending

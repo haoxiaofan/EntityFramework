@@ -27,7 +27,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_StartsWith_Literal()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.StartsWith("M")),
                 entryCount: 12);
         }
@@ -35,7 +35,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_StartsWith_Identity()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.StartsWith(c.ContactName)),
                 entryCount: 91);
         }
@@ -43,7 +43,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_StartsWith_Column()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.StartsWith(c.ContactName)),
                 entryCount: 91);
         }
@@ -51,7 +51,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_StartsWith_MethodCall()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.StartsWith(LocalMethod1())),
                 entryCount: 12);
         }
@@ -59,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_EndsWith_Literal()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.EndsWith("b")),
                 entryCount: 1);
         }
@@ -67,7 +67,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_EndsWith_Identity()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.EndsWith(c.ContactName)),
                 entryCount: 91);
         }
@@ -75,7 +75,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_EndsWith_Column()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.EndsWith(c.ContactName)),
                 entryCount: 91);
         }
@@ -83,7 +83,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_EndsWith_MethodCall()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.EndsWith(LocalMethod2())),
                 entryCount: 1);
         }
@@ -91,7 +91,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Contains_Literal()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains("M")),
                 entryCount: 19);
         }
@@ -99,7 +99,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Contains_Identity()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains(c.ContactName)),
                 entryCount: 91);
         }
@@ -107,7 +107,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Contains_Column()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains(c.ContactName)),
                 entryCount: 91);
         }
@@ -115,7 +115,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Contains_MethodCall()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactName.Contains(LocalMethod1())),
                 entryCount: 19);
         }
@@ -123,27 +123,27 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_simple_zero()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") == 0),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 != string.Compare(c.CustomerID, "ALFKI")),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") > 0),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 >= string.Compare(c.CustomerID, "ALFKI")),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 < string.Compare(c.CustomerID, "ALFKI")),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") <= 0),
                 entryCount: 1);
         }
@@ -151,26 +151,26 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_simple_one()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") == 1),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 == string.Compare(c.CustomerID, "ALFKI")));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") < 1),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 1 > string.Compare(c.CustomerID, "ALFKI")),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") > -1),
                 entryCount: 91);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 < string.Compare(c.CustomerID, "ALFKI")),
                 entryCount: 91);
         }
@@ -186,26 +186,26 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             ClearLog();
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, customer.CustomerID) == 1),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 == string.Compare(c.CustomerID, customer.CustomerID)));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, customer.CustomerID) < 1),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 1 > string.Compare(c.CustomerID, customer.CustomerID)),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, customer.CustomerID) > -1),
                 entryCount: 91);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 < string.Compare(c.CustomerID, customer.CustomerID)),
                 entryCount: 91);
         }
@@ -213,13 +213,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_simple_client()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") == 42));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") > 42));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 42 > string.Compare(c.CustomerID, "ALFKI")),
                 entryCount: 91);
         }
@@ -227,23 +227,23 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_nested()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "M" + c.CustomerID) == 0));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 != string.Compare(c.CustomerID, c.CustomerID.ToUpper())));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI".Replace("ALF".ToUpper(), c.CustomerID)) > 0));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 >= string.Compare(c.CustomerID, "M" + c.CustomerID)),
                 entryCount: 51);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 1 == string.Compare(c.CustomerID, c.CustomerID.ToUpper())));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI".Replace("ALF".ToUpper(), c.CustomerID)) == -1),
                 entryCount: 91);
         }
@@ -251,11 +251,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_multi_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.CustomerID, "ALFKI") > -1).Where(c => string.Compare(c.CustomerID, "CACTU") == -1),
                 entryCount: 11);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.Compare(c.ContactTitle, "Owner") == 0).Where(c => string.Compare(c.Country, "USA") != 0),
                 entryCount: 15);
         }
@@ -263,27 +263,27 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_to_simple_zero()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") == 0),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 != c.CustomerID.CompareTo("ALFKI")),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") > 0),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 >= c.CustomerID.CompareTo("ALFKI")),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 < c.CustomerID.CompareTo("ALFKI")),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") <= 0),
                 entryCount: 1);
         }
@@ -291,26 +291,26 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_to_simple_one()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") == 1),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 == c.CustomerID.CompareTo("ALFKI")));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") < 1),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 1 > c.CustomerID.CompareTo("ALFKI")),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") > -1),
                 entryCount: 91);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 < c.CustomerID.CompareTo("ALFKI")),
                 entryCount: 91);
         }
@@ -326,26 +326,26 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             ClearLog();
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo(customer.CustomerID) == 1),
                 entryCount: 90);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 == c.CustomerID.CompareTo(customer.CustomerID)));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo(customer.CustomerID) < 1),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 1 > c.CustomerID.CompareTo(customer.CustomerID)),
                 entryCount: 1);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo(customer.CustomerID) > -1),
                 entryCount: 91);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => -1 < c.CustomerID.CompareTo(customer.CustomerID)),
                 entryCount: 91);
         }
@@ -353,13 +353,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_to_simple_client()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") == 42));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") > 42));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 42 > c.CustomerID.CompareTo("ALFKI")),
                 entryCount: 91);
         }
@@ -367,23 +367,23 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_to_nested()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("M" + c.CustomerID) == 0));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 != c.CustomerID.CompareTo(c.CustomerID.ToUpper())));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI".Replace("ALF".ToUpper(), c.CustomerID)) > 0));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 0 >= c.CustomerID.CompareTo("M" + c.CustomerID)),
                 entryCount: 51);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => 1 == c.CustomerID.CompareTo(c.CustomerID.ToUpper())));
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI".Replace("ALF".ToUpper(), c.CustomerID)) == -1),
                 entryCount: 91);
         }
@@ -391,11 +391,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void String_Compare_to_multi_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.CompareTo("ALFKI") > -1).Where(c => c.CustomerID.CompareTo("CACTU") == -1),
                 entryCount: 11);
 
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.CompareTo("Owner") == 0).Where(c => c.Country.CompareTo("USA") != 0),
                 entryCount: 15);
         }
@@ -413,7 +413,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_abs1()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Abs(od.ProductID) > 10),
                 entryCount: 1939);
         }
@@ -421,7 +421,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_abs2()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Abs(od.Quantity) > 10),
                 entryCount: 1547);
         }
@@ -429,7 +429,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_abs3()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Abs(od.UnitPrice) > 10),
                 entryCount: 1677);
         }
@@ -437,7 +437,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_abs_uncorrelated()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Abs(-10) < od.ProductID),
                 entryCount: 1939);
         }
@@ -445,7 +445,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_ceiling1()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Ceiling(od.Discount) > 0),
                 entryCount: 838);
         }
@@ -453,7 +453,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_ceiling2()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Ceiling(od.UnitPrice) > 10),
                 entryCount: 1677);
         }
@@ -461,7 +461,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_floor()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Floor(od.UnitPrice) > 10),
                 entryCount: 1658);
         }
@@ -469,7 +469,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_power()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Pow(od.Discount, 2) > 0.05f),
                 entryCount: 154);
         }
@@ -477,7 +477,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_round()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Round(od.UnitPrice) > 10),
                 entryCount: 1662);
         }
@@ -485,7 +485,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Select_math_round_int()
         {
-            AssertQuery<Order>(
+            Fixture.QueryAsserter.AssertQuery<Order>(
                 os => os.Where(o => o.OrderID < 10250).Select(o => new { A = Math.Round((double)o.OrderID) }),
                 e => e.A);
         }
@@ -493,7 +493,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Select_math_truncate_int()
         {
-            AssertQuery<Order>(
+            Fixture.QueryAsserter.AssertQuery<Order>(
                 os => os.Where(o => o.OrderID < 10250).Select(o => new { A = Math.Truncate((double)o.OrderID) }),
                 e => e.A);
         }
@@ -501,7 +501,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_round2()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Round(od.UnitPrice, 2) > 100),
                 entryCount: 46);
         }
@@ -509,7 +509,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_truncate()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Math.Truncate(od.UnitPrice) > 10),
                 entryCount: 1658);
         }
@@ -517,7 +517,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_exp()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Exp(od.Discount) > 1),
                 entryCount: 13);
         }
@@ -525,7 +525,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_log10()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077 && od.Discount > 0).Where(od => Math.Log10(od.Discount) < 0),
                 entryCount: 13);
         }
@@ -533,7 +533,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_log()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077 && od.Discount > 0).Where(od => Math.Log(od.Discount) < 0),
                 entryCount: 13);
         }
@@ -541,7 +541,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_log_new_base()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077 && od.Discount > 0).Where(od => Math.Log(od.Discount, 7) < 0),
                 entryCount: 13);
         }
@@ -549,7 +549,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_sqrt()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Sqrt(od.Discount) > 0),
                 entryCount: 13);
         }
@@ -557,7 +557,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_acos()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Acos(od.Discount) > 1),
                 entryCount: 25);
         }
@@ -565,7 +565,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_asin()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Asin(od.Discount) > 0),
                 entryCount: 13);
         }
@@ -573,7 +573,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_atan()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Atan(od.Discount) > 0),
                 entryCount: 13);
         }
@@ -581,7 +581,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_atan2()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Atan2(od.Discount, 1) > 0),
                 entryCount: 13);
         }
@@ -589,7 +589,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_cos()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Cos(od.Discount) > 0),
                 entryCount: 25);
         }
@@ -597,7 +597,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_sin()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Sin(od.Discount) > 0),
                 entryCount: 13);
         }
@@ -605,7 +605,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_tan()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Tan(od.Discount) > 0),
                 entryCount: 13);
         }
@@ -613,7 +613,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_math_sign()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => od.OrderID == 11077).Where(od => Math.Sign(od.Discount) > 0),
                 entryCount: 13);
         }
@@ -621,7 +621,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_guid_newguid()
         {
-            AssertQuery<OrderDetail>(
+            Fixture.QueryAsserter.AssertQuery<OrderDetail>(
                 ods => ods.Where(od => Guid.NewGuid() != default(Guid)),
                 entryCount: 2155);
         }
@@ -629,7 +629,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_string_to_upper()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.ToUpper() == "ALFKI"),
                 entryCount: 1);
         }
@@ -637,7 +637,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_string_to_lower()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID.ToLower() == "alfki"),
                 entryCount: 1);
         }
@@ -645,7 +645,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_functions_nested()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => Math.Pow(c.CustomerID.Length, 2) == 25),
                 entryCount: 91);
         }
@@ -667,7 +667,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             foreach (var convertMethod in convertMethods)
             {
-                AssertQuery<Order>(
+                Fixture.QueryAsserter.AssertQuery<Order>(
                     os => os.Where(o => o.CustomerID == "ALFKI")
                         .Where(convertMethod),
                     entryCount: 6);
@@ -691,7 +691,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             foreach (var convertMethod in convertMethods)
             {
-                AssertQuery<Order>(
+                Fixture.QueryAsserter.AssertQuery<Order>(
                     os => os.Where(o => o.CustomerID == "ALFKI")
                         .Where(convertMethod),
                     entryCount: 6);
@@ -715,7 +715,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             foreach (var convertMethod in convertMethods)
             {
-                AssertQuery<Order>(
+                Fixture.QueryAsserter.AssertQuery<Order>(
                     os => os.Where(o => o.CustomerID == "ALFKI")
                         .Where(convertMethod),
                     entryCount: 6);
@@ -739,7 +739,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             foreach (var convertMethod in convertMethods)
             {
-                AssertQuery<Order>(
+                Fixture.QueryAsserter.AssertQuery<Order>(
                     os => os.Where(o => o.CustomerID == "ALFKI")
                         .Where(convertMethod),
                     entryCount: 6);
@@ -763,7 +763,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             foreach (var convertMethod in convertMethods)
             {
-                AssertQuery<Order>(
+                Fixture.QueryAsserter.AssertQuery<Order>(
                     os => os.Where(o => o.CustomerID == "ALFKI")
                         .Where(convertMethod),
                     entryCount: 6);
@@ -787,7 +787,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             foreach (var convertMethod in convertMethods)
             {
-                AssertQuery<Order>(
+                Fixture.QueryAsserter.AssertQuery<Order>(
                     os => os.Where(o => o.CustomerID == "ALFKI")
                         .Where(convertMethod),
                     entryCount: 6);
@@ -811,7 +811,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             foreach (var convertMethod in convertMethods)
             {
-                AssertQuery<Order>(
+                Fixture.QueryAsserter.AssertQuery<Order>(
                     os => os.Where(o => o.CustomerID == "ALFKI")
                         .Where(convertMethod),
                     entryCount: 6);
@@ -856,7 +856,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void IsNullOrEmpty_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.IsNullOrEmpty(c.Region)),
                 entryCount: 60);
         }
@@ -890,7 +890,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void IsNullOrWhiteSpace_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => string.IsNullOrWhiteSpace(c.Region)),
                 entryCount: 60);
         }
@@ -898,7 +898,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void TrimStart_without_arguments_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.TrimStart() == "Owner"),
                 entryCount: 17);
         }
@@ -906,7 +906,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void TrimStart_with_char_argument_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.TrimStart('O') == "wner"),
                 entryCount: 17);
         }
@@ -914,7 +914,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void TrimStart_with_char_array_argument_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.TrimStart('O', 'w') == "ner"),
                 entryCount: 17);
         }
@@ -922,7 +922,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void TrimEnd_without_arguments_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.TrimEnd() == "Owner"),
                 entryCount: 17);
         }
@@ -930,7 +930,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void TrimEnd_with_char_argument_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.TrimEnd('r') == "Owne"),
                 entryCount: 17);
         }
@@ -938,7 +938,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void TrimEnd_with_char_array_argument_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.TrimEnd('e', 'r') == "Own"),
                 entryCount: 17);
         }
@@ -946,7 +946,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Trim_without_argument_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.Trim() == "Owner"),
                 entryCount: 17);
         }
@@ -954,7 +954,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Trim_with_char_argument_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.Trim('O') == "wner"),
                 entryCount: 17);
         }
@@ -962,7 +962,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Trim_with_char_array_argument_in_predicate()
         {
-            AssertQuery<Customer>(
+            Fixture.QueryAsserter.AssertQuery<Customer>(
                 cs => cs.Where(c => c.ContactTitle.Trim('O', 'r') == "wne"),
                 entryCount: 17);
         }

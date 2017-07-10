@@ -1,14 +1,39 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
+using System.Collections.Generic;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.TestModels.Northwind;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
     public abstract class NorthwindQueryFixtureBase
     {
+        protected NorthwindQueryFixtureBase()
+        {
+            var entitySorters = new Dictionary<Type, Func<dynamic, object>>
+                {
+                    { typeof(Customer), e => e.CustomerID },
+                    { typeof(Order), e => e.OrderID },
+                    { typeof(Employee), e => e.EmployeeID },
+                    { typeof(Product), e => e.ProductID },
+                    { typeof(OrderDetail), e => e.OrderID.ToString() + " " + e.ProductID.ToString() },
+                };
+
+            var entityAsserters = new Dictionary<Type, Action<dynamic, dynamic>>
+            {
+            };
+
+            QueryAsserter = new QueryAsserter<NorthwindContext>(
+                () => CreateContext(),
+                new NorthwindData2(),
+                entitySorters,
+                entityAsserters);
+        }
+
         public abstract DbContextOptions BuildOptions(IServiceCollection additionalServices = null);
 
         public virtual NorthwindContext CreateContext(
@@ -21,6 +46,8 @@ namespace Microsoft.EntityFrameworkCore.Query
                 Options ?? (Options = new DbContextOptionsBuilder(BuildOptions()).Options),
                 queryTrackingBehavior);
         }
+
+        public QueryAsserter<NorthwindContext> QueryAsserter { get; set; }
 
         protected bool EnableFilters { get; set; }
         protected DbContextOptions Options { get; set; }
