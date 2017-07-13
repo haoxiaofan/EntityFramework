@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             _fixture = fixture;
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void AddChildren(IMetricCollector collector, bool autoDetectChanges)
@@ -45,7 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void AddParents(IMetricCollector collector, bool autoDetectChanges)
@@ -72,7 +72,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void AttachChildren(IMetricCollector collector, bool autoDetectChanges)
@@ -99,7 +99,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void AttachParents(IMetricCollector collector, bool autoDetectChanges)
@@ -126,7 +126,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void QueryChildren(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())
@@ -143,7 +143,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void QueryParents(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())

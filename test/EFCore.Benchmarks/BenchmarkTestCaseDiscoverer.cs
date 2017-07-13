@@ -45,8 +45,8 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks
                 if (BenchmarkConfig.Instance.RunIterations)
                 {
                     tests.Add(new BenchmarkTestCase(
-                        variation.Iterations ?? factAttribute.GetNamedArgument<int>(nameof(BenchmarkAttribute.Iterations)),
-                        factAttribute.GetNamedArgument<int>(nameof(BenchmarkAttribute.WarmupIterations)),
+                        variation.Iterations ?? factAttribute.GetNamedArgument<int>(nameof(BenchmarkOldAttribute.Iterations)),
+                        factAttribute.GetNamedArgument<int>(nameof(BenchmarkOldAttribute.WarmupIterations)),
                         variation.Name,
                         _diagnosticMessageSink,
                         testMethod,

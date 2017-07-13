@@ -19,7 +19,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             _fixture = fixture;
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void NewQueryInstance(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())
@@ -37,7 +37,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void SameQueryInstance(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())
@@ -57,7 +57,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void ValueFromObject(IMetricCollector collector)
         {
             using (var context = _fixture.CreateContext())

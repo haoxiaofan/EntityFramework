@@ -22,7 +22,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             _fixture = fixture;
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Default (10 queries)")]
         public void ToList(IMetricCollector collector)
         {
@@ -43,7 +43,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Default (10 queries)")]
         public void FilterOrderProject(IMetricCollector collector)
         {

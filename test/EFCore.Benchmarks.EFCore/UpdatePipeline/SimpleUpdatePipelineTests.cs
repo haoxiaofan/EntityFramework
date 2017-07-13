@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.UpdatePipeline
             _fixture = fixture;
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync - Batching Off", true, false)]
         [BenchmarkVariation("Sync", false, false)]
         [BenchmarkVariation("Async - Batching Off", true, true)]
@@ -43,7 +43,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.UpdatePipeline
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync - Batching Off", true, false)]
         [BenchmarkVariation("Sync", false, false)]
         [BenchmarkVariation("Async - Batching Off", true, true)]
@@ -70,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.UpdatePipeline
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync - Batching Off", true, false)]
         [BenchmarkVariation("Sync", false, false)]
         [BenchmarkVariation("Async - Batching Off", true, true)]
@@ -94,7 +94,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.UpdatePipeline
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync - Batching Off", true, false)]
         [BenchmarkVariation("Sync", false, false)]
         [BenchmarkVariation("Async - Batching Off", true, true)]

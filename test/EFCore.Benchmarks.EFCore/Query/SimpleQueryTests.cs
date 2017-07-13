@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             _fixture = fixture;
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Tracking On - Sync (1 query)", true, false, 1)]
         [BenchmarkVariation("Tracking Off - Sync (10 queries)", false, false, 10)]
         [BenchmarkVariation("Tracking On - Async (1 query)", true, true, 1)]
@@ -49,7 +49,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Tracking On - Sync (1 query)", true, false, 1)]
         [BenchmarkVariation("Tracking Off - Sync (10 queries)", false, false, 10)]
         [BenchmarkVariation("Tracking On - Async (1 query)", true, true, 1)]
@@ -82,7 +82,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Tracking On - Sync (1 query)", true, false, 1)]
         [BenchmarkVariation("Tracking Off - Sync (10 queries)", false, false, 10)]
         [BenchmarkVariation("Tracking On - Async (1 query)", true, true, 1)]
@@ -115,7 +115,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync (100 queries)", false, 100)]
         [BenchmarkVariation("Async (100 queries)", true, 100)]
         public async Task Count(IMetricCollector collector, bool async, int queriesPerIteration)
@@ -143,7 +143,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Tracking On - Sync (1 query)", true, false, 1)]
         [BenchmarkVariation("Tracking Off - Sync (10 queries)", false, false, 10)]
         [BenchmarkVariation("Tracking On - Async (1 query)", true, true, 1)]
@@ -177,7 +177,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync (10 queries)", false, 10)]
         [BenchmarkVariation("Async (10 queries)", true, 10)]
         public async Task GroupBy(IMetricCollector collector, bool async, int queriesPerIteration)
@@ -213,7 +213,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Tracking On - Sync (1 query)", true, false, 1)]
         [BenchmarkVariation("Tracking Off - Sync (1 query)", false, false, 1)]
         [BenchmarkVariation("Tracking On - Async (1 query)", true, true, 1)]
@@ -248,7 +248,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync (10 queries)", false, 10)]
         [BenchmarkVariation("Async (10 queries)", true, 10)]
         public async Task Projection(IMetricCollector collector, bool async, int queriesPerIteration)
@@ -286,7 +286,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Sync (10 queries)", false, 10)]
         [BenchmarkVariation("Async (10 queries)", true, 10)]
         public async Task ProjectionAcrossNavigation(IMetricCollector collector, bool async, int queriesPerIteration)

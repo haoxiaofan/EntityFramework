@@ -7,7 +7,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore
 {
     public class CalibrationTests
     {
-        [Benchmark]
+        [BenchmarkOld]
         public void Calibration_100ms(IMetricCollector collector)
         {
             using (collector.StartCollection())
@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void Calibration_100ms_controlled(IMetricCollector collector)
         {
             Thread.Sleep(100);
@@ -26,7 +26,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void Calibration_100ms_controlled_multi_scope(IMetricCollector collector)
         {
             Thread.Sleep(50);
