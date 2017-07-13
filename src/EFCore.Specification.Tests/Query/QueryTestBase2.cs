@@ -5,88 +5,306 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Xunit;
-using Microsoft.EntityFrameworkCore.Query;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 
-namespace Microsoft.EntityFrameworkCore.TestUtilities
+namespace Microsoft.EntityFrameworkCore.Query
 {
-    public class QueryAsserter<TContext> : IQueryAsserter
-        where TContext : DbContext
+    public interface IQueryAsserter
     {
-        private readonly Func<TContext> _contextCreator;
-        private readonly Dictionary<Type, Func<dynamic, object>> _entitySorters;
-        private readonly Dictionary<Type, Action<dynamic, dynamic>> _entityAsserters;
-
-        private IExpectedData _expectedData;
-        private ISetExtractor<TContext> _setExtractor;
-        private IncludeQueryResultAsserter _includeResultAsserter;
-
-        public QueryAsserter(
-            Func<TContext> contextCreator,
-            IExpectedData expectedData,
-            Dictionary<Type, Func<dynamic, object>> entitySorters,
-            Dictionary<Type, Action<dynamic, dynamic>> entityAsserters)
-        {
-            _contextCreator = contextCreator;
-            _expectedData = expectedData;
-
-            _entitySorters = entitySorters ?? new Dictionary<Type, Func<dynamic, object>>();
-            _entityAsserters = entityAsserters ?? new Dictionary<Type, Action<dynamic, dynamic>>();
-
-            _setExtractor = new DefaultSetExtractor();
-            _includeResultAsserter = new IncludeQueryResultAsserter(_entitySorters, _entityAsserters);
-        }
-
-        public virtual ISetExtractor<TContext> SetExtractor => _setExtractor;
-
-        public virtual IExpectedData ExpectedData => _expectedData;
-
-        public virtual void UseSetExtractor(ISetExtractor<TContext> setExtractor)
-        {
-            _setExtractor = setExtractor;
-        }
-
-        public virtual void UseExpectedData(IExpectedData expectedData)
-        {
-            _expectedData = expectedData;
-        }
-
         #region AssertSingleResult
 
-        // one argument
+        //void AssertSingleResult<TItem1>(
+        //    Func<IQueryable<TItem1>, object> query,
+        //    Action<object, object> asserter = null,
+        //    int entryCount = 0)
+        //    where TItem1 : class;
 
-        public virtual void AssertSingleResult<TItem1>(
+        void AssertSingleResult<TItem1>(
+            Func<IQueryable<TItem1>, object> actualQuery,
+            Func<IQueryable<TItem1>, object> expectedQuery,
+            Action<object, object> asserter = null,
+            int entryCount = 0)
+            where TItem1 : class;
+
+        //void AssertSingleResult<TItem1, TItem2>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, object> query,
+        //    Action<object, object> asserter = null,
+        //    int entryCount = 0)
+        //    where TItem1 : class
+        //    where TItem2 : class;
+
+        void AssertSingleResult<TItem1, TItem2>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, object> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, object> expectedQuery,
+            Action<object, object> asserter = null,
+            int entryCount = 0)
+            where TItem1 : class
+            where TItem2 : class;
+
+        //void AssertSingleResult<TItem1, TItem2, TItem3>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, object> query,
+        //    Action<object, object> asserter = null,
+        //    int entryCount = 0)
+        //    where TItem1 : class
+        //    where TItem2 : class
+        //    where TItem3 : class;
+
+        void AssertSingleResult<TItem1, TItem2, TItem3>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, object> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, object> expectedQuery,
+            Action<object, object> asserter = null,
+            int entryCount = 0)
+            where TItem1 : class
+            where TItem2 : class
+            where TItem3 : class;
+
+        #endregion
+
+        #region AssertQuery
+
+        //void AssertQuery<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<object>> query,
+        //    Func<dynamic, object> elementSorter = null,
+        //    Action<dynamic, dynamic> elementAsserter = null,
+        //    bool assertOrder = false,
+        //    int entryCount = 0)
+        //    where TItem1 : class;
+
+        void AssertQuery<TItem1>(
+            Func<IQueryable<TItem1>, IQueryable<object>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<object>> expectedQuery,
+            Func<dynamic, object> elementSorter = null,
+            Action<dynamic, dynamic> elementAsserter = null,
+            bool assertOrder = false,
+            int entryCount = 0)
+            where TItem1 : class;
+
+        //void AssertQuery<TItem1, TItem2>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> query,
+        //    Func<dynamic, object> elementSorter = null,
+        //    Action<dynamic, dynamic> elementAsserter = null,
+        //    bool assertOrder = false,
+        //    int entryCount = 0)
+        //    where TItem1 : class
+        //    where TItem2 : class;
+
+        void AssertQuery<TItem1, TItem2>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> expectedQuery,
+            Func<dynamic, object> elementSorter = null,
+            Action<dynamic, dynamic> elementAsserter = null,
+            bool assertOrder = false,
+            int entryCount = 0)
+            where TItem1 : class
+            where TItem2 : class;
+
+        //void AssertQuery<TItem1, TItem2, TItem3>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<object>> query,
+        //    Func<dynamic, object> elementSorter = null,
+        //    Action<dynamic, dynamic> elementAsserter = null,
+        //    bool assertOrder = false,
+        //    int entryCount = 0)
+        //    where TItem1 : class
+        //    where TItem2 : class
+        //    where TItem3 : class;
+
+        void AssertQuery<TItem1, TItem2, TItem3>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<object>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<object>> expectedQuery,
+            Func<dynamic, object> elementSorter = null,
+            Action<dynamic, dynamic> elementAsserter = null,
+            bool assertOrder = false,
+            int entryCount = 0)
+            where TItem1 : class
+            where TItem2 : class
+            where TItem3 : class;
+
+        #endregion
+
+        #region AssertQueryScalar
+
+        //void AssertQueryScalar<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<int>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class;
+
+        //void AssertQueryScalar<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<int>> actualQuery,
+        //    Func<IQueryable<TItem1>, IQueryable<int>> expectedQuery,
+        //    bool assertOrder = false)
+        //    where TItem1 : class;
+
+        //void AssertQueryScalar<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<long>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class;
+
+        //void AssertQueryScalar<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<short>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class;
+
+        //void AssertQueryScalar<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<bool>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class;
+
+        //void AssertQueryScalar<TItem1, TResult>(
+        //    Func<IQueryable<TItem1>, IQueryable<TResult>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class
+        //    where TResult : struct;
+
+        void AssertQueryScalar<TItem1, TResult>(
+            Func<IQueryable<TItem1>, IQueryable<TResult>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TResult>> expectedQuery,
+            bool assertOrder = false)
+            where TItem1 : class
+            where TResult : struct;
+
+        //void AssertQueryScalar<TItem1, TItem2>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class
+        //    where TItem2 : class;
+
+        //void AssertQueryScalar<TItem1, TItem2>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int>> actualQuery,
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int>> expectedQuery,
+        //    bool assertOrder = false)
+        //    where TItem1 : class
+        //    where TItem2 : class;
+
+        void AssertQueryScalar<TItem1, TItem2, TResult>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TResult>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TResult>> expectedQuery,
+            bool assertOrder = false)
+            where TItem1 : class
+            where TItem2 : class
+            where TResult : struct;
+
+        //void AssertQueryScalar<TItem1, TItem2, TItem3>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<int>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class
+        //    where TItem2 : class
+        //    where TItem3 : class;
+
+        void AssertQueryScalar<TItem1, TItem2, TItem3, TResult>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<TResult>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<TResult>> expectedQuery,
+            bool assertOrder = false)
+            where TItem1 : class
+            where TItem2 : class
+            where TItem3 : class
+            where TResult : struct;
+
+        #endregion
+
+        #region AssertQueryScalar - nullable
+
+        //void AssertQueryScalar<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<int?>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class;
+
+        //void AssertQueryScalar<TItem1>(
+        //    Func<IQueryable<TItem1>, IQueryable<int?>> actualQuery,
+        //    Func<IQueryable<TItem1>, IQueryable<int?>> expectedQuery,
+        //    bool assertOrder = false)
+        //    where TItem1 : class;
+
+        void AssertQueryScalar<TItem1, TResult>(
+            Func<IQueryable<TItem1>, IQueryable<TResult?>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TResult?>> expectedQuery,
+            bool assertOrder = false)
+            where TItem1 : class
+            where TResult : struct;
+
+        //void AssertQueryScalar<TItem1, TItem2>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int?>> query,
+        //    bool assertOrder = false)
+        //    where TItem1 : class
+        //    where TItem2 : class;
+
+        //void AssertQueryScalar<TItem1, TItem2>(
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int?>> actualQuery,
+        //    Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int?>> expectedQuery,
+        //    bool assertOrder = false)
+        //    where TItem1 : class
+        //    where TItem2 : class;
+
+        void AssertQueryScalar<TItem1, TItem2, TResult>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TResult?>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TResult?>> expectedQuery,
+            bool assertOrder = false)
+            where TItem1 : class
+            where TItem2 : class
+            where TResult : struct;
+
+        #endregion
+
+        #region AssertIncludeQuery
+
+        void AssertIncludeQuery<TItem1>(
+            Func<IQueryable<TItem1>, IQueryable<object>> query,
+            List<IExpectedInclude> expectedIncludes,
+            Func<dynamic, object> elementSorter = null,
+            Func<dynamic, object> clientProjection = null)
+            where TItem1 : class;
+
+        void AssertIncludeQuery<TItem1>(
+            Func<IQueryable<TItem1>, IQueryable<object>> efQuery,
+            Func<IQueryable<TItem1>, IQueryable<object>> l2oQuery,
+            List<IExpectedInclude> expectedIncludes,
+            Func<dynamic, object> elementSorter = null,
+            Func<dynamic, object> clientProjection = null)
+            where TItem1 : class;
+
+        void AssertIncludeQuery<TItem1, TItem2>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> query,
+            List<IExpectedInclude> expectedIncludes,
+            Func<dynamic, object> elementSorter = null,
+            Func<dynamic, object> clientProjection = null)
+            where TItem1 : class
+            where TItem2 : class;
+
+        void AssertIncludeQuery<TItem1, TItem2>(
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> efQuery,
+            Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> l2oQuery,
+            List<IExpectedInclude> expectedIncludes,
+            Func<dynamic, object> elementSorter = null,
+            Func<dynamic, object> clientProjection = null)
+            where TItem1 : class
+            where TItem2 : class;
+
+        #endregion
+    }
+
+    public class QueryFixtureBase
+    {
+        public IQueryAsserter QueryAsserter { get; set; }
+    }
+
+    public class QueryTestBase2<TFixture> : IClassFixture<TFixture>
+        where TFixture : QueryFixtureBase, new()
+    {
+        #region AssertSingleResult
+
+        protected virtual void AssertSingleResult<TItem1>(
             Func<IQueryable<TItem1>, object> query,
             Action<object, object> asserter = null,
             int entryCount = 0)
             where TItem1 : class
-            => AssertSingleResult(query, query, asserter, entryCount);
+            =>  AssertSingleResult(query, query, asserter, entryCount);
 
-        public virtual void AssertSingleResult<TItem1>(
+        protected virtual void AssertSingleResult<TItem1>(
             Func<IQueryable<TItem1>, object> actualQuery,
             Func<IQueryable<TItem1>, object> expectedQuery,
             Action<object, object> asserter = null,
             int entryCount = 0)
             where TItem1 : class
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(_setExtractor.Set<TItem1>(context));
-                var expected = expectedQuery(_expectedData.Set<TItem1>());
-
-                if (asserter != null)
-                {
-                    asserter(expected, actual);
-                }
-                else
-                {
-                    Assert.Equal(expected, actual);
-                }
-
-                Assert.Equal(entryCount, context.ChangeTracker.Entries().Count());
-            }
-        }
-
-        // two arguments
+            => Fixture.QueryAsserter.AssertSingleResult(actualQuery, expectedQuery, asserter, entryCount);
 
         public virtual void AssertSingleResult<TItem1, TItem2>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, object> query,
@@ -103,31 +321,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             int entryCount = 0)
             where TItem1 : class
             where TItem2 : class
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(
-                    _setExtractor.Set<TItem1>(context),
-                    _setExtractor.Set<TItem2>(context));
-
-                var expected = expectedQuery(
-                    _expectedData.Set<TItem1>(),
-                    _expectedData.Set<TItem2>());
-
-                if (asserter != null)
-                {
-                    asserter(expected, actual);
-                }
-                else
-                {
-                    Assert.Equal(expected, actual);
-                }
-
-                Assert.Equal(entryCount, context.ChangeTracker.Entries().Count());
-            }
-        }
-
-        // three arguments
+            => Fixture.QueryAsserter.AssertSingleResult(actualQuery, expectedQuery, asserter, entryCount);
 
         public virtual void AssertSingleResult<TItem1, TItem2, TItem3>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, object> query,
@@ -146,37 +340,11 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             where TItem1 : class
             where TItem2 : class
             where TItem3 : class
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(
-                    _setExtractor.Set<TItem1>(context),
-                    _setExtractor.Set<TItem2>(context),
-                    _setExtractor.Set<TItem3>(context));
-
-                var expected = expectedQuery(
-                    _expectedData.Set<TItem1>(),
-                    _expectedData.Set<TItem2>(),
-                    _expectedData.Set<TItem3>());
-
-                if (asserter != null)
-                {
-                    asserter(expected, actual);
-                }
-                else
-                {
-                    Assert.Equal(expected, actual);
-                }
-
-                Assert.Equal(entryCount, context.ChangeTracker.Entries().Count());
-            }
-        }
+            => Fixture.QueryAsserter.AssertSingleResult(actualQuery, expectedQuery, asserter, entryCount);
 
         #endregion
 
         #region AssertQuery
-
-        // one argument
 
         public virtual void AssertQuery<TItem1>(
             Func<IQueryable<TItem1>, IQueryable<object>> query,
@@ -195,29 +363,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             bool assertOrder = false,
             int entryCount = 0)
             where TItem1 : class
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(_setExtractor.Set<TItem1>(context)).ToArray();
-                var expected = expectedQuery(_expectedData.Set<TItem1>()).ToArray();
-
-                if (!assertOrder && elementSorter == null && expected.Length > 0 && expected[0] != null)
-                {
-                    _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
-                }
-
-                TestHelpers.AssertResults(
-                    expected,
-                    actual,
-                    elementSorter ?? (e => e),
-                    elementAsserter ?? ((e, a) => Assert.Equal(e, a)),
-                    assertOrder);
-
-                Assert.Equal(entryCount, context.ChangeTracker.Entries().Count());
-            }
-        }
-
-        // two arguments
+            => Fixture.QueryAsserter.AssertQuery(actualQuery, expectedQuery, elementSorter, elementAsserter, assertOrder, entryCount);
 
         public virtual void AssertQuery<TItem1, TItem2>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<object>> query,
@@ -238,34 +384,8 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             int entryCount = 0)
             where TItem1 : class
             where TItem2 : class
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(
-                    _setExtractor.Set<TItem1>(context),
-                    _setExtractor.Set<TItem2>(context)).ToArray();
+            => Fixture.QueryAsserter.AssertQuery(actualQuery, expectedQuery, elementSorter, elementAsserter, assertOrder, entryCount);
 
-                var expected = expectedQuery(
-                    _expectedData.Set<TItem1>(), 
-                    _expectedData.Set<TItem2>()).ToArray();
-
-                if (!assertOrder && elementSorter == null && expected.Length > 0 && expected[0] != null)
-                {
-                    _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
-                }
-
-                TestHelpers.AssertResults(
-                    expected,
-                    actual,
-                    elementSorter ?? (e => e),
-                    elementAsserter ?? ((e, a) => Assert.Equal(e, a)),
-                    assertOrder);
-
-                Assert.Equal(entryCount, context.ChangeTracker.Entries().Count());
-            }
-        }
-
-        // three arguments
         public virtual void AssertQuery<TItem1, TItem2, TItem3>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<object>> query,
             Func<dynamic, object> elementSorter = null,
@@ -287,40 +407,11 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             where TItem1 : class
             where TItem2 : class
             where TItem3 : class
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(
-                    _setExtractor.Set<TItem1>(context),
-                    _setExtractor.Set<TItem2>(context),
-                    _setExtractor.Set<TItem3>(context)).ToArray();
-
-                var expected = expectedQuery(
-                    _expectedData.Set<TItem1>(),
-                    _expectedData.Set<TItem2>(),
-                    _expectedData.Set<TItem3>()).ToArray();
-
-                if (!assertOrder && elementSorter == null && expected.Length > 0 && expected[0] != null)
-                {
-                    _entitySorters.TryGetValue(expected[0].GetType(), out elementSorter);
-                }
-
-                TestHelpers.AssertResults(
-                    expected,
-                    actual,
-                    elementSorter ?? (e => e),
-                    elementAsserter ?? ((e, a) => Assert.Equal(e, a)),
-                    assertOrder);
-
-                Assert.Equal(entryCount, context.ChangeTracker.Entries().Count());
-            }
-        }
+            => Fixture.QueryAsserter.AssertQuery(actualQuery, expectedQuery, elementSorter, elementAsserter, assertOrder, entryCount);
 
         #endregion
 
         #region AssertQueryScalar
-
-        // one argument
 
         public virtual void AssertQueryScalar<TItem1>(
             Func<IQueryable<TItem1>, IQueryable<int>> query,
@@ -366,21 +457,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             bool assertOrder = false)
             where TItem1 : class
             where TResult : struct
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(_setExtractor.Set<TItem1>(context)).ToArray();
-                var expected = expectedQuery(_expectedData.Set<TItem1>()).ToArray();
-                TestHelpers.AssertResults(
-                    expected,
-                    actual,
-                    e => e,
-                    Assert.Equal,
-                    assertOrder);
-            }
-        }
-
-        // two arguments
+            => Fixture.QueryAsserter.AssertQueryScalar(actualQuery, expectedQuery, assertOrder);
 
         public virtual void AssertQueryScalar<TItem1, TItem2>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int>> query,
@@ -404,27 +481,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             where TItem1 : class
             where TItem2 : class
             where TResult : struct
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(
-                    _setExtractor.Set<TItem1>(context),
-                    _setExtractor.Set<TItem2>(context)).ToArray();
-
-                var expected = expectedQuery(
-                    _expectedData.Set<TItem1>(),
-                    _expectedData.Set<TItem2>()).ToArray();
-
-                TestHelpers.AssertResults(
-                    expected,
-                    actual,
-                    e => e,
-                    Assert.Equal,
-                    assertOrder);
-            }
-        }
-
-        // three arguments
+            => Fixture.QueryAsserter.AssertQueryScalar(actualQuery, expectedQuery, assertOrder);
 
         public virtual void AssertQueryScalar<TItem1, TItem2, TItem3>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<TItem3>, IQueryable<int>> query,
@@ -442,33 +499,11 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             where TItem2 : class
             where TItem3 : class
             where TResult : struct
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(
-                    _setExtractor.Set<TItem1>(context),
-                    _setExtractor.Set<TItem2>(context),
-                    _setExtractor.Set<TItem3>(context)).ToArray();
-
-                var expected = expectedQuery(
-                    _expectedData.Set<TItem1>(),
-                    _expectedData.Set<TItem2>(),
-                    _expectedData.Set<TItem3>()).ToArray();
-
-                TestHelpers.AssertResults(
-                    expected,
-                    actual,
-                    e => e,
-                    Assert.Equal,
-                    assertOrder);
-            }
-        }
+            => Fixture.QueryAsserter.AssertQueryScalar(actualQuery, expectedQuery, assertOrder);
 
         #endregion
 
-        #region AssertQueryNullableScalar
-
-        // one argument
+        #region AssertQueryScalar - nullable
 
         public virtual void AssertQueryScalar<TItem1>(
             Func<IQueryable<TItem1>, IQueryable<int?>> query,
@@ -489,21 +524,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             bool assertOrder = false)
             where TItem1 : class
             where TResult : struct
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(_setExtractor.Set<TItem1>(context)).ToArray();
-                var expected = expectedQuery(_expectedData.Set<TItem1>()).ToArray();
-                TestHelpers.AssertResultsNullable(
-                    expected,
-                    actual,
-                    e => e,
-                    Assert.Equal,
-                    assertOrder);
-            }
-        }
-
-        // two arguments
+            => Fixture.QueryAsserter.AssertQueryScalar(actualQuery, expectedQuery, assertOrder);
 
         public virtual void AssertQueryScalar<TItem1, TItem2>(
             Func<IQueryable<TItem1>, IQueryable<TItem2>, IQueryable<int?>> query,
@@ -527,24 +548,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             where TItem1 : class
             where TItem2 : class
             where TResult : struct
-        {
-            using (var context = _contextCreator())
-            {
-                var actual = actualQuery(
-                    _setExtractor.Set<TItem1>(context),
-                    _setExtractor.Set<TItem2>(context)).ToArray();
-
-                var expected = expectedQuery(
-                    _expectedData.Set<TItem1>(),
-                    _expectedData.Set<TItem2>()).ToArray();
-                TestHelpers.AssertResultsNullable(
-                    expected,
-                    actual,
-                    e => e,
-                    Assert.Equal,
-                    assertOrder);
-            }
-        }
+            => Fixture.QueryAsserter.AssertQueryScalar(actualQuery, expectedQuery, assertOrder);
 
         #endregion
 
@@ -633,10 +637,6 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 
         #endregion
 
-        private class DefaultSetExtractor : ISetExtractor<TContext>
-        {
-            public override IQueryable<TEntity> Set<TEntity>(TContext context)
-                => context.Set<TEntity>();
-        }
+        protected TFixture Fixture { get; }
     }
 }
