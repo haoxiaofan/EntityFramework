@@ -16,7 +16,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             _fixture = fixture;
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void Add(IMetricCollector collector, bool autoDetectChanges)
@@ -37,7 +37,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void AddRange(IMetricCollector collector, bool autoDetectChanges)
@@ -55,7 +55,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void Attach(IMetricCollector collector, bool autoDetectChanges)
@@ -76,7 +76,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void AttachRange(IMetricCollector collector, bool autoDetectChanges)
@@ -94,7 +94,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void Remove(IMetricCollector collector, bool autoDetectChanges)
@@ -116,7 +116,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void RemoveRange(IMetricCollector collector, bool autoDetectChanges)
@@ -135,7 +135,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void Update(IMetricCollector collector, bool autoDetectChanges)
@@ -157,7 +157,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.ChangeTracker
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("AutoDetectChanges On", true)]
         [BenchmarkVariation("AutoDetectChanges Off", false)]
         public void UpdateRange(IMetricCollector collector, bool autoDetectChanges)

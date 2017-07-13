@@ -18,7 +18,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             _fixture = fixture;
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [AdventureWorksDatabaseRequired]
         [BenchmarkVariation("Sync (10 queries)", false, 10)]
         [BenchmarkVariation("Async (10 queries)", true, 10)]
@@ -47,7 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore.Query
             }
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [AdventureWorksDatabaseRequired]
         [BenchmarkVariation("Sync (10 queries)", false, 10)]
         [BenchmarkVariation("Async (10 queries)", true, 10)]

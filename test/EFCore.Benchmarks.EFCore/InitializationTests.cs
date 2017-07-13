@@ -13,7 +13,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore
 {
     public class InitializationTests : IClassFixture<AdventureWorksFixture>
     {
-        [Benchmark]
+        [BenchmarkOld]
         [BenchmarkVariation("Warm (10000 instances)", false, 10000)]
 #if NET461
         [BenchmarkVariation("Cold (1 instance)", true, 1)]
@@ -26,7 +26,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore
             RunColdStartEnabledTest(cold, c => c.CreateAndDisposeUnusedContext(collector, count));
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [AdventureWorksDatabaseRequired]
         [BenchmarkVariation("Warm (1000 instances)", false, 1000)]
 #if NET461
@@ -40,7 +40,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore
             RunColdStartEnabledTest(cold, c => c.InitializeAndQuery_AdventureWorks(collector, count));
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         [AdventureWorksDatabaseRequired]
         [BenchmarkVariation("Warm (100 instances)", false, 100)]
 #if NET461
@@ -54,7 +54,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore
             RunColdStartEnabledTest(cold, t => t.InitializeAndSaveChanges_AdventureWorks(collector, count));
         }
 
-        [Benchmark]
+        [BenchmarkOld]
         public void BuildModel_AdventureWorks(IMetricCollector collector)
         {
             collector.StartCollection();
