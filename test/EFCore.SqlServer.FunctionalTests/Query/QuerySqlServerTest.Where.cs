@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
-    public partial class QuerySqlServerTest
+    public class WhereQuerySqlServerTest : WhereQueryTestBase<NorthwindQuerySqlServerFixture>
     {
         public override void Where_simple()
         {

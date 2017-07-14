@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore.TestModels.Northwind;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
-    public partial class QuerySqlServerTest
+    public class FunctionsQuerySqlServerTest : FunctionsQueryTestBase<NorthwindQuerySqlServerFixture>
     {
         public override void String_StartsWith_Literal()
         {

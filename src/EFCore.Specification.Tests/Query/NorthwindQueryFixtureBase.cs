@@ -10,7 +10,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
-    public abstract class NorthwindQueryFixtureBase
+    public abstract class NorthwindQueryFixtureBase : QueryFixtureBase
     {
         protected NorthwindQueryFixtureBase()
         {
@@ -47,7 +47,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 queryTrackingBehavior);
         }
 
-        public QueryAsserter<NorthwindContext> QueryAsserter { get; set; }
+        //public QueryAsserter<NorthwindContext> QueryAsserter { get; set; }
 
         protected bool EnableFilters { get; set; }
         protected DbContextOptions Options { get; set; }

@@ -143,17 +143,6 @@ WHERE trim(""c"".""ContactTitle"", 'Or') = 'wne'",
                 Sql);
         }
 
-        public override void Sum_with_coalesce()
-        {
-            base.Sum_with_coalesce();
-
-            Assert.Contains(
-                @"SELECT SUM(COALESCE(""p"".""UnitPrice"", 0.0))
-FROM ""Products"" AS ""p""
-WHERE ""p"".""ProductID"" < 40",
-                Sql);
-        }
-
         private const string FileLineEnding = @"
 ";
 

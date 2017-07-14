@@ -11,13 +11,13 @@ using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
-    public abstract partial class QueryTestBase<TFixture>
+    public abstract class WhereQueryTestBase<TFixture> : QueryTestBase2<TFixture>
         where TFixture : NorthwindQueryFixtureBase, new()
     {
         [ConditionalFact]
         public virtual void Where_simple()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == "London"),
                 entryCount: 6);
         }
@@ -28,7 +28,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             // ReSharper disable once ConvertToConstant.Local
             var city = "London";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city),
                 entryCount: 6);
         }
@@ -39,7 +39,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             // ReSharper disable once ConvertToConstant.Local
             var city = new[] { "London" };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city[0]),
                 entryCount: 6);
         }
@@ -50,7 +50,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             // ReSharper disable once ConvertToConstant.Local
             var predicate = true;
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => predicate),
                 entryCount: 91);
         }
@@ -60,13 +60,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = "London";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city),
                 entryCount: 6);
 
             city = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city),
                 entryCount: 1);
         }
@@ -76,13 +76,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = new City { Int = 2 };
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == city.Int),
                 entryCount: 5);
 
             city.Int = 5;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == city.Int),
                 entryCount: 3);
         }
@@ -92,13 +92,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = new City { NullableInt = 1 };
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID > city.NullableInt),
                 entryCount: 8);
 
             city.NullableInt = 5;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID > city.NullableInt),
                 entryCount: 4);
         }
@@ -108,13 +108,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = new City { InstanceFieldValue = "London" };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.GetCity()),
                 entryCount: 6);
 
             city.InstanceFieldValue = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.GetCity()),
                 entryCount: 1);
         }
@@ -124,13 +124,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = new City { InstanceFieldValue = "London" };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.InstanceFieldValue),
                 entryCount: 6);
 
             city.InstanceFieldValue = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.InstanceFieldValue),
                 entryCount: 1);
         }
@@ -140,13 +140,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = new City { InstancePropertyValue = "London" };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.InstancePropertyValue),
                 entryCount: 6);
 
             city.InstancePropertyValue = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.InstancePropertyValue),
                 entryCount: 1);
         }
@@ -156,13 +156,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             City.StaticFieldValue = "London";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == City.StaticFieldValue),
                 entryCount: 6);
 
             City.StaticFieldValue = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == City.StaticFieldValue),
                 entryCount: 1);
         }
@@ -172,13 +172,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             City.StaticPropertyValue = "London";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == City.StaticPropertyValue),
                 entryCount: 6);
 
             City.StaticPropertyValue = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == City.StaticPropertyValue),
                 entryCount: 1);
         }
@@ -188,13 +188,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = new City { Nested = new City { InstanceFieldValue = "London" } };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.Nested.InstanceFieldValue),
                 entryCount: 6);
 
             city.Nested.InstanceFieldValue = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.Nested.InstanceFieldValue),
                 entryCount: 1);
         }
@@ -204,13 +204,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var city = new City { Nested = new City { InstancePropertyValue = "London" } };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.Nested.InstancePropertyValue),
                 entryCount: 6);
 
             city.Nested.InstancePropertyValue = "Seattle";
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == city.Nested.InstancePropertyValue),
                 entryCount: 1);
         }
@@ -246,11 +246,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_new_instance_field_access_closure_via_query_cache()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == new City { InstanceFieldValue = "London" }.InstanceFieldValue),
                 entryCount: 6);
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == new City { InstanceFieldValue = "Seattle" }.InstanceFieldValue),
                 entryCount: 1);
         }
@@ -287,19 +287,19 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             int? reportsTo = 2;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == reportsTo),
                 entryCount: 5);
 
             reportsTo = 5;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == reportsTo),
                 entryCount: 3);
 
             reportsTo = null;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == reportsTo),
                 entryCount: 1);
         }
@@ -309,19 +309,19 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             int? reportsTo = null;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == reportsTo),
                 entryCount: 1);
 
             reportsTo = 5;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == reportsTo),
                 entryCount: 3);
 
             reportsTo = 2;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == reportsTo),
                 entryCount: 5);
         }
@@ -352,7 +352,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_simple_shadow()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => EF.Property<string>(e, "Title") == "Sales Representative"),
                 entryCount: 6);
         }
@@ -360,7 +360,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_simple_shadow_projection()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => EF.Property<string>(e, "Title") == "Sales Representative")
                     .Select(e => EF.Property<string>(e, "Title")));
         }
@@ -368,7 +368,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_simple_shadow_projection_mixed()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => EF.Property<string>(e, "Title") == "Sales Representative")
                     .Select(e => new { e, Title = EF.Property<string>(e, "Title") }),
                 e => e.e.EmployeeID,
@@ -378,7 +378,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_simple_shadow_subquery()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => from e in es.OrderBy(e => e.EmployeeID).Take(5)
                       where EF.Property<string>(e, "Title") == "Sales Representative"
                       select e,
@@ -388,7 +388,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_shadow_subquery_FirstOrDefault()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(es =>
+            AssertQuery<Employee>(es =>
                     from e in es
                     where EF.Property<string>(e, "Title")
                           == EF.Property<string>(es.OrderBy(e2 => EF.Property<string>(e2, "Title")).FirstOrDefault(), "Title")
@@ -399,7 +399,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_client()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.IsLondon),
                 entryCount: 6);
         }
@@ -407,7 +407,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_subquery_correlated()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c1 => cs.Any(c2 => c1.CustomerID == c2.CustomerID)),
                 entryCount: 91);
         }
@@ -415,7 +415,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_subquery_correlated_client_eval()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Take(5).OrderBy(c1 => c1.CustomerID).Where(c1 => cs.Any(c2 => c1.CustomerID == c2.CustomerID && c2.IsLondon)),
                 entryCount: 1);
         }
@@ -423,7 +423,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_client_and_server_top_level()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.IsLondon && c.CustomerID != "AROUT"),
                 entryCount: 5);
         }
@@ -431,7 +431,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_client_or_server_top_level()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.IsLondon || c.CustomerID == "ALFKI"),
                 entryCount: 7);
         }
@@ -439,7 +439,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_client_and_server_non_top_level()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID != "ALFKI" == (c.IsLondon && c.CustomerID != "AROUT")),
                 entryCount: 6);
         }
@@ -447,7 +447,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_client_deep_inside_predicate_and_server_top_level()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID != "ALFKI" && (c.CustomerID == "MAUMAR" || (c.CustomerID != "AROUT" && c.IsLondon))),
                 entryCount: 5);
         }
@@ -455,7 +455,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_method_string()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City.Equals("London")),
                 entryCount: 6);
         }
@@ -463,7 +463,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_method_int()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID.Equals(1)),
                 entryCount: 1);
         }
@@ -473,7 +473,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             long longPrm = 1;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID.Equals(longPrm)));
         }
 
@@ -482,7 +482,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             short shortPrm = 1;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID.Equals(shortPrm)),
                 entryCount: 1);
         }
@@ -492,10 +492,10 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             long longPrm = 2;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo.Equals(longPrm)));
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => longPrm.Equals(e.ReportsTo)));
         }
 
@@ -504,11 +504,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var intPrm = 2;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo.Equals(intPrm)),
                 entryCount: 5);
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => intPrm.Equals(e.ReportsTo)),
                 entryCount: 5);
         }
@@ -518,10 +518,10 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             long? nullableLongPrm = 2;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => nullableLongPrm.Equals(e.ReportsTo)));
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo.Equals(nullableLongPrm)));
         }
 
@@ -530,11 +530,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             int? nullableIntPrm = 2;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => nullableIntPrm.Equals(e.ReportsTo)),
                 entryCount: 5);
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo.Equals(nullableIntPrm)),
                 entryCount: 5);
         }
@@ -544,11 +544,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             int? nullableIntPrm = null;
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => nullableIntPrm.Equals(e.ReportsTo)),
                 entryCount: 1);
 
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo.Equals(nullableIntPrm)),
                 entryCount: 1);
         }
@@ -556,7 +556,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_comparison_nullable_type_not_null()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == 2),
                 entryCount: 5);
         }
@@ -564,7 +564,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_comparison_nullable_type_null()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo == null),
                 entryCount: 1);
         }
@@ -572,7 +572,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_string_length()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City.Length == 6),
                 entryCount: 20);
         }
@@ -581,7 +581,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_datetime_now()
         {
             var myDatetime = new DateTime(2015, 4, 10);
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => DateTime.Now != myDatetime),
                 entryCount: 91);
         }
@@ -590,7 +590,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_datetime_utcnow()
         {
             var myDatetime = new DateTime(2015, 4, 10);
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => DateTime.UtcNow != myDatetime),
                 entryCount: 91);
         }
@@ -599,7 +599,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_datetime_date_component()
         {
             var myDatetime = new DateTime(1998, 5, 4);
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o =>
                     o.OrderDate.Value.Date == myDatetime),
                 entryCount: 3);
@@ -608,7 +608,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_date_add_year_constant_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.AddYears(-1).Year == 1997),
                 entryCount: 270);
         }
@@ -616,7 +616,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_datetime_year_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.Year == 1998),
                 entryCount: 270);
         }
@@ -624,7 +624,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_datetime_month_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.Month == 4),
                 entryCount: 105);
         }
@@ -632,7 +632,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_datetime_dayOfYear_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.DayOfYear == 68),
                 entryCount: 3);
         }
@@ -640,7 +640,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_datetime_day_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.Day == 4),
                 entryCount: 27);
         }
@@ -648,35 +648,35 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_datetime_hour_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.Hour == 14));
         }
 
         [ConditionalFact]
         public virtual void Where_datetime_minute_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.Minute == 23));
         }
 
         [ConditionalFact]
         public virtual void Where_datetime_second_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.Second == 44));
         }
 
         [ConditionalFact]
         public virtual void Where_datetime_millisecond_component()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(
+            AssertQuery<Order>(
                 oc => oc.Where(o => o.OrderDate.Value.Millisecond == 88));
         }
 
         [ConditionalFact]
         public virtual void Where_simple_reversed()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => "London" == c.City),
                 entryCount: 6);
         }
@@ -684,7 +684,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_is_null()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == null));
         }
 
@@ -692,7 +692,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_null_is_null()
         {
             // ReSharper disable once EqualExpressionComparison
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => null == null),
                 entryCount: 91);
         }
@@ -700,14 +700,14 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_constant_is_null()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => "foo" == null));
         }
 
         [ConditionalFact]
         public virtual void Where_is_not_null()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City != null),
                 entryCount: 91);
         }
@@ -716,14 +716,14 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_null_is_not_null()
         {
             // ReSharper disable once EqualExpressionComparison
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => null != null));
         }
 
         [ConditionalFact]
         public virtual void Where_constant_is_not_null()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => "foo" != null),
                 entryCount: 91);
         }
@@ -732,7 +732,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_identity_comparison()
         {
             // ReSharper disable once EqualExpressionComparison
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == c.City),
                 entryCount: 91);
         }
@@ -740,7 +740,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_in_optimization_multiple()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
+            AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     from c in cs
                     from e in es
@@ -756,7 +756,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_not_in_optimization1()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
+            AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     from c in cs
                     from e in es
@@ -770,7 +770,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_not_in_optimization2()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
+            AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     from c in cs
                     from e in es
@@ -784,7 +784,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_not_in_optimization3()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
+            AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     from c in cs
                     from e in es
@@ -799,7 +799,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_not_in_optimization4()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
+            AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     from c in cs
                     from e in es
@@ -815,7 +815,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_select_many_and()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer, Employee>(
+            AssertQuery<Customer, Employee>(
                 (cs, es) =>
                     from c in cs
                     from e in es
@@ -830,14 +830,14 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_primitive()
         {
-            Fixture.QueryAsserter.AssertQueryScalar<Employee>(
+            AssertQueryScalar<Employee>(
                 es => es.Select(e => e.EmployeeID).Take(9).Where(i => i == 5));
         }
 
         [ConditionalFact]
         public virtual void Where_primitive_tracked()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Take(9).Where(e => e.EmployeeID == 5),
                 entryCount: 1);
         }
@@ -845,7 +845,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_primitive_tracked2()
         {
-            Fixture.QueryAsserter.AssertQuery<Employee>(
+            AssertQuery<Employee>(
                 es => es.Take(9).Select(e => new { e }).Where(e => e.e.EmployeeID == 5),
                 e => e.e.EmployeeID,
                 entryCount: 1);
@@ -854,19 +854,19 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_bool_member()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => p.Discontinued), entryCount: 8);
+            AssertQuery<Product>(ps => ps.Where(p => p.Discontinued), entryCount: 8);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_member_false()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued), entryCount: 69);
+            AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued), entryCount: 69);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_client_side_negated()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !ClientFunc(p.ProductID) && p.Discontinued), entryCount: 8);
+            AssertQuery<Product>(ps => ps.Where(p => !ClientFunc(p.ProductID) && p.Discontinued), entryCount: 8);
         }
 
         private static bool ClientFunc(int id)
@@ -880,113 +880,113 @@ namespace Microsoft.EntityFrameworkCore.Query
             // ReSharper disable once NegativeEqualityExpression
             // ReSharper disable once DoubleNegationOperator
             // ReSharper disable once RedundantBoolCompare
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !!(p.Discontinued == true)), entryCount: 8);
+            AssertQuery<Product>(ps => ps.Where(p => !!(p.Discontinued == true)), entryCount: 8);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_member_shadow()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => EF.Property<bool>(p, "Discontinued")), entryCount: 8);
+            AssertQuery<Product>(ps => ps.Where(p => EF.Property<bool>(p, "Discontinued")), entryCount: 8);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_member_false_shadow()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !EF.Property<bool>(p, "Discontinued")), entryCount: 69);
+            AssertQuery<Product>(ps => ps.Where(p => !EF.Property<bool>(p, "Discontinued")), entryCount: 69);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_member_equals_constant()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => p.Discontinued.Equals(true)), entryCount: 8);
+            AssertQuery<Product>(ps => ps.Where(p => p.Discontinued.Equals(true)), entryCount: 8);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_member_in_complex_predicate()
         {
             // ReSharper disable once RedundantBoolCompare
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => p.ProductID > 100 && p.Discontinued || (p.Discontinued == true)), entryCount: 8);
+            AssertQuery<Product>(ps => ps.Where(p => p.ProductID > 100 && p.Discontinued || (p.Discontinued == true)), entryCount: 8);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_member_compared_to_binary_expression()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => p.Discontinued == (p.ProductID > 50)), entryCount: 44);
+            AssertQuery<Product>(ps => ps.Where(p => p.Discontinued == (p.ProductID > 50)), entryCount: 44);
         }
 
         [ConditionalFact]
         public virtual void Where_not_bool_member_compared_to_not_bool_member()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued == !p.Discontinued), entryCount: 77);
+            AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued == !p.Discontinued), entryCount: 77);
         }
 
         [ConditionalFact]
         public virtual void Where_negated_boolean_expression_compared_to_another_negated_boolean_expression()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !(p.ProductID > 50) == !(p.ProductID > 20)), entryCount: 47);
+            AssertQuery<Product>(ps => ps.Where(p => !(p.ProductID > 50) == !(p.ProductID > 20)), entryCount: 47);
         }
 
         [ConditionalFact]
         public virtual void Where_not_bool_member_compared_to_binary_expression()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued == (p.ProductID > 50)), entryCount: 33);
+            AssertQuery<Product>(ps => ps.Where(p => !p.Discontinued == (p.ProductID > 50)), entryCount: 33);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_parameter()
         {
             var prm = true;
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => prm), entryCount: 77);
+            AssertQuery<Product>(ps => ps.Where(p => prm), entryCount: 77);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_parameter_compared_to_binary_expression()
         {
             var prm = true;
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => (p.ProductID > 50) != prm), entryCount: 50);
+            AssertQuery<Product>(ps => ps.Where(p => (p.ProductID > 50) != prm), entryCount: 50);
         }
 
         [ConditionalFact]
         public virtual void Where_bool_member_and_parameter_compared_to_binary_expression_nested()
         {
             var prm = true;
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => p.Discontinued == ((p.ProductID > 50) != prm)), entryCount: 33);
+            AssertQuery<Product>(ps => ps.Where(p => p.Discontinued == ((p.ProductID > 50) != prm)), entryCount: 33);
         }
 
         [ConditionalFact]
         public virtual void Where_de_morgan_or_optimizated()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !(p.Discontinued || (p.ProductID < 20))), entryCount: 53);
+            AssertQuery<Product>(ps => ps.Where(p => !(p.Discontinued || (p.ProductID < 20))), entryCount: 53);
         }
 
         [ConditionalFact]
         public virtual void Where_de_morgan_and_optimizated()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !(p.Discontinued && (p.ProductID < 20))), entryCount: 74);
+            AssertQuery<Product>(ps => ps.Where(p => !(p.Discontinued && (p.ProductID < 20))), entryCount: 74);
         }
 
         [ConditionalFact]
         public virtual void Where_complex_negated_expression_optimized()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => !(!(!p.Discontinued && (p.ProductID < 60)) || !(p.ProductID > 30))), entryCount: 27);
+            AssertQuery<Product>(ps => ps.Where(p => !(!(!p.Discontinued && (p.ProductID < 60)) || !(p.ProductID > 30))), entryCount: 27);
         }
 
         [ConditionalFact]
         public virtual void Where_short_member_comparison()
         {
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps.Where(p => p.UnitsInStock > 10), entryCount: 63);
+            AssertQuery<Product>(ps => ps.Where(p => p.UnitsInStock > 10), entryCount: 63);
         }
 
         [ConditionalFact]
         public virtual void Where_comparison_to_nullable_bool()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(cs => cs.Where(c => c.CustomerID.EndsWith("KI") == ((bool?)true)), entryCount: 1);
+            AssertQuery<Customer>(cs => cs.Where(c => c.CustomerID.EndsWith("KI") == ((bool?)true)), entryCount: 1);
         }
 
         [ConditionalFact]
         public virtual void Where_true()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => true),
                 entryCount: 91);
         }
@@ -994,7 +994,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_false()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => false));
         }
 
@@ -1003,12 +1003,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var boolean = false;
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID == "ALFKI" && boolean));
 
             boolean = true;
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID == "ALFKI" && boolean),
                 entryCount: 1);
         }
@@ -1018,12 +1018,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var customer = new Customer { CustomerID = "ALFKI" };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.Equals(customer)).Select(c => c.CustomerID));
 
             customer = new Customer { CustomerID = "ANATR" };
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.Equals(customer)).Select(c => c.CustomerID));
         }
 
@@ -1041,7 +1041,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         Expression.Default(typeof(string))),
                     parameter);
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 es => es.Where(defaultExpression),
                 entryCount: 22);
         }
@@ -1052,7 +1052,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             Expression<Func<Customer, bool>> expression = c => c.CustomerID == "ALFKI";
             var parameter = Expression.Parameter(typeof(Customer), "c");
 
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(
                     Expression.Lambda<Func<Customer, bool>>(Expression.Invoke(expression, parameter), parameter)),
                 entryCount: 1);
@@ -1062,7 +1062,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_concat_string_int_comparison1()
         {
             var i = 10;
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.CustomerID + i == c.CompanyName).Select(c => c.CustomerID));
         }
 
@@ -1070,7 +1070,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Where_concat_string_int_comparison2()
         {
             var i = 10;
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => i + c.CustomerID == c.CompanyName).Select(c => c.CustomerID));
         }
 
@@ -1079,7 +1079,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var i = 10;
             var j = 21;
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => i + 20 + c.CustomerID + j + 42 == c.CompanyName).Select(c => c.CustomerID));
         }
 
@@ -1088,7 +1088,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var flag = true;
 
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps
+            AssertQuery<Product>(ps => ps
                     .Where(p => flag ? p.UnitsInStock >= 20 : p.UnitsInStock < 20),
                 entryCount: 51);
         }
@@ -1098,7 +1098,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var flag = false;
 
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps
+            AssertQuery<Product>(ps => ps
                     .Where(p => flag ? p.UnitsInStock >= 20 : p.UnitsInStock < 20),
                 entryCount: 26);
         }
@@ -1109,7 +1109,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             var flag = true;
             var productId = 15;
 
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps
+            AssertQuery<Product>(ps => ps
                     .Where(p => p.ProductID < productId
                                 && (flag ? p.UnitsInStock >= 20 : p.UnitsInStock < 20)),
                 entryCount: 9);
@@ -1120,7 +1120,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var flag = true;
 
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps
+            AssertQuery<Product>(ps => ps
                     // ReSharper disable once SimplifyConditionalTernaryExpression
                     .Where(p => flag ? p.UnitsInStock >= 20 : false),
                 entryCount: 51);
@@ -1131,7 +1131,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             var flag = false;
 
-            Fixture.QueryAsserter.AssertQuery<Product>(ps => ps
+            AssertQuery<Product>(ps => ps
                 // ReSharper disable once SimplifyConditionalTernaryExpression
                 .Where(p => flag ? p.UnitsInStock >= 20 : false));
         }
@@ -1180,21 +1180,21 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_compare_constructed_equal()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => new { x = c.City } == new { x = "London" }));
         }
 
         [ConditionalFact]
         public virtual void Where_compare_constructed_multi_value_equal()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => new { x = c.City, y = c.Country } == new { x = "London", y = "UK" }));
         }
 
         [ConditionalFact]
         public virtual void Where_compare_constructed_multi_value_not_equal()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => new { x = c.City, y = c.Country } != new { x = "London", y = "UK" }),
                 entryCount: 91);
         }
@@ -1202,28 +1202,28 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_compare_constructed()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => new { x = c.City } == new { x = "London" }));
         }
 
         [ConditionalFact]
         public virtual void Where_compare_null()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == null && c.Country == "UK"));
         }
 
         [ConditionalFact]
         public virtual void Where_projection()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c.City == "London").Select(c => c.CompanyName));
         }
 
         [ConditionalFact]
         public virtual void Where_Is_on_same_type()
         {
-            Fixture.QueryAsserter.AssertQuery<Customer>(
+            AssertQuery<Customer>(
                 cs => cs.Where(c => c is Customer),
                 entryCount: 91);
         }
@@ -1231,9 +1231,20 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_chain()
         {
-            Fixture.QueryAsserter.AssertQuery<Order>(order => order
+            AssertQuery<Order>(order => order
                 .Where(o => o.CustomerID == "QUICK")
                 .Where(o => o.OrderDate > new DateTime(1998, 1, 1)), entryCount: 8);
+        }
+
+        protected NorthwindContext CreateContext() => Fixture.CreateContext();
+
+        protected WhereQueryTestBase(TFixture fixture)
+            : base(fixture)
+        {
+        }
+
+        protected virtual void ClearLog()
+        {
         }
     }
 }
