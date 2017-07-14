@@ -17,7 +17,7 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         private readonly Dictionary<Type, Action<dynamic, dynamic>> _entityAsserters;
 
         private IExpectedData _expectedData;
-        private ISetExtractor<TContext> _setExtractor;
+        private ISetExtractor _setExtractor;
         private IncludeQueryResultAsserter _includeResultAsserter;
 
         public QueryAsserter(
@@ -36,11 +36,11 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             _includeResultAsserter = new IncludeQueryResultAsserter(_entitySorters, _entityAsserters);
         }
 
-        public virtual ISetExtractor<TContext> SetExtractor => _setExtractor;
+        public virtual ISetExtractor SetExtractor => _setExtractor;
 
         public virtual IExpectedData ExpectedData => _expectedData;
 
-        public virtual void UseSetExtractor(ISetExtractor<TContext> setExtractor)
+        public virtual void UseSetExtractor(ISetExtractor setExtractor)
         {
             _setExtractor = setExtractor;
         }
@@ -633,9 +633,9 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 
         #endregion
 
-        private class DefaultSetExtractor : ISetExtractor<TContext>
+        private class DefaultSetExtractor : ISetExtractor
         {
-            public override IQueryable<TEntity> Set<TEntity>(TContext context)
+            public override IQueryable<TEntity> Set<TEntity>(DbContext context)
                 => context.Set<TEntity>();
         }
     }

@@ -162,9 +162,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                 .IsRequired(false);
         }
 
-        private class ComplexNavigationsOwnedSetExtractor : ISetExtractor<ComplexNavigationsContext>
+        private class ComplexNavigationsOwnedSetExtractor : ISetExtractor
         {
-            public override IQueryable<TEntity> Set<TEntity>(ComplexNavigationsContext context)
+            public override IQueryable<TEntity> Set<TEntity>(DbContext context)
             {
                 if (typeof(TEntity) == typeof(Level1))
                 {
@@ -189,16 +189,16 @@ namespace Microsoft.EntityFrameworkCore.Query
                 throw new NotImplementedException();
             }
 
-            private IQueryable<Level1> GetLevelOne(ComplexNavigationsContext context)
+            private IQueryable<Level1> GetLevelOne(DbContext context)
                 => context.Set<Level1>();
 
-            private IQueryable<Level2> GetLevelTwo(ComplexNavigationsContext context)
+            private IQueryable<Level2> GetLevelTwo(DbContext context)
                 => GetLevelOne(context).Select(t => t.OneToOne_Required_PK).Where(t => t != null);
 
-            private IQueryable<Level3> GetLevelThree(ComplexNavigationsContext context)
+            private IQueryable<Level3> GetLevelThree(DbContext context)
                 => GetLevelTwo(context).Select(t => t.OneToOne_Required_PK).Where(t => t != null);
 
-            private IQueryable<Level4> GetLevelFour(ComplexNavigationsContext context)
+            private IQueryable<Level4> GetLevelFour(DbContext context)
                 => GetLevelThree(context).Select(t => t.OneToOne_Required_PK).Where(t => t != null);
         }
 

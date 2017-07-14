@@ -10,7 +10,7 @@ using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
-    public abstract class ComplexNavigationsQueryFixtureBase<TTestStore>
+    public abstract class ComplexNavigationsQueryFixtureBase<TTestStore> : QueryFixtureBase
         where TTestStore : TestStore
     {
         protected ComplexNavigationsQueryFixtureBase()
@@ -78,7 +78,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         public abstract ComplexNavigationsContext CreateContext(TTestStore testStore);
 
-        public QueryAsserter<ComplexNavigationsContext> QueryAsserter { get; set; }
+        //public QueryAsserter<ComplexNavigationsContext> QueryAsserter { get; set; }
 
         protected virtual void OnModelCreating(ModelBuilder modelBuilder)
         {
