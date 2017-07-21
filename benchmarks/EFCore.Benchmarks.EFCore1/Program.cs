@@ -2,17 +2,20 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using BenchmarkDotNet.Running;
-using Microsoft.EntityFrameworkCore.Benchmarks.EF6.ChangeTracker;
-using Microsoft.EntityFrameworkCore.Benchmarks.EF6.Query;
-using Microsoft.EntityFrameworkCore.Benchmarks.EF6.UpdatePipeline;
+using Microsoft.EntityFrameworkCore.Benchmarks.EFCore1.ChangeTracker;
+using Microsoft.EntityFrameworkCore.Benchmarks.EFCore1.Query;
+using Microsoft.EntityFrameworkCore.Benchmarks.EFCore1.UpdatePipeline;
 
-namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6
+namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore1
 {
     public class Program
     {
         public static void Main(string[] args)
         {
             var benchmarkSummaryProcessor = new BenchmarkSummaryProcessor();
+
+            // Calibration
+            benchmarkSummaryProcessor.Process(BenchmarkRunner.Run<CalibrationTests>());
 
             // Initialization
             benchmarkSummaryProcessor.Process(BenchmarkRunner.Run<InitializationTests>());
