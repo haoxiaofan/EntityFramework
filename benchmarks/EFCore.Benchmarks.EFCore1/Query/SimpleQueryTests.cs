@@ -1,16 +1,15 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System.Data.Entity;
 using System.Linq;
 using System.Threading.Tasks;
 using BenchmarkDotNet.Attributes;
-using Microsoft.EntityFrameworkCore.Benchmarks.EF6.Models.Orders;
+using Microsoft.EntityFrameworkCore.Benchmarks.EFCore1.Models.Orders;
 using Xunit;
 
 // ReSharper disable ReturnValueOfPureMethodIsNotUsed
 
-namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6.Query
+namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore1.Query
 {
     public class SimpleQueryTests
     {
@@ -215,10 +214,10 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6.Query
             }
         }
 
-        private class SimpleQueryFixture : OrdersFixture
+        public class SimpleQueryFixture : OrdersFixture
         {
             public SimpleQueryFixture()
-                : base("Perf_Query_Simple_EF6", 1000, 1000, 2, 2)
+                : base("Perf_Query_Simple", 1000, 1000, 2, 2)
             {
             }
         }

@@ -1,25 +1,29 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using Microsoft.EntityFrameworkCore.Benchmarks.EF6.Models.AdventureWorks;
-using Microsoft.EntityFrameworkCore.Benchmarks.Models.AdventureWorks;
-using Microsoft.EntityFrameworkCore.Benchmarks.Models.AdventureWorks.TestHelpers;
 using System;
-using System.Data.Entity;
-using System.Data.SqlClient;
 using System.Linq;
 using BenchmarkDotNet.Attributes;
+using Microsoft.EntityFrameworkCore.Benchmarks.EFCore1.Models.AdventureWorks;
+using Microsoft.EntityFrameworkCore.Benchmarks.Models.AdventureWorks;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 // ReSharper disable InconsistentNaming
-// ReSharper disable ReturnValueOfPureMethodIsNotUsed
 
-namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6
+
+namespace Microsoft.EntityFrameworkCore.Benchmarks.EFCore1
 {
     public class InitializationTests
     {
+#if NET461
         private ColdStartSandbox _sandbox;
+#endif
         private ColdStartEnabledTests _testClass;
 
+#if NET461
         [Params(true, false)]
+#elif NETCOREAPP1_1
+        [Params(false)]
+#endif
         public bool Cold { get; set; }
 
         [GlobalSetup]
@@ -27,8 +31,10 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6
         {
             if (Cold)
             {
+#if NET461
                 _sandbox = new ColdStartSandbox();
                 _testClass = _sandbox.CreateInstance<ColdStartEnabledTests>();
+#endif
             }
             else
             {
@@ -36,11 +42,13 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6
             }
         }
 
+#if NET461
         [GlobalCleanup]
         public void CleanupContext()
         {
             _sandbox?.Dispose();
         }
+#endif
 
         [Benchmark]
         public void CreateAndDisposeUnusedContext()
@@ -63,12 +71,17 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6
         [Benchmark]
         public void BuildModel_AdventureWorks()
         {
-            var builder = new DbModelBuilder();
+            var builder = new ModelBuilder(SqlServerConventionSetBuilder.Build());
             AdventureWorksContext.ConfigureModel(builder);
-            builder.Build(new SqlConnection(AdventureWorksFixtureBase.ConnectionString));
+
+            // ReSharper disable once UnusedVariable
+            var model = builder.Model;
         }
 
-        private class ColdStartEnabledTests : MarshalByRefObject
+        private class ColdStartEnabledTests
+#if NET461            
+            : MarshalByRefObject
+#endif
         {
             public void CreateAndDisposeUnusedContext(int count)
             {
@@ -87,6 +100,7 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks.EF6
                 {
                     using (var context = AdventureWorksFixture.CreateContext())
                     {
+                        // ReSharper disable once ReturnValueOfPureMethodIsNotUsed
                         context.Department.First();
                     }
                 }
