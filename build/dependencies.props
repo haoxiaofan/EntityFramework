@@ -7,6 +7,8 @@
     <EF6Version>6.1.3</EF6Version>
     <EFCore1Version>1.1.2</EFCore1Version>
     <EFCore1SqlClientVersion>4.3.1</EFCore1SqlClientVersion>
+    <EFCore2Version>2.0.0-rtm-*</EFCore2Version>
+    <EFCore2SqlClientVersion>4.4.0-*</EFCore2SqlClientVersion>
     <InternalAspNetCoreSdkVersion>2.0.1-*</InternalAspNetCoreSdkVersion>
     <JsonNetVersion>10.0.1</JsonNetVersion>
     <NETStandardImplicitPackageVersion>2.0.0-*</NETStandardImplicitPackageVersion>
