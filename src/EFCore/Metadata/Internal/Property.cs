@@ -33,9 +33,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         private ConfigurationSource? _isConcurrencyTokenConfigurationSource;
         private ConfigurationSource? _valueGeneratedConfigurationSource;
 
-        // Warning: Never access these fields directly as access needs to be thread-safe
-        private PropertyIndexes _indexes;
-
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -464,11 +461,23 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static string Format([NotNull] IEnumerable<IProperty> properties, bool includeTypes = false)
+        public static string Format([NotNull] IEnumerable<IPropertyBase> properties, bool includeTypes = false)
             => "{"
                + string.Join(
                    ", ",
-                   properties.Select(p => "'" + p.Name + "'" + (includeTypes ? " : " + p.ClrType.DisplayName(fullName: false) : "")))
+                   properties.Select(
+                       p => "'" + p.Name + "'" + (includeTypes ? " : " + p.ClrType.DisplayName(fullName: false) : "")))
+               + "}";
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static string Format([NotNull] IEnumerable<string> properties)
+            => "{"
+               + string.Join(
+                   ", ",
+                   properties.Select(p => string.IsNullOrEmpty(p) ? "" : "'" + p + "'"))
                + "}";
 
         IEntityType IProperty.DeclaringEntityType => DeclaringEntityType;
@@ -493,32 +502,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                              && entityType.ClrType.GetRuntimeProperties().FirstOrDefault(p => p.Name == property.Name) != null)
                             || (property.FieldInfo != null
                                 && entityType.ClrType.GetFieldInfo(property.Name) != null))));
-        }
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public virtual PropertyIndexes PropertyIndexes
-        {
-            get => NonCapturingLazyInitializer.EnsureInitialized(
-                ref _indexes, this,
-                property => property.DeclaringType.CalculateIndexes(property));
-
-            [param: CanBeNull]
-            set
-            {
-                if (value == null)
-                {
-                    // This path should only kick in when the model is still mutable and therefore access does not need
-                    // to be thread-safe.
-                    _indexes = null;
-                }
-                else
-                {
-                    NonCapturingLazyInitializer.EnsureInitialized(ref _indexes, value);
-                }
-            }
         }
 
         /// <summary>

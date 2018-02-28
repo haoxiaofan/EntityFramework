@@ -5,6 +5,8 @@ using System;
 using System.Data;
 using System.Data.Common;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
 
 namespace Microsoft.EntityFrameworkCore.Storage.Internal
 {
@@ -17,18 +19,32 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         private readonly int _maxSpecificSize;
 
         /// <summary>
-        ///     Initializes a new instance of the <see cref="SqlServerStringTypeMapping" /> class.
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
-        /// <param name="unicode"> A value indicating whether the type should handle Unicode data or not. </param>
-        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
         public SqlServerStringTypeMapping(
             [NotNull] string storeType,
             DbType? dbType,
             bool unicode = false,
-            int? size = null)
-            : base(storeType, dbType, unicode, size)
+            int? size = null,
+            bool fixedLength = false)
+            : this(storeType, null, null, dbType, unicode, size, fixedLength)
+        {
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public SqlServerStringTypeMapping(
+            [NotNull] string storeType,
+            [CanBeNull] ValueConverter converter,
+            [CanBeNull] ValueComparer comparer,
+            DbType? dbType,
+            bool unicode = false,
+            int? size = null,
+            bool fixedLength = false)
+            : base(storeType, converter, comparer, dbType, unicode, size, fixedLength)
         {
             _maxSpecificSize = CalculateSize(unicode, size);
         }
@@ -47,11 +63,14 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new SqlServerStringTypeMapping(
-                storeType,
-                DbType,
-                IsUnicode,
-                size);
+            => new SqlServerStringTypeMapping(storeType, Converter, Comparer, DbType, IsUnicode, size, IsFixedLength);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public override CoreTypeMapping Clone(ValueConverter converter)
+            => new SqlServerStringTypeMapping(StoreType, ComposeConverter(converter), Comparer, DbType, IsUnicode, Size, IsFixedLength);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -73,12 +92,9 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         }
 
         /// <summary>
-        ///     Generates the SQL representation of a literal value.
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        /// <param name="value">The literal value.</param>
-        /// <returns>
-        ///     The generated string.
-        /// </returns>
         protected override string GenerateNonNullSqlLiteral(object value)
             => IsUnicode
                 ? $"N'{EscapeSqlLiteral((string)value)}'" // Interpolation okay; strings

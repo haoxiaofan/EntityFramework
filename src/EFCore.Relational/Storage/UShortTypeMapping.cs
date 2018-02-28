@@ -3,6 +3,8 @@
 
 using System.Data;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
 
 namespace Microsoft.EntityFrameworkCore.Storage
 {
@@ -25,7 +27,23 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public UShortTypeMapping(
             [NotNull] string storeType,
             DbType? dbType = null)
-            : base(storeType, typeof(ushort), dbType)
+            : this(storeType, null, null, dbType)
+        {
+        }
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="UShortTypeMapping" /> class.
+        /// </summary>
+        /// <param name="storeType"> The name of the database type. </param>
+        /// <param name="converter"> Converts types to and from the store whenever this mapping is used. </param>
+        /// <param name="comparer"> Supports custom value snapshotting and comparisons. </param>
+        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
+        public UShortTypeMapping(
+            [NotNull] string storeType,
+            [CanBeNull] ValueConverter converter,
+            [CanBeNull] ValueComparer comparer,
+            DbType? dbType = null)
+            : base(storeType, typeof(ushort), converter, comparer, dbType)
         {
         }
 
@@ -36,6 +54,15 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
         /// <returns> The newly created mapping. </returns>
         public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new UShortTypeMapping(storeType, DbType);
+            => new UShortTypeMapping(storeType, Converter, Comparer, DbType);
+
+        /// <summary>
+        ///    Returns a new copy of this type mapping with the given <see cref="ValueConverter"/>
+        ///    added.
+        /// </summary>
+        /// <param name="converter"> The converter to use. </param>
+        /// <returns> A new type mapping </returns>
+        public override CoreTypeMapping Clone(ValueConverter converter)
+            => new UShortTypeMapping(StoreType, ComposeConverter(converter), Comparer, DbType);
     }
 }

@@ -10,6 +10,10 @@ using Microsoft.EntityFrameworkCore.Storage.Internal;
 
 namespace Microsoft.EntityFrameworkCore
 {
+    /// <summary>
+    ///     An <see cref="IExecutionStrategy" /> implementation for retrying failed executions
+    ///     on SQL Server.
+    /// </summary>
     public class SqlServerRetryingExecutionStrategy : ExecutionStrategy
     {
         private readonly ICollection<int> _additionalErrorNumbers;
@@ -77,9 +81,7 @@ namespace Microsoft.EntityFrameworkCore
                 context,
                 maxRetryCount,
                 maxRetryDelay)
-        {
-            _additionalErrorNumbers = errorNumbersToAdd;
-        }
+            => _additionalErrorNumbers = errorNumbersToAdd;
 
         /// <summary>
         ///     Creates a new instance of <see cref="SqlServerRetryingExecutionStrategy" />.
@@ -94,16 +96,21 @@ namespace Microsoft.EntityFrameworkCore
             TimeSpan maxRetryDelay,
             [CanBeNull] ICollection<int> errorNumbersToAdd)
             : base(dependencies, maxRetryCount, maxRetryDelay)
-        {
-            _additionalErrorNumbers = errorNumbersToAdd;
-        }
+            => _additionalErrorNumbers = errorNumbersToAdd;
 
+        /// <summary>
+        ///     Determines whether the specified exception represents a transient failure that can be
+        ///     compensated by a retry. Additional exceptions to retry on can be passed to the constructor.
+        /// </summary>
+        /// <param name="exception"> The exception object to be verified. </param>
+        /// <returns>
+        ///     <c>true</c> if the specified exception is considered as transient, otherwise <c>false</c>.
+        /// </returns>
         protected override bool ShouldRetryOn(Exception exception)
         {
             if (_additionalErrorNumbers != null)
             {
-                var sqlException = exception as SqlException;
-                if (sqlException != null)
+                if (exception is SqlException sqlException)
                 {
                     foreach (SqlError err in sqlException.Errors)
                     {
@@ -118,6 +125,14 @@ namespace Microsoft.EntityFrameworkCore
             return SqlServerTransientExceptionDetector.ShouldRetryOn(exception);
         }
 
+        /// <summary>
+        ///     Determines whether the operation should be retried and the delay before the next attempt.
+        /// </summary>
+        /// <param name="lastException"> The exception thrown during the last execution attempt. </param>
+        /// <returns>
+        ///     Returns the delay indicating how long to wait for before the next execution attempt if the operation should be retried;
+        ///     <c>null</c> otherwise
+        /// </returns>
         protected override TimeSpan? GetNextDelay(Exception lastException)
         {
             var baseDelay = base.GetNextDelay(lastException);
@@ -136,8 +151,7 @@ namespace Microsoft.EntityFrameworkCore
 
         private bool IsMemoryOptimizedError(Exception exception)
         {
-            var sqlException = exception as SqlException;
-            if (sqlException != null)
+            if (exception is SqlException sqlException)
             {
                 foreach (SqlError err in sqlException.Errors)
                 {

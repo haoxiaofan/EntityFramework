@@ -4,6 +4,8 @@
 using System;
 using System.Data;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
 
 namespace Microsoft.EntityFrameworkCore.Storage.Internal
 {
@@ -14,14 +16,26 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     public class SqliteGuidTypeMapping : GuidTypeMapping
     {
         /// <summary>
-        ///     Initializes a new instance of the <see cref="SqliteGuidTypeMapping" /> class.
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        /// <param name="storeType"> The name of the database type. </param>
-        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
         public SqliteGuidTypeMapping(
             [NotNull] string storeType,
             DbType? dbType = null)
-            : base(storeType, dbType)
+            : this(storeType, null, null, dbType)
+        {
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public SqliteGuidTypeMapping(
+            [NotNull] string storeType,
+            [CanBeNull] ValueConverter converter,
+            [CanBeNull] ValueComparer comparer,
+            DbType? dbType = null)
+            : base(storeType, converter, comparer, dbType)
         {
         }
 
@@ -30,15 +44,19 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new SqliteGuidTypeMapping(storeType, DbType);
+            => new SqliteGuidTypeMapping(storeType, Converter, Comparer, DbType);
 
         /// <summary>
-        ///     Generates the SQL representation of a literal value.
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        /// <param name="value">The literal value.</param>
-        /// <returns>
-        ///     The generated string.
-        /// </returns>
+        public override CoreTypeMapping Clone(ValueConverter converter)
+            => new SqliteGuidTypeMapping(StoreType, ComposeConverter(converter), Comparer, DbType);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         protected override string GenerateNonNullSqlLiteral(object value)
             => new ByteArrayTypeMapping(StoreType).GenerateSqlLiteral(((Guid)value).ToByteArray());
     }

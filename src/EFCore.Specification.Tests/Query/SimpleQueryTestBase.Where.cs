@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.TestModels.Northwind;
@@ -22,6 +23,16 @@ namespace Microsoft.EntityFrameworkCore.Query
                 entryCount: 6);
         }
 
+        private static Expression<Func<Order, bool>> _filter = o => o.CustomerID == "ALFKI";
+
+        [ConditionalFact]
+        public virtual void Where_as_queryable_expression()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.Orders.AsQueryable().Any(_filter)),
+                entryCount: 1);
+        }
+
         [ConditionalFact]
         public virtual void Where_simple_closure()
         {
@@ -36,11 +47,40 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_indexer_closure()
         {
-            // ReSharper disable once ConvertToConstant.Local
-            var city = new[] { "London" };
+            var cities = new[] { "London" };
 
             AssertQuery<Customer>(
-                cs => cs.Where(c => c.City == city[0]),
+                cs => cs.Where(c => c.City == cities[0]),
+                entryCount: 6);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_dictionary_key_access_closure()
+        {
+            var predicateMap = new Dictionary<string, string> { ["City"] = "London" };
+
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City == predicateMap["City"]),
+                entryCount: 6);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_tuple_item_closure()
+        {
+            var predicateTuple = new Tuple<string, string>("ALFKI", "London");
+
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City == predicateTuple.Item2),
+                entryCount: 6);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_named_tuple_item_closure()
+        {
+            (string CustomerID, string City) predicateTuple = ("ALFKI", "London");
+
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City == predicateTuple.City),
                 entryCount: 6);
         }
 
@@ -474,7 +514,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_using_object_overload_on_mismatched_types()
         {
+#if Test20
             long longPrm = 1;
+#else
+            ulong longPrm = 1;
+#endif
 
             AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID.Equals(longPrm)));
@@ -483,7 +527,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_using_int_overload_on_mismatched_types()
         {
+#if Test20
             short shortPrm = 1;
+#else
+            ushort shortPrm = 1;
+#endif
 
             AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID.Equals(shortPrm)),
@@ -493,7 +541,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_on_mismatched_types_nullable_int_long()
         {
+#if Test20
             long longPrm = 2;
+#else
+            ulong longPrm = 2;
+#endif
 
             AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo.Equals(longPrm)));
@@ -505,7 +557,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_on_mismatched_types_int_nullable_int()
         {
+#if Test20
             var intPrm = 2;
+#else
+            uint intPrm = 2;
+#endif
 
             AssertQuery<Employee>(
                 es => es.Where(e => e.ReportsTo.Equals(intPrm)),
@@ -519,7 +575,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_on_mismatched_types_nullable_long_nullable_int()
         {
-            long? nullableLongPrm = 2;
+#if Test20
+            ulong? nullableLongPrm = 2;
+#else
+            ulong? nullableLongPrm = 2;
+#endif
 
             AssertQuery<Employee>(
                 es => es.Where(e => nullableLongPrm.Equals(e.ReportsTo)));
@@ -531,7 +591,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_on_matched_nullable_int_types()
         {
+#if Test20
             int? nullableIntPrm = 2;
+#else
+            uint? nullableIntPrm = 2;
+#endif
 
             AssertQuery<Employee>(
                 es => es.Where(e => nullableIntPrm.Equals(e.ReportsTo)),
@@ -545,7 +609,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Where_equals_on_null_nullable_int_types()
         {
+#if Test20
             int? nullableIntPrm = null;
+#else
+            uint? nullableIntPrm = null;
+#endif
 
             AssertQuery<Employee>(
                 es => es.Where(e => nullableIntPrm.Equals(e.ReportsTo)),
@@ -581,6 +649,31 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual void Where_string_indexof()
+        {
+            // ReSharper disable once StringIndexOfIsCultureSpecific.1
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City.IndexOf("Sea") != -1),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_string_replace()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City.Replace("Sea", "Rea") == "Reattle"),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_string_substring()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.City.Substring(1, 2) == "ea"),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
         public virtual void Where_datetime_now()
         {
             var myDatetime = new DateTime(2015, 4, 10);
@@ -596,6 +689,14 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<Customer>(
                 cs => cs.Where(c => DateTime.UtcNow != myDatetime),
                 entryCount: 91);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetime_today()
+        {
+            AssertQuery<Employee>(
+                es => es.Where(e => DateTime.Now.Date == DateTime.Today),
+                entryCount: 9);
         }
 
         [ConditionalFact]
@@ -823,7 +924,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 (cs, es) =>
                     from c in cs
                     from e in es
-                    // ReSharper disable ArrangeRedundantParentheses
+                        // ReSharper disable ArrangeRedundantParentheses
                     where (c.City == "London" && c.Country == "UK")
                           && (e.City == "London" && e.Country == "UK")
                     select new { c, e },
@@ -1210,10 +1311,47 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
-        public virtual void Where_compare_constructed()
+        public virtual void Where_compare_tuple_constructed_equal()
         {
             AssertQuery<Customer>(
-                cs => cs.Where(c => new { x = c.City } == new { x = "London" }));
+                cs => cs.Where(c => new Tuple<string>(c.City) == new Tuple<string>("London")));
+        }
+
+        [ConditionalFact]
+        public virtual void Where_compare_tuple_constructed_multi_value_equal()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => new Tuple<string, string>(c.City, c.Country) == new Tuple<string, string>("London", "UK")));
+        }
+
+        [ConditionalFact]
+        public virtual void Where_compare_tuple_constructed_multi_value_not_equal()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => new Tuple<string, string>(c.City, c.Country) != new Tuple<string, string>("London", "UK")),
+                entryCount: 91);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_compare_tuple_create_constructed_equal()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => Tuple.Create(c.City) == Tuple.Create("London")));
+        }
+
+        [ConditionalFact]
+        public virtual void Where_compare_tuple_create_constructed_multi_value_equal()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => Tuple.Create(c.City, c.Country) == Tuple.Create("London", "UK")));
+        }
+
+        [ConditionalFact]
+        public virtual void Where_compare_tuple_create_constructed_multi_value_not_equal()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Where(c => Tuple.Create(c.City, c.Country) != Tuple.Create("London", "UK")),
+                entryCount: 91);
         }
 
         [ConditionalFact]
@@ -1245,6 +1383,28 @@ namespace Microsoft.EntityFrameworkCore.Query
                 order => order
                     .Where(o => o.CustomerID == "QUICK")
                     .Where(o => o.OrderDate > new DateTime(1998, 1, 1)), entryCount: 8);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_navigation_contains()
+        {
+            using (var context = CreateContext())
+            {
+                var customer = context.Customers.Include(c => c.Orders).Single(c => c.CustomerID == "ALFKI");
+                var orderDetails = context.OrderDetails.Where(od => customer.Orders.Contains(od.Order)).ToList();
+
+                Assert.Equal(12, orderDetails.Count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Where_array_index()
+        {
+            var customers = new[] { "ALFKI", "ANATR" };
+
+            AssertQuery<Customer>(
+                cs => cs.Where(c => c.CustomerID == customers[0]),
+                entryCount: 1);
         }
     }
 }

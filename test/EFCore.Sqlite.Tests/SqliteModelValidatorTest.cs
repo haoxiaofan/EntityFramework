@@ -4,20 +4,25 @@
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public class SqliteModelValidatorTest : RelationalModelValidatorTest
     {
         public override void Detects_duplicate_column_names()
         {
-            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))).CreateConventionSet());
-            modelBuilder.Entity<Animal>().Property(b => b.Id).HasColumnName("Name");
+            var modelBuilder = InMemoryTestHelpers.Instance.CreateConventionBuilder();
+
+            GenerateMapping(modelBuilder.Entity<Animal>().Property(b => b.Id).HasColumnName("Name").Metadata);
+            GenerateMapping(modelBuilder.Entity<Animal>().Property(d => d.Name).HasColumnName("Name").Metadata);
 
             VerifyError(
                 RelationalStrings.DuplicateColumnNameDataTypeMismatch(
@@ -28,10 +33,11 @@ namespace Microsoft.EntityFrameworkCore
 
         public override void Detects_duplicate_columns_in_derived_types_with_different_types()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = CreateConventionalModelBuilder();
             modelBuilder.Entity<Animal>();
-            modelBuilder.Entity<Cat>().Property(c => c.Type);
-            modelBuilder.Entity<Dog>().Property(c => c.Type);
+
+            GenerateMapping(modelBuilder.Entity<Cat>().Property(c => c.Type).HasColumnName("Type").Metadata);
+            GenerateMapping(modelBuilder.Entity<Dog>().Property(d => d.Type).HasColumnName("Type").Metadata);
 
             VerifyError(
                 RelationalStrings.DuplicateColumnNameDataTypeMismatch(
@@ -44,12 +50,16 @@ namespace Microsoft.EntityFrameworkCore
 
         public override void Detects_incompatible_shared_columns_with_shared_table()
         {
-            var modelBuilder = new ModelBuilder(new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))).CreateConventionSet());
+            var modelBuilder = InMemoryTestHelpers.Instance.CreateConventionBuilder();
 
             modelBuilder.Entity<A>().HasOne<B>().WithOne().IsRequired().HasForeignKey<A>(a => a.Id).HasPrincipalKey<B>(b => b.Id);
-            modelBuilder.Entity<A>().Property(a => a.P0).HasColumnType("someInt");
+            modelBuilder.Entity<A>().Property(a => a.P0).HasColumnName(nameof(A.P0)).HasColumnType("someInt");
             modelBuilder.Entity<A>().ToTable("Table");
+            modelBuilder.Entity<B>().Property(a => a.P0).HasColumnName(nameof(A.P0));
             modelBuilder.Entity<B>().ToTable("Table");
+
+            GenerateMapping(modelBuilder.Entity<A>().Property(b => b.P0).Metadata);
+            GenerateMapping(modelBuilder.Entity<B>().Property(d => d.P0).Metadata);
 
             VerifyError(
                 RelationalStrings.DuplicateColumnNameDataTypeMismatch(
@@ -59,7 +69,7 @@ namespace Microsoft.EntityFrameworkCore
         [Fact]
         public void Detects_schemas()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = CreateConventionalModelBuilder();
             modelBuilder.Entity<Animal>().ToTable("Animals", "pet");
 
             VerifyWarning(SqliteStrings.LogSchemaConfigured.GenerateMessage("Animal", "pet"), modelBuilder.Model);
@@ -68,20 +78,35 @@ namespace Microsoft.EntityFrameworkCore
         [Fact]
         public void Detects_sequences()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = CreateConventionalModelBuilder();
             modelBuilder.HasSequence("Fibonacci");
 
             VerifyWarning(SqliteStrings.LogSequenceConfigured.GenerateMessage("Fibonacci"), modelBuilder.Model);
         }
 
-        protected override ModelValidator CreateModelValidator()
+        private static void GenerateMapping(IMutableProperty property)
+            => property[CoreAnnotationNames.TypeMapping]
+                = TestServiceFactory.Instance.Create<SqliteTypeMappingSource>()
+                    .FindMapping(property);
+
+        protected override IModelValidator CreateModelValidator()
             => new SqliteModelValidator(
                 new ModelValidatorDependencies(
                     new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
                         new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Validation.Name),
                         new LoggingOptions(),
+                        new DiagnosticListener("Fake")),
+                    new DiagnosticsLogger<DbLoggerCategory.Model>(
+                        new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Name),
+                        new LoggingOptions(),
                         new DiagnosticListener("Fake"))),
                 new RelationalModelValidatorDependencies(
-                    new SqliteTypeMapper(new RelationalTypeMapperDependencies())));
+#pragma warning disable 618
+                    new ObsoleteRelationalTypeMapper(), 
+#pragma warning restore 618
+                    TestServiceFactory.Instance.Create<SqliteTypeMappingSource>()));
+
+        protected override ModelBuilder CreateConventionalModelBuilder()
+            => SqliteTestHelpers.Instance.CreateConventionBuilder();
     }
 }

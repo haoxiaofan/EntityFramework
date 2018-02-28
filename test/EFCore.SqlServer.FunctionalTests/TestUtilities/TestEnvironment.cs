@@ -24,26 +24,58 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
                 .GetSection("Test:SqlServer");
         }
 
-        private const string DefaultConnectionString = "Data Source=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;Connect Timeout=30";
+        private const string DefaultConnectionString
+            = "Data Source=(localdb)\\MSSQLLocalDB;Database=master;Integrated Security=True;Connect Timeout=30";
 
         public static string DefaultConnection => Config["DefaultConnection"] ?? DefaultConnectionString;
 
-        public static bool IsSqlAzure => new SqlConnectionStringBuilder(DefaultConnection).DataSource.Contains("database.windows.net");
+        public static bool IsSqlAzure
+            => new SqlConnectionStringBuilder(DefaultConnection).DataSource.Contains("database.windows.net");
 
         public static bool IsTeamCity => Environment.GetEnvironmentVariable("TEAMCITY_VERSION") != null;
+
+        public static bool IsFullTestSearchSupported
+        {
+            get
+            {
+                var fullTextInstalled = false;
+                using (var sqlConnection = new SqlConnection(SqlServerTestStore.CreateConnectionString("master")))
+                {
+                    sqlConnection.Open();
+
+                    using (var command = new SqlCommand(
+                        "SELECT FULLTEXTSERVICEPROPERTY('IsFullTextInstalled')", sqlConnection))
+                    {
+                        var result = (int)command.ExecuteScalar();
+
+                        fullTextInstalled = result == 1;
+                    }
+                }
+
+                if (fullTextInstalled)
+                {
+                    var flag = GetFlag("SupportsFullTextSearch");
+
+                    if (flag.HasValue)
+                    {
+                        return flag.Value;
+                    }
+                }
+
+                return false;
+            }
+        }
 
         public static string ElasticPoolName => Config["ElasticPoolName"];
 
         public static bool? GetFlag(string key)
         {
-            bool flag;
-            return bool.TryParse(Config[key], out flag) ? flag : (bool?)null;
+            return bool.TryParse(Config[key], out var flag) ? flag : (bool?)null;
         }
 
         public static int? GetInt(string key)
         {
-            int value;
-            return int.TryParse(Config[key], out value) ? value : (int?)null;
+            return int.TryParse(Config[key], out var value) ? value : (int?)null;
         }
     }
 }

@@ -49,6 +49,9 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 return this;
             }
 
+            public override void Owned<TEntity>()
+                => ModelBuilder.Owned<TEntity>();
+
             public override TestModelBuilder Ignore<TEntity>()
             {
                 ModelBuilder.Ignore<TEntity>();

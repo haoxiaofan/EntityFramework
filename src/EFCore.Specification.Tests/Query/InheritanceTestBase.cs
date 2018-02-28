@@ -1,8 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestModels.Inheritance;
 using Microsoft.EntityFrameworkCore.TestUtilities;
@@ -209,6 +211,19 @@ namespace Microsoft.EntityFrameworkCore.Query
                 Assert.Equal(2, animals.Count);
                 Assert.IsType<Kiwi>(animals[0]);
                 Assert.IsType<Eagle>(animals[1]);
+            }
+        }
+
+        [Fact]
+        public virtual void Can_query_all_animal_views()
+        {
+            using (var context = CreateContext())
+            {
+                var animalQueries = context.Query<AnimalQuery>().OrderBy(av => av.CountryId).ToList();
+
+                Assert.Equal(2, animalQueries.Count);
+                Assert.IsType<KiwiQuery>(animalQueries[0]);
+                Assert.IsType<EagleQuery>(animalQueries[1]);
             }
         }
 
@@ -508,6 +523,31 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var concat = kiwis.Cast<Bird>().Union(eagles).ToList();
 
                 Assert.Equal(2, concat.Count);
+            }
+        }
+
+        [Fact]
+        public virtual void Setting_foreign_key_to_a_different_type_throws()
+        {
+            using (var context = CreateContext())
+            {
+                var kiwi = context.Set<Kiwi>().Single();
+
+                var eagle = new Eagle
+                {
+                    Species = "Haliaeetus leucocephalus",
+                    Name = "Bald eagle",
+                    Group = EagleGroup.Booted,
+                    EagleId = kiwi.Species
+                };
+
+                Assert.Equal(CoreStrings.IncompatiblePrincipalEntrySensitive(
+                    "{EagleId: Apteryx haastii}",
+                    nameof(Eagle),
+                    "{Species: Haliaeetus leucocephalus}",
+                    nameof(Kiwi),
+                    nameof(Eagle)),
+                    Assert.Throws<InvalidOperationException>(() => context.Add(eagle)).Message);
             }
         }
 

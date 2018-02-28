@@ -150,6 +150,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 || relationalQueryModelVisitor.RequiresClientFilter
                 || relationalQueryModelVisitor.RequiresClientOrderBy
                 || relationalQueryModelVisitor.RequiresClientResultOperator
+                || relationalQueryModelVisitor.RequiresStreamingGroupResultOperator
                 || !_resultHandlers.TryGetValue(resultOperator.GetType(), out var resultHandler)
                 || selectExpression == null)
             {
@@ -163,6 +164,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         {
             var sqlTranslatingVisitor
                 = handlerContext.CreateSqlTranslatingVisitor();
+
+            PrepareSelectExpressionForAggregate(handlerContext.SelectExpression);
 
             var predicate
                 = sqlTranslatingVisitor.Visit(
@@ -446,6 +449,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         private static Expression HandleGroup(HandlerContext handlerContext)
         {
+            if (handlerContext.QueryModelVisitor.QueryCompilationContext.IsIncludeQuery
+                && handlerContext.QueryModel.ResultOperators.Any(
+                    o => o is SkipResultOperator || o is TakeResultOperator || o is ChoiceResultOperatorBase || o is DistinctResultOperator))
+            {
+                return handlerContext.EvalOnClient();
+            }
+
             var sqlTranslatingExpressionVisitor = handlerContext.CreateSqlTranslatingVisitor();
 
             var groupResultOperator = (GroupResultOperator)handlerContext.ResultOperator;
@@ -455,13 +465,21 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
             if (sqlExpression != null)
             {
+                var selectExpression = handlerContext.SelectExpression;
+
+                PrepareSelectExpressionForAggregate(selectExpression);
+
+                sqlExpression
+                    = sqlTranslatingExpressionVisitor.Visit(groupResultOperator.KeySelector);
+
                 var columns = (sqlExpression as ConstantExpression)?.Value as Expression[] ?? new[] { sqlExpression };
 
-                handlerContext.SelectExpression
-                    .PrependToOrderBy(columns.Select(c => new Ordering(c, OrderingDirection.Asc)));
+                selectExpression.PrependToOrderBy(columns.Select(c => new Ordering(c, OrderingDirection.Asc)));
+
+                handlerContext.QueryModelVisitor.RequiresStreamingGroupResultOperator = true;
             }
 
-            var oldGroupByCall = (MethodCallExpression)handlerContext.EvalOnClient();
+            var oldGroupByCall = (MethodCallExpression)handlerContext.EvalOnClient(requiresClientResultOperator: sqlExpression == null);
 
             var newGroupByCall
                 = handlerContext.QueryModelVisitor.QueryCompilationContext.QueryMethodProvider.GroupByMethod;
@@ -580,6 +598,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             var requiresClientResultOperator = true;
             if (handlerContext.SelectExpression.OrderBy.Any())
             {
+                if (handlerContext.SelectExpression.Limit != null
+                    || handlerContext.SelectExpression.Offset != null)
+                {
+                    handlerContext.SelectExpression.PushDownSubquery();
+                    handlerContext.SelectExpression.LiftOrderBy();
+                }
+
                 foreach (var ordering in handlerContext.SelectExpression.OrderBy)
                 {
                     ordering.OrderingDirection
@@ -626,7 +651,6 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (!(expression.RemoveConvert() is SelectExpression))
                 {
-                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
                     var minExpression = new SqlFunctionExpression("MIN", handlerContext.QueryModel.SelectClause.Selector.Type, new[] { expression });
 
                     handlerContext.SelectExpression.SetProjectionExpression(minExpression);
@@ -653,7 +677,6 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                 if (!(expression.RemoveConvert() is SelectExpression))
                 {
-                    expression = (expression as ExplicitCastExpression)?.Operand ?? expression;
                     var maxExpression = new SqlFunctionExpression("MAX", handlerContext.QueryModel.SelectClause.Selector.Type, new[] { expression });
 
                     handlerContext.SelectExpression.SetProjectionExpression(maxExpression);
@@ -672,6 +695,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
         private static bool DetermineAggregateThrowingBehavior(HandlerContext handlerContext, Type maxExpressionType)
         {
+            if (handlerContext.QueryModel.MainFromClause.FromExpression.Type.IsGrouping())
+            {
+                return false;
+            }
+
             var throwOnNullResult = !maxExpressionType.IsNullableType();
 
             if (throwOnNullResult
@@ -681,7 +709,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     .QueryPossibleExceptionWithAggregateOperator();
             }
 
-            handlerContext.QueryModelVisitor.RequiresClientResultOperator = throwOnNullResult;
+            if (handlerContext.QueryModelVisitor.ParentQueryModelVisitor != null)
+            {
+                handlerContext.QueryModelVisitor.RequiresClientResultOperator = throwOnNullResult;
+            }
 
             return throwOnNullResult;
         }
@@ -740,9 +771,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                     handlerContext.SelectExpression.SetProjectionExpression(sumExpression);
 
-                    return (Expression)_transformClientExpressionMethodInfo
-                        .MakeGenericMethod(sumExpression.Type)
-                        .Invoke(null, new object[] { handlerContext, /*throwOnNullResult:*/ false });
+                    var clientExpression
+                        = (Expression)_transformClientExpressionMethodInfo
+                            .MakeGenericMethod(sumExpression.Type.UnwrapNullableType())
+                            .Invoke(null, new object[] { handlerContext, /*throwOnNullResult:*/ false });
+
+                    return
+                        sumExpression.Type.IsNullableType()
+                            ? Expression.Convert(clientExpression, sumExpression.Type)
+                            : clientExpression;
                 }
             }
 

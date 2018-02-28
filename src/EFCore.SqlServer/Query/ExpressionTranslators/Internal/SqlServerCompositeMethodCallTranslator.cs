@@ -16,7 +16,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
             new SqlServerContainsOptimizedTranslator(),
             new SqlServerConvertTranslator(),
             new SqlServerDateAddTranslator(),
+            new SqlServerDateDiffTranslator(),
             new SqlServerEndsWithOptimizedTranslator(),
+            new SqlServerFreeTextMethodCallTranslator(),
             new SqlServerMathTranslator(),
             new SqlServerNewGuidTranslator(),
             new SqlServerObjectToStringTranslator(),
@@ -28,7 +30,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
             new SqlServerStringToUpperTranslator(),
             new SqlServerStringTrimEndTranslator(),
             new SqlServerStringTrimStartTranslator(),
-            new SqlServerStringTrimTranslator()
+            new SqlServerStringTrimTranslator(),
+            new SqlServerStringIndexOfTranslator()
         };
 
         /// <summary>

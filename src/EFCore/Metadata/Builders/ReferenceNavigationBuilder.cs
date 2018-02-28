@@ -2,6 +2,8 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
+using System.Diagnostics;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -63,31 +65,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             Builder = builder;
         }
 
-        private InternalRelationshipBuilder Builder { get; }
+        private InternalRelationshipBuilder Builder { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual string ReferenceName { get; }
+        protected virtual string ReferenceName { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual PropertyInfo ReferenceProperty { get; }
+        protected virtual PropertyInfo ReferenceProperty { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual EntityType RelatedEntityType { get; }
+        protected virtual EntityType RelatedEntityType { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected virtual EntityType DeclaringEntityType { get; }
+        protected virtual EntityType DeclaringEntityType { [DebuggerStepThrough] get; }
 
         /// <summary>
         ///     Gets the internal builder being used to configure the relationship.
@@ -135,16 +137,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             }
 
             builder = builder.IsUnique(false, ConfigurationSource.Explicit);
-            var foreingKey = builder.Metadata;
+            var foreignKey = builder.Metadata;
             if (collectionName != null
-                && foreingKey.PrincipalToDependent != null
-                && foreingKey.GetPrincipalToDependentConfigurationSource() == ConfigurationSource.Explicit
-                && foreingKey.PrincipalToDependent.Name != collectionName)
+                && foreignKey.PrincipalToDependent != null
+                && foreignKey.GetPrincipalToDependentConfigurationSource() == ConfigurationSource.Explicit
+                && foreignKey.PrincipalToDependent.Name != collectionName)
             {
-                ThrowForConflictingNavigation(foreingKey, collectionName, false);
+                ThrowForConflictingNavigation(foreignKey, collectionName, false);
             }
 
-            if (RelatedEntityType != foreingKey.PrincipalEntityType)
+            if (RelatedEntityType != foreignKey.PrincipalEntityType)
             {
                 return collection.Property == null && ReferenceProperty == null
                     ? builder.Navigations(ReferenceName, collection.Name, RelatedEntityType, DeclaringEntityType, ConfigurationSource.Explicit)
@@ -198,8 +200,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             using (var batch = Builder.Metadata.DeclaringEntityType.Model.ConventionDispatcher.StartBatch())
             {
                 var builder = Builder.IsUnique(true, ConfigurationSource.Explicit);
-                var foreingKey = builder.Metadata;
-                if (foreingKey.IsSelfReferencing()
+                var foreignKey = builder.Metadata;
+                if (foreignKey.IsSelfReferencing()
                     && referenceName != null
                     && ReferenceName == referenceName)
                 {
@@ -208,30 +210,30 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                             referenceName, RelatedEntityType.DisplayName(), RelatedEntityType.DisplayName()));
                 }
 
-                var pointsToPrincipal = !foreingKey.IsSelfReferencing()
-                                        && (!foreingKey.DeclaringEntityType.IsAssignableFrom(DeclaringEntityType)
-                                            || !foreingKey.PrincipalEntityType.IsAssignableFrom(RelatedEntityType)
-                                            || (foreingKey.DeclaringEntityType.IsAssignableFrom(RelatedEntityType)
-                                                && foreingKey.PrincipalEntityType.IsAssignableFrom(DeclaringEntityType)
-                                                && foreingKey.PrincipalToDependent != null
-                                                && foreingKey.PrincipalToDependent.Name == ReferenceName));
+                var pointsToPrincipal = !foreignKey.IsSelfReferencing()
+                                        && (!foreignKey.DeclaringEntityType.IsAssignableFrom(DeclaringEntityType)
+                                            || !foreignKey.PrincipalEntityType.IsAssignableFrom(RelatedEntityType)
+                                            || (foreignKey.DeclaringEntityType.IsAssignableFrom(RelatedEntityType)
+                                                && foreignKey.PrincipalEntityType.IsAssignableFrom(DeclaringEntityType)
+                                                && foreignKey.PrincipalToDependent != null
+                                                && foreignKey.PrincipalToDependent.Name == ReferenceName));
 
                 if (referenceName != null
                     && ((pointsToPrincipal
-                         && foreingKey.DependentToPrincipal != null
-                         && foreingKey.GetDependentToPrincipalConfigurationSource() == ConfigurationSource.Explicit
-                         && foreingKey.DependentToPrincipal.Name != referenceName)
+                         && foreignKey.DependentToPrincipal != null
+                         && foreignKey.GetDependentToPrincipalConfigurationSource() == ConfigurationSource.Explicit
+                         && foreignKey.DependentToPrincipal.Name != referenceName)
                         || (!pointsToPrincipal
-                            && foreingKey.PrincipalToDependent != null
-                            && foreingKey.GetPrincipalToDependentConfigurationSource() == ConfigurationSource.Explicit
-                            && foreingKey.PrincipalToDependent.Name != referenceName)))
+                            && foreignKey.PrincipalToDependent != null
+                            && foreignKey.GetPrincipalToDependentConfigurationSource() == ConfigurationSource.Explicit
+                            && foreignKey.PrincipalToDependent.Name != referenceName)))
                 {
-                    ThrowForConflictingNavigation(foreingKey, referenceName, pointsToPrincipal);
+                    ThrowForConflictingNavigation(foreignKey, referenceName, pointsToPrincipal);
                 }
 
                 if (referenceName != null
                     && pointsToPrincipal
-                    && RelatedEntityType != foreingKey.DeclaringEntityType)
+                    && RelatedEntityType != foreignKey.DeclaringEntityType)
                 {
                     builder = reference.Property == null && ReferenceProperty == null
                         ? builder.Navigations(
@@ -241,7 +243,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 }
                 else if (referenceName != null
                          && !pointsToPrincipal
-                         && RelatedEntityType != foreingKey.PrincipalEntityType)
+                         && RelatedEntityType != foreignKey.PrincipalEntityType)
                 {
                     builder = reference.Property == null && ReferenceProperty == null
                         ? builder.Navigations(
@@ -270,18 +272,44 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             }
         }
 
-        private static void ThrowForConflictingNavigation(ForeignKey foreingKey, string newInverseName, bool newToPrincipal)
+        private static void ThrowForConflictingNavigation(ForeignKey foreignKey, string newInverseName, bool newToPrincipal)
         {
             throw new InvalidOperationException(
                 CoreStrings.ConflictingRelationshipNavigation(
-                    foreingKey.PrincipalEntityType.DisplayName(),
-                    newToPrincipal ? foreingKey.PrincipalToDependent.Name : newInverseName,
-                    foreingKey.DeclaringEntityType.DisplayName(),
-                    newToPrincipal ? newInverseName : foreingKey.DependentToPrincipal.Name,
-                    foreingKey.PrincipalEntityType.DisplayName(),
-                    foreingKey.PrincipalToDependent.Name,
-                    foreingKey.DeclaringEntityType.DisplayName(),
-                    foreingKey.DependentToPrincipal.Name));
+                    foreignKey.PrincipalEntityType.DisplayName(),
+                    newToPrincipal ? foreignKey.PrincipalToDependent?.Name : newInverseName,
+                    foreignKey.DeclaringEntityType.DisplayName(),
+                    newToPrincipal ? newInverseName : foreignKey.DependentToPrincipal?.Name,
+                    foreignKey.PrincipalEntityType.DisplayName(),
+                    foreignKey.PrincipalToDependent?.Name,
+                    foreignKey.DeclaringEntityType.DisplayName(),
+                    foreignKey.DependentToPrincipal?.Name));
         }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

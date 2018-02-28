@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Data.SqlClient;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
@@ -22,6 +23,10 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         private readonly ISqlServerConnection _connection;
         private readonly IRawSqlCommandBuilder _rawSqlCommandBuilder;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqlServerDatabaseCreator(
             [NotNull] RelationalDatabaseCreatorDependencies dependencies,
             [NotNull] ISqlServerConnection connection,
@@ -65,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override async Task CreateAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override async Task CreateAsync(CancellationToken cancellationToken = default)
         {
             using (var masterConnection = _connection.CreateMasterConnection())
             {
@@ -89,7 +94,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected override Task<bool> HasTablesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        protected override Task<bool> HasTablesAsync(CancellationToken cancellationToken = default)
             => Dependencies.ExecutionStrategyFactory.Create().ExecuteAsync(
                 _connection,
                 async (connection, ct) => (int)await CreateHasTablesCommand().ExecuteScalarAsync(connection, cancellationToken: ct) != 0, cancellationToken);
@@ -119,8 +124,11 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                         {
                             try
                             {
-                                _connection.Open(errorsExpected: true);
-                                _connection.Close();
+                                using (new TransactionScope(TransactionScopeOption.Suppress))
+                                {
+                                    _connection.Open(errorsExpected: true);
+                                    _connection.Close();
+                                }
                                 return true;
                             }
                             catch (SqlException e)
@@ -146,7 +154,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override Task<bool> ExistsAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override Task<bool> ExistsAsync(CancellationToken cancellationToken = default)
             => ExistsAsync(retryOnNotExists: false, cancellationToken: cancellationToken);
 
         private Task<bool> ExistsAsync(bool retryOnNotExists, CancellationToken cancellationToken)
@@ -157,9 +165,12 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
                         {
                             try
                             {
-                                await _connection.OpenAsync(ct, errorsExpected: true);
+                                using (new TransactionScope(TransactionScopeOption.Suppress, TransactionScopeAsyncFlowOption.Enabled))
+                                {
+                                    await _connection.OpenAsync(ct, errorsExpected: true);
 
-                                _connection.Close();
+                                    _connection.Close();
+                                }
                                 return true;
                             }
                             catch (SqlException e)
@@ -239,7 +250,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public override async Task DeleteAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public override async Task DeleteAsync(CancellationToken cancellationToken = default)
         {
             ClearAllPools();
 

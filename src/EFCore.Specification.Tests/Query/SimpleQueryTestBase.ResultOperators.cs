@@ -46,7 +46,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             public override bool Equals(object obj)
             {
-                if (ReferenceEquals(null, obj))
+                if (obj is null)
                 {
                     return false;
                 }
@@ -66,6 +66,12 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Sum_with_no_arg()
         {
             AssertSingleResult<Order>(os => os.Select(o => o.OrderID).Sum());
+        }
+
+        [ConditionalFact]
+        public virtual void Sum_with_no_data_nullable()
+        {
+            AssertSingleResult<Order>(os => os.Where(o => o.OrderID < 0).Select(o => (int?)o.OrderID).Sum());
         }
 
         [ConditionalFact]
@@ -421,7 +427,11 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         private static int ClientEvalSelectorStateless() => 42;
 
+#if Test20
         protected internal int ClientEvalSelector(Order order) => order.EmployeeID % 10 ?? 0;
+#else
+        protected internal uint ClientEvalSelector(Order order) => order.EmployeeID % 10 ?? 0;
+#endif
 
         [ConditionalFact]
         public virtual void Distinct()
@@ -711,13 +721,21 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Contains_with_local_int_array_closure()
         {
-            var ids = new[] { 0, 1 };
+#if Test20
+            var ids = new int[] { 0, 1 };
+#else
+            var ids = new uint[] { 0, 1 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
                     es.Where(e => ids.Contains(e.EmployeeID)), entryCount: 1);
 
-            ids = new[] { 0 };
+#if Test20
+            ids = new int[] { 0 };
+#else
+            ids = new uint[] { 0 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
@@ -727,13 +745,21 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Contains_with_local_nullable_int_array_closure()
         {
+#if Test20
             var ids = new int?[] { 0, 1 };
+#else
+            var ids = new uint?[] { 0, 1 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
                     es.Where(e => ids.Contains(e.EmployeeID)), entryCount: 1);
 
+#if Test20
             ids = new int?[] { 0 };
+#else
+            ids = new uint?[] { 0 };
+#endif
 
             AssertQuery<Employee>(
                 es =>
@@ -863,6 +889,34 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Contains_top_level()
         {
             AssertSingleResult<Customer>(cs => cs.Select(c => c.CustomerID).Contains("ALFKI"));
+        }
+
+        [ConditionalFact]
+        public virtual void Contains_with_local_tuple_array_closure()
+        {
+            var ids = new[] { Tuple.Create(1, 2), Tuple.Create(10248, 11) };
+
+            AssertQuery<OrderDetail>(
+                od => od.Where(o => ids.Contains(new Tuple<int, int>(o.OrderID, o.ProductID))), entryCount: 1);
+
+            ids = new[] { Tuple.Create(1, 2) };
+
+            AssertQuery<OrderDetail>(
+                od => od.Where(o => ids.Contains(new Tuple<int, int>(o.OrderID, o.ProductID))));
+        }
+
+        [ConditionalFact]
+        public virtual void Contains_with_local_anonymous_type_array_closure()
+        {
+            var ids = new[] { new { Id1 = 1, Id2 = 2 }, new { Id1 = 10248, Id2 = 11 } };
+
+            AssertQuery<OrderDetail>(
+                od => od.Where(o => ids.Contains(new { Id1 = o.OrderID, Id2 = o.ProductID })), entryCount: 1);
+
+            ids = new[] { new { Id1 = 1, Id2 = 2 } };
+
+            AssertQuery<OrderDetail>(
+                od => od.Where(o => ids.Contains(new { Id1 = o.OrderID, Id2 = o.ProductID })));
         }
 
         [ConditionalFact]
@@ -1097,6 +1151,81 @@ namespace Microsoft.EntityFrameworkCore.Query
                     .Where(o => o.CustomerID.StartsWith("A"))
                     .OrderBy(o => o.OrderID)
                     .Select(o => (long)o.OrderID).Average());
+        }
+
+        [ConditionalFact]
+        public virtual void Max_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            AssertSingleResult<Order>(
+                os => os
+                    .Where(o => o.CustomerID.StartsWith("A"))
+                    .OrderBy(o => o.OrderID)
+                    .Select(o => (long)o.OrderID).Max());
+        }
+
+        [ConditionalFact]
+        public virtual void Min_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            AssertSingleResult<Order>(
+                os => os
+                    .Where(o => o.CustomerID.StartsWith("A"))
+                    .Select(o => (long)o.OrderID).Min());
+        }
+
+        [ConditionalFact]
+        public virtual void OrderBy_Take_Last_gives_correct_result()
+        {
+            AssertSingleResult<Customer>(
+                cs => cs.OrderBy(c => c.CustomerID)
+                    .Take(20)
+                    .Last(),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void OrderBy_Skip_Last_gives_correct_result()
+        {
+            AssertSingleResult<Customer>(
+                cs => cs.OrderBy(c => c.CustomerID)
+                    .Skip(20)
+                    .Last(),
+                entryCount: 1);
+        }
+
+        [ConditionalFact]
+        public virtual void Contains_over_entityType_should_rewrite_to_identity_equality()
+        {
+            using (var context = CreateContext())
+            {
+                var query
+                    = context.Orders.Where(o => o.CustomerID == "VINET")
+                        .Contains(context.Orders.Single(o => o.OrderID == 10248));
+
+                Assert.True(query);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Contains_over_entityType_should_materialize_when_composite()
+        {
+            using (var context = CreateContext())
+            {
+                var query
+                    = context.OrderDetails.Where(o => o.ProductID == 42)
+                        .Contains(context.OrderDetails.First(o => o.OrderID == 10248 && o.ProductID == 42));
+
+                Assert.True(query);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Paging_operation_on_string_doesnt_issue_warning()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Customers.Select(c => c.CustomerID.FirstOrDefault()).ToList();
+                Assert.Equal(91, query.Count);
+            }
         }
     }
 }

@@ -7,6 +7,7 @@ using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Remotion.Linq.Parsing.ExpressionVisitors.TreeEvaluation;
@@ -19,11 +20,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
     /// </summary>
     public class ParameterExtractingExpressionVisitor : ExpressionVisitor
     {
+        private const string QueryFilterPrefix = "ef_filter";
+
         private static readonly TypeInfo _queryableTypeInfo = typeof(IQueryable).GetTypeInfo();
 
         private readonly IEvaluatableExpressionFilter _evaluatableExpressionFilter;
         private readonly IParameterValues _parameterValues;
         private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
+        private readonly ContextParameterReplacingExpressionVisitor _contextParameterReplacingExpressionVisitor;
 
         private readonly bool _parameterize;
         private readonly bool _generateContextAccessors;
@@ -40,6 +44,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             [NotNull] IEvaluatableExpressionFilter evaluatableExpressionFilter,
             [NotNull] IParameterValues parameterValues,
             [NotNull] IDiagnosticsLogger<DbLoggerCategory.Query> logger,
+            [NotNull] Type contextType,
             bool parameterize,
             bool generateContextAccessors = false)
         {
@@ -48,6 +53,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             _logger = logger;
             _parameterize = parameterize;
             _generateContextAccessors = generateContextAccessors;
+
+            if (_generateContextAccessors)
+            {
+                _contextParameterReplacingExpressionVisitor = new ContextParameterReplacingExpressionVisitor(contextType);
+            }
         }
 
         /// <summary>
@@ -95,6 +105,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (returnTypeInfo.IsGenericType
                 && returnTypeInfo.GetGenericTypeDefinition() == typeof(DbSet<>))
             {
+                if (_generateContextAccessors)
+                {
+                    return NullAsyncQueryProvider.Instance
+                        .CreateEntityQueryableExpression(
+                            methodCallExpression.Type.GetGenericArguments()[0]);
+                }
+
                 var queryable = (IQueryable)Evaluate(methodCallExpression, out _);
 
                 return ExtractParameters(queryable.Expression);
@@ -203,7 +220,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         /// </summary>
         protected override Expression VisitMember(MemberExpression memberExpression)
         {
-            if (!_partialEvaluationInfo.IsEvaluatableExpression(memberExpression))
+            if (memberExpression.Member is FieldInfo fieldInfo
+                && fieldInfo.IsStatic && fieldInfo.IsInitOnly
+                || !_partialEvaluationInfo.IsEvaluatableExpression(memberExpression))
             {
                 return base.VisitMember(memberExpression);
             }
@@ -211,6 +230,15 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             if (!_queryableTypeInfo.IsAssignableFrom(memberExpression.Type.GetTypeInfo()))
             {
                 return TryExtractParameter(memberExpression);
+            }
+
+            if (_generateContextAccessors
+                && memberExpression.Type.IsGenericType
+                && memberExpression.Type.GetGenericTypeDefinition() == typeof(DbSet<>))
+            {
+                return NullAsyncQueryProvider.Instance
+                    .CreateEntityQueryableExpression(
+                        memberExpression.Type.GetGenericArguments()[0]);
             }
 
             var queryable = (IQueryable)Evaluate(memberExpression, out _);
@@ -229,9 +257,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return Expression.Constant(detachableContext.DetachContext());
             }
 
-            return !_inLambda
-                   && _partialEvaluationInfo.IsEvaluatableExpression(constantExpression)
-                   && !_queryableTypeInfo.IsAssignableFrom(constantExpression.Type.GetTypeInfo())
+            return _partialEvaluationInfo.IsEvaluatableExpression(constantExpression)
+                && (!_inLambda
+                    && !(constantExpression.Value is IQueryable))
+                || (_inLambda
+                    && constantExpression.Value is IQueryable
+                    && !(constantExpression.Type.IsGenericType
+                        && constantExpression.Type.BaseType.IsGenericType
+                        && constantExpression.Type.BaseType.GetTypeInfo().GetGenericTypeDefinition() == typeof(DbSet<>)))
                 ? TryExtractParameter(constantExpression)
                 : constantExpression;
         }
@@ -300,6 +333,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         /// </summary>
         protected override Expression VisitBinary(BinaryExpression binaryExpression)
         {
+            if (binaryExpression.NodeType == ExpressionType.ArrayIndex
+                && _partialEvaluationInfo.IsEvaluatableExpression(binaryExpression))
+            {
+                return TryExtractParameter(binaryExpression);
+            }
+
             if (!binaryExpression.IsLogicalOperation())
             {
                 return base.VisitBinary(binaryExpression);
@@ -352,30 +391,17 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         {
             var parameterValue = Evaluate(expression, out var parameterName);
 
-            if (parameterValue is Expression valueExpression)
+            if (parameterName == null
+                || !parameterName.StartsWith(QueryFilterPrefix, StringComparison.Ordinal))
             {
-                return ExtractParameters(valueExpression);
-            }
-
-            if (!_parameterize)
-            {
-                if (_generateContextAccessors
-                    && expression is MemberExpression memberExpression
-                    && memberExpression.Expression != null
-                    && typeof(DbContext).GetTypeInfo()
-                        .IsAssignableFrom(memberExpression.Expression.Type.GetTypeInfo()))
+                if (parameterValue is Expression valueExpression)
                 {
-                    var contextParameterExpression
-                        = Expression.Parameter(memberExpression.Expression.Type, "context");
-
-                    parameterValue
-                        = Expression.Lambda(
-                            memberExpression.Update(contextParameterExpression),
-                            contextParameterExpression);
+                    return ExtractParameters(valueExpression);
                 }
-                else
+
+                if (!_parameterize)
                 {
-                    return Expression.Constant(parameterValue);
+                    return Expression.Constant(parameterValue, expression.Type);
                 }
             }
 
@@ -403,6 +429,30 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return Expression.Parameter(expression.Type, parameterName);
         }
 
+        private class ContextParameterReplacingExpressionVisitor : ExpressionVisitor
+        {
+            private readonly Type _contextType;
+
+            public ContextParameterReplacingExpressionVisitor(Type contextType)
+            {
+                ContextParameterExpression = Expression.Parameter(contextType, "context");
+                _contextType = contextType;
+            }
+
+            public ParameterExpression ContextParameterExpression { get; }
+
+            public override Expression Visit(Expression expression)
+            {
+                if (expression != null
+                    && expression.Type.GetTypeInfo().IsAssignableFrom(_contextType))
+                {
+                    return ContextParameterExpression;
+                }
+
+                return base.Visit(expression);
+            }
+        }
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -416,11 +466,27 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 return null;
             }
 
+            if (_generateContextAccessors)
+            {
+                var newExpression = _contextParameterReplacingExpressionVisitor.Visit(expression);
+
+                if (newExpression != expression)
+                {
+                    parameterName = QueryFilterPrefix + "__"
+                                    + (expression is MemberExpression memberExpression
+                                        ? memberExpression.Member.Name
+                                        : QueryFilterPrefix);
+
+                    return Expression.Lambda(
+                        newExpression,
+                        _contextParameterReplacingExpressionVisitor.ContextParameterExpression);
+                }
+            }
+
             // ReSharper disable once SwitchStatementMissingSomeCases
             switch (expression.NodeType)
             {
                 case ExpressionType.MemberAccess:
-                {
                     var memberExpression = (MemberExpression)expression;
                     var @object = Evaluate(memberExpression.Expression, out parameterName);
 
@@ -455,19 +521,14 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                             // Try again when we compile the delegate
                         }
                     }
-
                     break;
-                }
+
                 case ExpressionType.Constant:
-                {
                     return ((ConstantExpression)expression).Value;
-                }
-                case ExpressionType.Call:
-                {
-                    parameterName = ((MethodCallExpression)expression).Method.Name;
 
+                case ExpressionType.Call:
+                    parameterName = ((MethodCallExpression)expression).Method.Name;
                     break;
-                }
             }
 
             try

@@ -42,6 +42,13 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual void Projection_when_client_evald_subquery()
+        {
+            AssertQuery<Customer>(
+                cs => cs.Select(c => string.Join(", ", c.Orders.Select(o => o.CustomerID).ToList())));
+        }
+
+        [ConditionalFact]
         public virtual void Project_to_object_array()
         {
             AssertQuery<Employee>(
@@ -56,7 +63,11 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<Employee>(
                 es => es.Where(e => e.EmployeeID == 1)
                     .Select(e => new[] { e.EmployeeID, e.ReportsTo }),
+#if Test20
                 elementAsserter: (e, a) => AssertArrays<int?>(e, a, 2));
+#else
+                elementAsserter: (e, a) => AssertArrays<uint?>(e, a, 2));
+#endif
         }
 
         private static void AssertArrays<T>(object e, object a, int count)
@@ -480,13 +491,17 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
-        public virtual void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduces_explicit_cast()
+        public virtual void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduce_explicit_cast()
         {
             AssertQueryScalar<Order>(
                 os => os
                     .Where(o => o.CustomerID == "ALFKI")
                     .OrderBy(o => o.OrderID)
+#if Test20
                     .Select(o => (int)o.EmployeeID),
+#else
+                    .Select(o => (uint)o.EmployeeID),
+#endif
                 assertOrder: true);
         }
 
@@ -585,6 +600,15 @@ namespace Microsoft.EntityFrameworkCore.Query
                 os => from o in os
                       where o.CustomerID == "ALFKI"
                       select o.CustomerID == null ? true : o.OrderID < 100);
+        }
+
+        [ConditionalFact]
+        public virtual void Projection_in_a_subquery_should_be_liftable()
+        {
+            AssertQuery<Employee>(
+                es => es.OrderBy(e => e.EmployeeID)
+                    .Select(e => string.Format("{0}", e.EmployeeID))
+                    .Skip(1));
         }
     }
 }

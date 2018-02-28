@@ -78,8 +78,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             {
                 var nonNullExpression = isLeftNullConstant ? node.Right : node.Left;
 
-                var methodCallExpression = nonNullExpression as MethodCallExpression;
-                if (methodCallExpression != null)
+                if (nonNullExpression is MethodCallExpression methodCallExpression)
                 {
                     if (methodCallExpression.Method.IsEFPropertyMethod())
                     {
@@ -115,7 +114,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 newRight = _queryModelVisitor.BindReadValueMethod(node.Right.Type, newRight, 0);
             }
 
-            var newConversion = VisitAndConvert(node.Conversion, "VisitBinary");
+            var newConversion = VisitAndConvert(node.Conversion, nameof(VisitBinary));
 
             return node.Update(newLeft, newConversion, newRight);
         }
@@ -199,8 +198,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             {
                 var newCaller = Visit(nullConditionalExpression.Caller);
 
-                if (newCaller != nullConditionalExpression.Caller
-                    && newCaller.Type == typeof(ValueBuffer))
+                if (newCaller.Type == typeof(ValueBuffer))
                 {
                     var newAccessOperation = Visit(nullConditionalExpression.AccessOperation);
                     if (newAccessOperation != nullConditionalExpression.AccessOperation)
@@ -236,22 +234,26 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return base.VisitExtension(node);
         }
 
-        private static Expression TryCreateNullableAccessOperation(Expression accessOperation)
+        private static bool TryMakeNullable(
+            MethodInfo method,
+            Type type,
+            out MethodInfo convertedMethod)
         {
-            if (accessOperation is MethodCallExpression methodCallExpression
-                && methodCallExpression.Method.MethodIsClosedFormOf(EntityMaterializerSource.TryReadValueMethod))
+            if (method.MethodIsClosedFormOf(EntityMaterializerSource.TryReadValueMethod))
             {
-                var tryReadValueMethodInfo = EntityMaterializerSource.TryReadValueMethod.MakeGenericMethod(accessOperation.Type.MakeNullable());
-
-                return Expression.Call(
-                    tryReadValueMethodInfo,
-                    methodCallExpression.Arguments[0],
-                    methodCallExpression.Arguments[1],
-                    methodCallExpression.Arguments[2]);
+                convertedMethod = EntityMaterializerSource.TryReadValueMethod.MakeGenericMethod(type.MakeNullable());
+                return true;
             }
 
-            return null;
+            convertedMethod = null;
+            return false;
         }
+
+        private static Expression TryCreateNullableAccessOperation(Expression accessOperation)
+            => accessOperation is MethodCallExpression methodCallExpression
+               && TryMakeNullable(methodCallExpression.Method, accessOperation.Type, out var convertedMethod)
+                ? Expression.Call(convertedMethod, methodCallExpression.Arguments)
+                : null;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -304,7 +306,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                             methodCallExpression.Arguments[0],
                             methodCallExpression.Arguments[1]
                         }.AsReadOnly(),
-                        "VisitMethodCall");
+                        nameof(VisitMethodCall));
 
                 if (newArguments[0].Type == typeof(ValueBuffer))
                 {
@@ -457,6 +459,29 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             return innerProperties;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static IEntityType GetEntityType([NotNull] Expression expression, [NotNull] QueryCompilationContext queryCompilationContext)
+        {
+            IEntityType entityType = null;
+            var properties = GetPropertyPath(expression, queryCompilationContext, out var qsre);
+            if (properties.Count > 0)
+            {
+                if (properties[properties.Count - 1] is INavigation navigation)
+                {
+                    entityType = navigation.GetTargetType();
+                }
+            }
+            else if (qsre != null)
+            {
+                entityType = queryCompilationContext.FindEntityType(qsre.ReferencedQuerySource);
+            }
+
+            return entityType;
+        }
+
         private static readonly MethodInfo _getValueMethodInfo
             = typeof(MemberAccessBindingExpressionVisitor)
                 .GetTypeInfo().GetDeclaredMethod(nameof(GetValue));
@@ -466,7 +491,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         {
             if (entity == null)
             {
-                return default(T);
+                return default;
             }
 
             return (T)queryContext.QueryBuffer.GetPropertyValue(entity, property);
@@ -481,7 +506,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         {
             if (entity == null)
             {
-                return default(T);
+                return default;
             }
 
             return (T)clrPropertyGetter.GetClrValue(entity);

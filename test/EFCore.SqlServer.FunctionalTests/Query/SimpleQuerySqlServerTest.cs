@@ -130,6 +130,20 @@ FROM [Customers] AS [c]
 WHERE [c].[CustomerID] = @__get_Item_0");
         }
 
+        public override void Method_with_constant_queryable_arg()
+        {
+            base.Method_with_constant_queryable_arg();
+
+            AssertSql(
+                @"SELECT COUNT(*)
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] IN (N'ALFKI')",
+                //
+                @"SELECT COUNT(*)
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] IN (N'FOO')");
+        }
+
         public override void Entity_equality_self()
         {
             base.Entity_equality_self();
@@ -274,6 +288,7 @@ SELECT [t].[EmployeeID], [t].[City], [t].[Country], [t].[FirstName], [t].[Report
 FROM (
     SELECT TOP(@__p_0) [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[ReportsTo], [e].[Title]
     FROM [Employees] AS [e]
+    ORDER BY [e].[EmployeeID]
 ) AS [t]",
                 //
                 @"@_outer_ReportsTo='2' (Nullable = true)
@@ -304,6 +319,7 @@ SELECT [t].[EmployeeID], [t].[City], [t].[Country], [t].[FirstName], [t].[Report
 FROM (
     SELECT TOP(@__p_0) [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[ReportsTo], [e].[Title]
     FROM [Employees] AS [e]
+    ORDER BY [e].[EmployeeID]
 ) AS [t]",
                 //
                 @"@_outer_ReportsTo='2' (Nullable = true)
@@ -633,12 +649,14 @@ ORDER BY [o20].[OrderID], [c4].[CustomerID]");
 
 SELECT [t].[EmployeeID], [t].[City], [t].[Country], [t].[FirstName], [t].[ReportsTo], [t].[Title], [t0].[OrderID], [t0].[CustomerID], [t0].[EmployeeID], [t0].[OrderDate]
 FROM (
-    SELECT TOP(@__p_0) [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[ReportsTo], [e].[Title]
-    FROM [Employees] AS [e]
+    SELECT TOP(@__p_0) [ee].[EmployeeID], [ee].[City], [ee].[Country], [ee].[FirstName], [ee].[ReportsTo], [ee].[Title]
+    FROM [Employees] AS [ee]
+    ORDER BY [ee].[EmployeeID]
 ) AS [t]
 CROSS JOIN (
-    SELECT TOP(5) [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
-    FROM [Orders] AS [o]
+    SELECT TOP(5) [oo].[OrderID], [oo].[CustomerID], [oo].[EmployeeID], [oo].[OrderDate]
+    FROM [Orders] AS [oo]
+    ORDER BY [oo].[OrderID]
 ) AS [t0]");
         }
 
@@ -651,18 +669,20 @@ CROSS JOIN (
 
 SELECT [t].[EmployeeID], [t].[City], [t].[Country], [t].[FirstName], [t].[ReportsTo], [t].[Title], [t0].[OrderID], [t0].[CustomerID], [t0].[EmployeeID], [t0].[OrderDate], [t1].[CustomerID], [t1].[Address], [t1].[City], [t1].[CompanyName], [t1].[ContactName], [t1].[ContactTitle], [t1].[Country], [t1].[Fax], [t1].[Phone], [t1].[PostalCode], [t1].[Region]
 FROM (
-    SELECT TOP(@__p_0) [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[ReportsTo], [e].[Title]
-    FROM [Employees] AS [e]
+    SELECT TOP(@__p_0) [ee].[EmployeeID], [ee].[City], [ee].[Country], [ee].[FirstName], [ee].[ReportsTo], [ee].[Title]
+    FROM [Employees] AS [ee]
+    ORDER BY [ee].[EmployeeID]
 ) AS [t]
 CROSS JOIN (
-    SELECT TOP(5) [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
-    FROM [Orders] AS [o]
+    SELECT TOP(5) [oo].[OrderID], [oo].[CustomerID], [oo].[EmployeeID], [oo].[OrderDate]
+    FROM [Orders] AS [oo]
+    ORDER BY [oo].[OrderID]
 ) AS [t0]
 CROSS JOIN (
     SELECT TOP(2) [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
     FROM [Customers] AS [c]
 ) AS [t1]
-WHERE [t].[City] = N'London'");
+WHERE [t].[City] = N'Seattle'");
         }
 
         public override void OrderBy_SelectMany()
@@ -1748,16 +1768,74 @@ ORDER BY [t].[CustomerID], [t].[OrderID]");
         }
 
         [SqlServerCondition(SqlServerCondition.SupportsOffset)]
-        public override void Distinct_Skip() => base.Distinct_Skip();
+        public override void Distinct_Skip()
+        {
+            base.Distinct_Skip();
+
+            AssertSql(
+                @"@__p_0='5'
+
+SELECT [t].[CustomerID], [t].[Address], [t].[City], [t].[CompanyName], [t].[ContactName], [t].[ContactTitle], [t].[Country], [t].[Fax], [t].[Phone], [t].[PostalCode], [t].[Region]
+FROM (
+    SELECT DISTINCT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+) AS [t]
+ORDER BY [t].[CustomerID]
+OFFSET @__p_0 ROWS");
+        }
 
         [SqlServerCondition(SqlServerCondition.SupportsOffset)]
-        public override void Distinct_Skip_Take() => base.Distinct_Skip_Take();
+        public override void Distinct_Skip_Take()
+        {
+            base.Distinct_Skip_Take();
+
+            AssertSql(
+                @"@__p_0='5'
+@__p_1='10'
+
+SELECT [t].[CustomerID], [t].[Address], [t].[City], [t].[CompanyName], [t].[ContactName], [t].[ContactTitle], [t].[Country], [t].[Fax], [t].[Phone], [t].[PostalCode], [t].[Region]
+FROM (
+    SELECT DISTINCT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+) AS [t]
+ORDER BY [t].[ContactName]
+OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY");
+        }
 
         [SqlServerCondition(SqlServerCondition.SupportsOffset)]
-        public override void Skip_Distinct() => base.Skip_Distinct();
+        public override void Skip_Distinct()
+        {
+            base.Skip_Distinct();
+
+            AssertSql(
+                @"@__p_0='5'
+
+SELECT DISTINCT [t].*
+FROM (
+    SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+    ORDER BY [c].[ContactName]
+    OFFSET @__p_0 ROWS
+) AS [t]");
+        }
 
         [SqlServerCondition(SqlServerCondition.SupportsOffset)]
-        public override void Skip_Take_Distinct() => base.Skip_Take_Distinct();
+        public override void Skip_Take_Distinct()
+        {
+            base.Skip_Take_Distinct();
+
+            AssertSql(
+                @"@__p_0='5'
+@__p_1='10'
+
+SELECT DISTINCT [t].*
+FROM (
+    SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+    ORDER BY [c].[ContactName]
+    OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY
+) AS [t]");
+        }
 
         [SqlServerCondition(SqlServerCondition.SupportsOffset)]
         public override void Skip_Take_Any()
@@ -1784,16 +1862,84 @@ END");
             base.Skip_Take_All();
 
             AssertSql(
-                @"@__p_0='5'
-@__p_1='10'
+                @"@__p_0='4'
+@__p_1='7'
 
 SELECT CASE
     WHEN NOT EXISTS (
         SELECT 1
-        FROM [Customers] AS [c]
-        WHERE CAST(LEN([c].[CustomerID]) AS int) <> 5
-        ORDER BY [c].[ContactName]
-        OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY)
+        FROM (
+            SELECT [c].*
+            FROM [Customers] AS [c]
+            ORDER BY [c].[CustomerID]
+            OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY
+        ) AS [t]
+        WHERE NOT ([t].[CustomerID] LIKE N'B' + N'%') OR (LEFT([t].[CustomerID], LEN(N'B')) <> N'B'))
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END");
+        }
+
+        [SqlServerCondition(SqlServerCondition.SupportsOffset)]
+        public override void Take_All()
+        {
+            base.Take_All();
+
+            AssertSql(
+                @"@__p_0='4'
+
+SELECT CASE
+    WHEN NOT EXISTS (
+        SELECT 1
+        FROM (
+            SELECT TOP(@__p_0) [c].*
+            FROM [Customers] AS [c]
+            ORDER BY [c].[CustomerID]
+        ) AS [t]
+        WHERE NOT ([t].[CustomerID] LIKE N'A' + N'%') OR (LEFT([t].[CustomerID], LEN(N'A')) <> N'A'))
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END");
+        }
+
+        [SqlServerCondition(SqlServerCondition.SupportsOffset)]
+        public override void Skip_Take_Any_with_predicate()
+        {
+            base.Skip_Take_Any_with_predicate();
+
+            AssertSql(
+                @"@__p_0='5'
+@__p_1='7'
+
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM (
+            SELECT [c].*
+            FROM [Customers] AS [c]
+            ORDER BY [c].[CustomerID]
+            OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY
+        ) AS [t]
+        WHERE [t].[CustomerID] LIKE N'C' + N'%' AND (LEFT([t].[CustomerID], LEN(N'C')) = N'C'))
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END");
+        }
+
+        [SqlServerCondition(SqlServerCondition.SupportsOffset)]
+        public override void Take_Any_with_predicate()
+        {
+            base.Take_Any_with_predicate();
+
+            AssertSql(
+                @"@__p_0='5'
+
+SELECT CASE
+    WHEN EXISTS (
+        SELECT 1
+        FROM (
+            SELECT TOP(@__p_0) [c].*
+            FROM [Customers] AS [c]
+            ORDER BY [c].[CustomerID]
+        ) AS [t]
+        WHERE [t].[CustomerID] LIKE N'B' + N'%' AND (LEFT([t].[CustomerID], LEN(N'B')) = N'B'))
     THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
 END");
         }
@@ -2123,12 +2269,9 @@ WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) =
             AssertSql(
                 @"@__p_0='3'
 
-SELECT [t].[CustomerID]
-FROM (
-    SELECT TOP(@__p_0) [c].*
-    FROM [Customers] AS [c]
-) AS [t]
-ORDER BY [t].[CustomerID]",
+SELECT TOP(@__p_0) [cc].[CustomerID]
+FROM [Customers] AS [cc]
+ORDER BY [cc].[CustomerID]",
                 //
                 @"@_outer_CustomerID='ALFKI' (Size = 5)
 
@@ -2425,7 +2568,7 @@ ORDER BY COALESCE([c].[Region], N'ZZ')");
             base.DateTime_parse_is_parameterized();
 
             AssertSql(
-                @"@__Parse_0='01/01/1998 12:00:00'
+                @"@__Parse_0='1998-01-01T12:00:00'
 
 SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
 FROM [Orders] AS [o]
@@ -2843,7 +2986,7 @@ WHERE [c2].[CustomerID] = @_outer_CustomerID1");
             AssertSql(
                 @"SELECT [o].[CustomerID]
 FROM [Orders] AS [o]
-WHERE [o].[OrderDate] IS NOT NULL AND (CHARINDEX(N'10', CONVERT(VARCHAR(11), [o].[EmployeeID])) > 0)");
+WHERE [o].[OrderDate] IS NOT NULL AND (CHARINDEX(N'10', CONVERT(VARCHAR(10), [o].[EmployeeID])) > 0)");
         }
 
         public override void Select_expression_long_to_string()
@@ -3019,7 +3162,8 @@ CROSS APPLY (
         WHERE [o0].[CustomerID] = [c].[CustomerID]
     ) AS [t1] ON 1 = 1
 ) AS [t2]
-WHERE ([c].[City] = N'Seattle') AND ([t0].[OrderID] IS NOT NULL AND [t2].[OrderID] IS NOT NULL)");
+WHERE ([c].[City] = N'Seattle') AND ([t0].[OrderID] IS NOT NULL AND [t2].[OrderID] IS NOT NULL)
+ORDER BY [t0].[OrderID], [t2].[OrderDate]");
         }
 
         [SqlServerCondition(SqlServerCondition.SupportsOffset)]
@@ -3572,7 +3716,7 @@ ORDER BY (
 
 SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
 FROM [Customers] AS [c]
-WHERE [c].[CustomerID] <> N'VAFFE'
+WHERE [c].[CustomerID] NOT IN (N'VAFFE', N'DRACD')
 ORDER BY [c].[City], [c].[CustomerID]
 OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY",
                 //
@@ -3584,7 +3728,7 @@ FROM [Orders] AS [c.Orders]
 INNER JOIN (
     SELECT [c0].[CustomerID], [c0].[City]
     FROM [Customers] AS [c0]
-    WHERE [c0].[CustomerID] <> N'VAFFE'
+    WHERE [c0].[CustomerID] NOT IN (N'VAFFE', N'DRACD')
     ORDER BY [c0].[City], [c0].[CustomerID]
     OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY
 ) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
@@ -4127,6 +4271,124 @@ ORDER BY [c].[CustomerID]");
 FROM [Customers] AS [c]
 WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')
 ORDER BY [c].[CustomerID] DESC");
+        }
+
+        public override void Complex_nested_query_doesnt_try_binding_to_grandparent_when_parent_returns_complex_result()
+        {
+            base.Complex_nested_query_doesnt_try_binding_to_grandparent_when_parent_returns_complex_result();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'",
+                //
+                @"@_outer_CustomerID1='ALFKI' (Size = 5)
+@_outer_CustomerID2='ALFKI' (Size = 4000)
+@_outer_CustomerID='ALFKI' (Size = 5)
+
+SELECT (
+    SELECT COUNT(*)
+    FROM [Orders] AS [o0]
+    WHERE @_outer_CustomerID1 = [o0].[CustomerID]
+) AS [InnerOrder], @_outer_CustomerID2 AS [Id]
+FROM [Orders] AS [o]
+WHERE @_outer_CustomerID = [o].[CustomerID]");
+        }
+
+        public override void Complex_nested_query_properly_binds_to_grandparent_when_parent_returns_scalar_result()
+        {
+            base.Complex_nested_query_properly_binds_to_grandparent_when_parent_returns_scalar_result();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], (
+    SELECT COUNT(*)
+    FROM [Orders] AS [o]
+    WHERE ((
+        SELECT COUNT(*)
+        FROM [Orders] AS [o0]
+        WHERE [c].[CustomerID] = [o0].[CustomerID]
+    ) > 0) AND ([c].[CustomerID] = [o].[CustomerID])
+) AS [OuterOrders]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'");
+        }
+
+        public override void OrderBy_Dto_projection_skip_take()
+        {
+            base.OrderBy_Dto_projection_skip_take();
+
+            AssertSql(
+                @"@__p_0='5'
+@__p_1='10'
+
+SELECT [c].[CustomerID] AS [Id]
+FROM [Customers] AS [c]
+ORDER BY [Id]
+OFFSET @__p_0 ROWS FETCH NEXT @__p_1 ROWS ONLY");
+        }
+
+        public override void Streaming_chained_sync_query()
+        {
+            base.Streaming_chained_sync_query();
+
+            AssertContainsSql(
+                @"SELECT [c].[CustomerID]
+FROM [Customers] AS [c]",
+                //
+                @"@_outer_CustomerID='ALFKI' (Size = 5)
+
+SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[CustomerID] = @_outer_CustomerID",
+                //
+                @"SELECT [y.Customer].[CustomerID], [y.Customer].[Address], [y.Customer].[City], [y.Customer].[CompanyName], [y.Customer].[ContactName], [y.Customer].[ContactTitle], [y.Customer].[Country], [y.Customer].[Fax], [y.Customer].[Phone], [y.Customer].[PostalCode], [y.Customer].[Region]
+FROM [Customers] AS [y.Customer]",
+                //
+                @"@_outer_CustomerID='ANATR' (Size = 5)
+
+SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[CustomerID] = @_outer_CustomerID");
+        }
+
+        public override void Join_take_count_works()
+        {
+            base.Join_take_count_works();
+
+            AssertSql(
+    @"@__p_0='5'
+
+SELECT COUNT(*)
+FROM (
+    SELECT TOP(@__p_0) [o].*
+    FROM [Orders] AS [o]
+    INNER JOIN (
+        SELECT [c].*
+        FROM [Customers] AS [c]
+        WHERE [c].[CustomerID] = N'ALFKI'
+    ) AS [t] ON [o].[CustomerID] = [t].[CustomerID]
+    WHERE ([o].[OrderID] > 690) AND ([o].[OrderID] < 710)
+) AS [t0]");
+        }
+
+        public override void OrderBy_empty_list_contains()
+        {
+            base.OrderBy_empty_list_contains();
+
+            AssertSql(
+    @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+ORDER BY (SELECT 1)");
+        }
+
+        public override void OrderBy_empty_list_does_not_contains()
+        {
+            base.OrderBy_empty_list_does_not_contains();
+
+            AssertSql(
+    @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+ORDER BY (SELECT 1)");
         }
 
         private void AssertSql(params string[] expected)

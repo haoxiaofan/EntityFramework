@@ -2,14 +2,208 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Data;
 using System.Data.Common;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Storage
 {
     public abstract class RelationalTypeMappingTest
     {
+        protected class FakeValueConverter : ValueConverter<object, object>
+        {
+            public FakeValueConverter()
+                : base(_ => _, _ => _)
+            {
+            }
+
+            public override Type ModelClrType { get; } = typeof(object);
+            public override Type ProviderClrType { get; } = typeof(object);
+        }
+
+        protected class FakeValueComparer : ValueComparer<object>
+        {
+            public FakeValueComparer()
+                : base((_, __) => true, _ => _)
+            {
+            }
+
+            public override Type Type { get; } = typeof(object);
+        }
+
+        [Theory]
+        [InlineData(typeof(BoolTypeMapping), typeof(bool))]
+        [InlineData(typeof(ByteTypeMapping), typeof(byte))]
+        [InlineData(typeof(CharTypeMapping), typeof(char))]
+        [InlineData(typeof(DateTimeOffsetTypeMapping), typeof(DateTimeOffset))]
+        [InlineData(typeof(DateTimeTypeMapping), typeof(DateTime))]
+        [InlineData(typeof(DecimalTypeMapping), typeof(decimal))]
+        [InlineData(typeof(DoubleTypeMapping), typeof(double))]
+        [InlineData(typeof(FloatTypeMapping), typeof(float))]
+        [InlineData(typeof(GuidTypeMapping), typeof(Guid))]
+        [InlineData(typeof(IntTypeMapping), typeof(int))]
+        [InlineData(typeof(LongTypeMapping), typeof(long))]
+        [InlineData(typeof(SByteTypeMapping), typeof(sbyte))]
+        [InlineData(typeof(ShortTypeMapping), typeof(short))]
+        [InlineData(typeof(TimeSpanTypeMapping), typeof(TimeSpan))]
+        [InlineData(typeof(UIntTypeMapping), typeof(uint))]
+        [InlineData(typeof(ULongTypeMapping), typeof(ulong))]
+        [InlineData(typeof(UShortTypeMapping), typeof(ushort))]
+        public virtual void Create_and_clone_with_converter(Type mappingType, Type clrType)
+        {
+            var mapping = (RelationalTypeMapping)Activator.CreateInstance(
+                mappingType,
+                "<original>",
+                new FakeValueConverter(),
+                new FakeValueComparer(),
+                DbType.VarNumeric);
+
+            var clone = mapping.Clone("<clone>", null);
+
+            Assert.NotSame(mapping, clone);
+            Assert.Same(mapping.GetType(), clone.GetType());
+            Assert.Equal("<clone>", clone.StoreType);
+            Assert.Equal(DbType.VarNumeric, clone.DbType);
+            Assert.Null(clone.Size);
+            Assert.NotNull(mapping.Converter);
+            Assert.Same(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(typeof(object), clone.ClrType);
+
+            var newConverter = new FakeValueConverter();
+            clone = (RelationalTypeMapping)mapping.Clone(newConverter);
+
+            Assert.NotSame(mapping, clone);
+            Assert.Same(mapping.GetType(), clone.GetType());
+            Assert.Equal("<original>", clone.StoreType);
+            Assert.Equal(DbType.VarNumeric, clone.DbType);
+            Assert.Null(clone.Size);
+            Assert.NotSame(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(typeof(object), clone.ClrType);
+        }
+
+        [Theory]
+        [InlineData(typeof(ByteArrayTypeMapping), typeof(byte[]))]
+        public virtual void Create_and_clone_sized_mappings_with_converter(Type mappingType, Type clrType)
+        {
+            var mapping = (RelationalTypeMapping)Activator.CreateInstance(
+                mappingType,
+                "<original>",
+                new FakeValueConverter(),
+                new FakeValueComparer(),
+                DbType.VarNumeric,
+                33,
+                true);
+
+            var clone = mapping.Clone("<clone>", 66);
+
+            Assert.NotSame(mapping, clone);
+            Assert.Same(mapping.GetType(), clone.GetType());
+            Assert.Equal("<original>", mapping.StoreType);
+            Assert.Equal("<clone>", clone.StoreType);
+            Assert.Equal(DbType.VarNumeric, clone.DbType);
+            Assert.Equal(33, mapping.Size);
+            Assert.Equal(66, clone.Size);
+            Assert.NotNull(mapping.Converter);
+            Assert.Same(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(typeof(object), clone.ClrType);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+
+            var newConverter = new FakeValueConverter();
+            clone = (RelationalTypeMapping)mapping.Clone(newConverter);
+
+            Assert.NotSame(mapping, clone);
+            Assert.Same(mapping.GetType(), clone.GetType());
+            Assert.Equal("<original>", mapping.StoreType);
+            Assert.Equal("<original>", clone.StoreType);
+            Assert.Equal(DbType.VarNumeric, clone.DbType);
+            Assert.Equal(33, mapping.Size);
+            Assert.Equal(33, clone.Size);
+            Assert.NotSame(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(typeof(object), clone.ClrType);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+        }
+
+        [Theory]
+        [InlineData(typeof(StringTypeMapping), typeof(string))]
+        public virtual void Create_and_clone_unicode_sized_mappings_with_converter(Type mappingType, Type clrType)
+        {
+            var mapping = (RelationalTypeMapping)Activator.CreateInstance(
+                mappingType,
+                "<original>",
+                new FakeValueConverter(),
+                new FakeValueComparer(),
+                DbType.VarNumeric,
+                false,
+                33,
+                true);
+
+            var clone = mapping.Clone("<clone>", 66);
+
+            Assert.NotSame(mapping, clone);
+            Assert.Same(mapping.GetType(), clone.GetType());
+            Assert.Equal("<original>", mapping.StoreType);
+            Assert.Equal("<clone>", clone.StoreType);
+            Assert.Equal(DbType.VarNumeric, clone.DbType);
+            Assert.Equal(33, mapping.Size);
+            Assert.Equal(66, clone.Size);
+            Assert.False(mapping.IsUnicode);
+            Assert.False(clone.IsUnicode);
+            Assert.NotNull(mapping.Converter);
+            Assert.Same(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(typeof(object), clone.ClrType);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+
+            var newConverter = new FakeValueConverter();
+            clone = (RelationalTypeMapping)mapping.Clone(newConverter);
+
+            Assert.NotSame(mapping, clone);
+            Assert.Same(mapping.GetType(), clone.GetType());
+            Assert.Equal("<original>", mapping.StoreType);
+            Assert.Equal("<original>", clone.StoreType);
+            Assert.Equal(DbType.VarNumeric, clone.DbType);
+            Assert.Equal(33, mapping.Size);
+            Assert.Equal(33, clone.Size);
+            Assert.False(mapping.IsUnicode);
+            Assert.False(clone.IsUnicode);
+            Assert.NotSame(mapping.Converter, clone.Converter);
+            Assert.Same(mapping.Comparer, clone.Comparer);
+            Assert.Same(typeof(object), clone.ClrType);
+            Assert.True(mapping.IsFixedLength);
+            Assert.True(clone.IsFixedLength);
+        }
+
+        [Fact]
+        public void Cannot_compose_converters_with_mismatched_types()
+        {
+            Assert.Equal(
+                CoreStrings.ConverterCloneNotImplemented("FakeTypeMapping"),
+                Assert.Throws<NotImplementedException>(
+                    () => new FakeTypeMapping().Clone(new FakeValueConverter())).Message);
+        }
+
+        private class FakeTypeMapping : RelationalTypeMapping
+        {
+            public FakeTypeMapping()
+                : base("storeType", typeof(object))
+            {
+            }
+
+            public override RelationalTypeMapping Clone(string storeType, int? size) => throw new NotImplementedException();
+        }
+
         [Fact]
         public void Can_create_simple_parameter()
         {
@@ -163,7 +357,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         [Fact]
         public virtual void GenerateSqlLiteral_returns_NullableInt_literal_when_null()
         {
+#pragma warning disable IDE0034 // Simplify 'default' expression - Causes inference of default(object) due to parameter being object type
             var literal = new IntTypeMapping("int?", DbType.Int32).GenerateSqlLiteral(default(int?));
+#pragma warning restore IDE0034 // Simplify 'default' expression
             Assert.Equal("NULL", literal);
         }
 
@@ -261,6 +457,45 @@ namespace Microsoft.EntityFrameworkCore.Storage
             literal = typeMapping.GenerateSqlLiteral(ulong.MaxValue);
             Assert.Equal("18446744073709551615", literal);
         }
+
+        [Fact]
+        public void Primary_key_type_mapping_is_picked_up_by_FK_without_going_through_store_type()
+        {
+            using (var context = new FruityContext(ContextOptions))
+            {
+                Assert.Same(
+                    context.Model.FindEntityType(typeof(Banana)).FindProperty("Id").FindMapping(),
+                    context.Model.FindEntityType(typeof(Kiwi)).FindProperty("BananaId").FindMapping());
+            }
+        }
+
+        private class FruityContext : DbContext
+        {
+            public FruityContext(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Banana> Bananas { get; set; }
+            public DbSet<Kiwi> Kiwi { get; set; }
+        }
+
+        private class Banana
+        {
+            public int Id { get; set; }
+
+            public ICollection<Kiwi> Kiwis { get; set; }
+        }
+
+        private class Kiwi
+        {
+            public int Id { get; set; }
+
+            public int BananaId { get; set; }
+            public Banana Banana { get; set; }
+        }
+
+        protected abstract DbContextOptions ContextOptions { get; }
 
         protected abstract DbCommand CreateTestCommand();
 

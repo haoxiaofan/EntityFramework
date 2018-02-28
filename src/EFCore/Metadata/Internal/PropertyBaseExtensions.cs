@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Reflection;
 using System.Runtime.CompilerServices;
 using JetBrains.Annotations;
@@ -47,96 +48,22 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static int GetOriginalValueIndex([NotNull] this IPropertyBase propertyBase)
+            => propertyBase.GetPropertyIndexes().OriginalValueIndex;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static PropertyIndexes GetPropertyIndexes([NotNull] this IPropertyBase propertyBase)
-            => (propertyBase as IProperty)?.AsProperty()?.PropertyIndexes
-               ?? ((INavigation)propertyBase).AsNavigation().PropertyIndexes;
+            => propertyBase.AsPropertyBase()?.PropertyIndexes;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static PropertyIndexes CalculateIndexes([NotNull] this IEntityType entityType, [NotNull] IPropertyBase propertyBase)
-        {
-            var index = 0;
-            var navigationIndex = 0;
-            var shadowIndex = 0;
-            var originalValueIndex = 0;
-            var relationshipIndex = 0;
-            var storeGenerationIndex = 0;
-
-            var baseCounts = entityType.BaseType?.GetCounts();
-            if (baseCounts != null)
-            {
-                index = baseCounts.PropertyCount;
-                navigationIndex = baseCounts.NavigationCount;
-                shadowIndex = baseCounts.ShadowCount;
-                originalValueIndex = baseCounts.OriginalValueCount;
-                relationshipIndex = baseCounts.RelationshipCount;
-                storeGenerationIndex = baseCounts.StoreGeneratedCount;
-            }
-
-            PropertyIndexes callingPropertyIndexes = null;
-
-            foreach (var property in entityType.GetDeclaredProperties())
-            {
-                var indexes = new PropertyIndexes(
-                    index: index++,
-                    originalValueIndex: property.RequiresOriginalValue() ? originalValueIndex++ : -1,
-                    shadowIndex: property.IsShadowProperty ? shadowIndex++ : -1,
-                    relationshipIndex: property.IsKeyOrForeignKey() ? relationshipIndex++ : -1,
-                    storeGenerationIndex: property.MayBeStoreGenerated() ? storeGenerationIndex++ : -1);
-
-                TrySetIndexes(property, indexes);
-
-                if (propertyBase == property)
-                {
-                    callingPropertyIndexes = indexes;
-                }
-            }
-
-            var isNotifying = entityType.GetChangeTrackingStrategy() != ChangeTrackingStrategy.Snapshot;
-
-            foreach (var navigation in entityType.GetDeclaredNavigations())
-            {
-                var indexes = new PropertyIndexes(
-                    index: navigationIndex++,
-                    originalValueIndex: -1,
-                    shadowIndex: -1,
-                    relationshipIndex: navigation.IsCollection() && isNotifying ? -1 : relationshipIndex++,
-                    storeGenerationIndex: -1);
-
-                TrySetIndexes(navigation, indexes);
-
-                if (propertyBase == navigation)
-                {
-                    callingPropertyIndexes = indexes;
-                }
-            }
-
-            foreach (var derivedType in entityType.GetDirectlyDerivedTypes())
-            {
-                derivedType.CalculateIndexes(propertyBase);
-            }
-
-            return callingPropertyIndexes;
-        }
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public static void TrySetIndexes([NotNull] this IPropertyBase propertyBase, [CanBeNull] PropertyIndexes indexes)
-        {
-            var property = propertyBase as IProperty;
-            if (property != null)
-            {
-                property.AsProperty().PropertyIndexes = indexes;
-            }
-            else
-            {
-                ((INavigation)propertyBase).AsNavigation().PropertyIndexes = indexes;
-            }
-        }
+        public static void SetIndexes([NotNull] this IPropertyBase propertyBase, [CanBeNull] PropertyIndexes indexes)
+            => propertyBase.AsPropertyBase().PropertyIndexes = indexes;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -163,14 +90,22 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        // Note: only use this to find the property/field that defines the property in the model. Use
+        // GetMemberInfo to get the property/field to use, which may be different.
+        public static MemberInfo GetIdentifyingMemberInfo(
+            [NotNull] this IPropertyBase propertyBase)
+            => propertyBase.PropertyInfo ?? (MemberInfo)propertyBase.FieldInfo;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static MemberInfo GetMemberInfo(
             [NotNull] this IPropertyBase propertyBase,
             bool forConstruction,
             bool forSet)
         {
-            MemberInfo memberInfo;
-            string errorMessage;
-            if (propertyBase.TryGetMemberInfo(forConstruction, forSet, out memberInfo, out errorMessage))
+            if (propertyBase.TryGetMemberInfo(forConstruction, forSet, out var memberInfo, out var errorMessage))
             {
                 return memberInfo;
             }
@@ -230,8 +165,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     {
                         if (!isCollectionNav)
                         {
-                            errorMessage = CoreStrings.NoBackingField(
-                                propertyBase.Name, propertyBase.DeclaringType.DisplayName(), nameof(PropertyAccessMode));
+                            errorMessage = GetNoFieldErrorMessage(propertyBase);
                             return false;
                         }
                         return true;
@@ -295,10 +229,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     if (!forSet
                         || !isCollectionNav)
                     {
-                        errorMessage = CoreStrings.NoBackingField(
-                            propertyBase.Name, propertyBase.DeclaringType.DisplayName(), nameof(PropertyAccessMode));
+                        errorMessage = GetNoFieldErrorMessage(propertyBase);
                         return false;
                     }
+
                     return true;
                 }
 
@@ -346,6 +280,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 
             memberInfo = getterProperty;
             return true;
+        }
+
+        private static string GetNoFieldErrorMessage(IPropertyBase propertyBase)
+        {
+            var constructorBinding = (ConstructorBinding)propertyBase.DeclaringType[CoreAnnotationNames.ConstructorBinding];
+
+            return constructorBinding != null
+                   && constructorBinding.ParameterBindings
+                       .OfType<ServiceParameterBinding>()
+                       .Any(b => b.ServiceType == typeof(ILazyLoader))
+                ? CoreStrings.NoBackingFieldLazyLoading(
+                    propertyBase.Name, propertyBase.DeclaringType.DisplayName())
+                : CoreStrings.NoBackingField(
+                    propertyBase.Name, propertyBase.DeclaringType.DisplayName(), nameof(PropertyAccessMode));
         }
 
         /// <summary>

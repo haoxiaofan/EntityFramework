@@ -118,7 +118,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 Expression.Parameter(typeof(Order), "o"));
 
             Assert.Equal(
-                CoreStrings.InvalidComplexPropertyExpression(lambdaExpression.ToString()),
+                CoreStrings.InvalidIncludeLambdaExpression("Include", lambdaExpression.ToString()),
                 Assert.Throws<InvalidOperationException>(
                     () =>
                         {
@@ -193,7 +193,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 Expression.Parameter(typeof(Order), "o"));
 
             Assert.Equal(
-                CoreStrings.InvalidComplexPropertyExpression(lambdaExpression.ToString()),
+                CoreStrings.InvalidIncludeLambdaExpression("ThenInclude", lambdaExpression.ToString()),
                 Assert.Throws<ArgumentException>(
                     () =>
                         {
@@ -3148,7 +3148,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 Assert.Equal(
                     CoreStrings.IncludeNotSpecifiedDirectlyOnEntityType(@"Include(""Item1.Orders"")", "Item1"),
-                    Assert.Throws<NotSupportedException>(
+                    Assert.Throws<InvalidOperationException>(
                         () => useString
                             ? context.Customers
                                 .Select(c => new Tuple<Customer, int>(c, 5))
@@ -3158,6 +3158,796 @@ namespace Microsoft.EntityFrameworkCore.Query
                                 .Select(c => new Tuple<Customer, int>(c, 5))
                                 .Include("Item1.Orders")
                                 .ToList()).Message);
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include("OrderDetails")
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include(o => o.OrderDetails)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_reference_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include("Customer")
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include(o => o.Customer)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_Join_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include("OrderDetails")
+                            .Join(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include(o => o.OrderDetails)
+                            .Join(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_reference_Join_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include("Customer")
+                            .Join(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include(o => o.Customer)
+                            .Join(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Join_Include_collection_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.OrderDetails
+                            .Where(od => od.OrderID == 10248)
+                            .Join(
+                                context.Orders.Include("OrderDetails"),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.OrderDetails
+                            .Where(od => od.OrderID == 10248)
+                            .Join(
+                                context.Orders.Include(o => o.OrderDetails),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Join_Include_reference_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.OrderDetails
+                            .Join(
+                                context.Orders.Include("Customer"),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.OrderDetails
+                            .Join(
+                                context.Orders.Include(o => o.Customer),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_GroupJoin_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include("OrderDetails")
+                            .GroupJoin(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include(o => o.OrderDetails)
+                            .GroupJoin(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_reference_GroupJoin_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include("Customer")
+                            .GroupJoin(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID == 10248)
+                            .Include(o => o.Customer)
+                            .GroupJoin(context.OrderDetails,
+                                o => o.OrderID,
+                                od => od.OrderID,
+                                (o, od) => o)
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void GroupJoin_Include_collection_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.OrderDetails
+                            .Where(od => od.OrderID == 10248)
+                            .GroupJoin(
+                                context.Orders.Include("OrderDetails"),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o.OrderBy(o1 => o1.OrderID).FirstOrDefault())
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.OrderDetails
+                            .Where(od => od.OrderID == 10248)
+                            .GroupJoin(
+                                context.Orders.Include(o => o.OrderDetails),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o.OrderBy(o1 => o1.OrderID).FirstOrDefault())
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void GroupJoin_Include_reference_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.OrderDetails
+                            .Where(od => od.OrderID == 10248)
+                            .GroupJoin(
+                                context.Orders.Include("Customer"),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o.OrderBy(o1 => o1.OrderID).FirstOrDefault())
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList()
+                        : context.OrderDetails
+                            .Where(od => od.OrderID == 10248)
+                            .GroupJoin(
+                                context.Orders.Include(o => o.Customer),
+                                od => od.OrderID,
+                                o => o.OrderID,
+                                (od, o) => o.OrderBy(o1 => o1.OrderID).FirstOrDefault())
+                            .GroupBy(e => e.OrderID)
+                            .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_SelectMany_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? (from o in context.Orders.Include("OrderDetails").Where(o => o.OrderID == 10248)
+                           from od in context.OrderDetails
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList()
+                        : (from o in context.Orders.Include(o => o.OrderDetails).Where(o => o.OrderID == 10248)
+                           from od in context.OrderDetails
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_reference_SelectMany_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? (from o in context.Orders.Include("Customer").Where(o => o.OrderID == 10248)
+                           from od in context.OrderDetails
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList()
+                        : (from o in context.Orders.Include(o => o.Customer).Where(o => o.OrderID == 10248)
+                           from od in context.OrderDetails
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void SelectMany_Include_collection_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? (from od in context.OrderDetails.Where(od => od.OrderID == 10248)
+                           from o in context.Orders.Include("OrderDetails")
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList()
+                        : (from od in context.OrderDetails.Where(od => od.OrderID == 10248)
+                           from o in context.Orders.Include(o => o.OrderDetails)
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void SelectMany_Include_reference_GroupBy_Select(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? (from od in context.OrderDetails.Where(od => od.OrderID == 10248)
+                           from o in context.Orders.Include("Customer")
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList()
+                        : (from od in context.OrderDetails.Where(od => od.OrderID == 10248)
+                           from o in context.Orders.Include(o => o.Customer)
+                           select o)
+                        .GroupBy(e => e.OrderID)
+                        .Select(e => e.OrderBy(o => o.OrderID).FirstOrDefault())
+                        .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_reference_distinct_is_server_evaluated(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID < 10250)
+                            .Include("Customer")
+                            .Distinct()
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID < 10250)
+                            .Include(o => o.Customer)
+                            .Distinct()
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: false,
+                        productLoaded: false,
+                        customerLoaded: true,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_distinct_is_server_evaluated(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var customers
+                    = useString
+                        ? context.Customers
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .Include("Orders")
+                            .Distinct()
+                            .ToList()
+                        : context.Customers
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .Include(o => o.Orders)
+                            .Distinct()
+                            .ToList();
+
+                foreach (var customer in customers)
+                {
+                    CheckIsLoaded(
+                        context,
+                        customer,
+                        ordersLoaded: true,
+                        orderDetailsLoaded: false,
+                        productLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_OrderBy_object(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var orders
+                    = useString
+                        ? context.Orders
+                            .Where(o => o.OrderID < 10250)
+                            .Include("OrderDetails")
+                            .OrderBy<Order, object>(c => c.OrderID)
+                            .ToList()
+                        : context.Orders
+                            .Where(o => o.OrderID < 10250)
+                            .Include(o => o.OrderDetails)
+                            .OrderBy<Order, object>(c => c.OrderID)
+                            .ToList();
+
+                foreach (var order in orders)
+                {
+                    CheckIsLoaded(
+                        context,
+                        order,
+                        orderDetailsLoaded: true,
+                        productLoaded: false,
+                        customerLoaded: false,
+                        ordersLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_OrderBy_empty_list_contains(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var list = new List<string>();
+                var customers
+                    = useString
+                        ? context.Customers
+                            .Include("Orders")
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList()
+                        : context.Customers
+                            .Include(c => c.Orders)
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList();
+
+                foreach (var customer in customers)
+                {
+                    CheckIsLoaded(
+                        context,
+                        customer,
+                        ordersLoaded: true,
+                        orderDetailsLoaded: false,
+                        productLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_OrderBy_empty_list_does_not_contains(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var list = new List<string>();
+                var customers
+                    = useString
+                        ? context.Customers
+                            .Include("Orders")
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => !list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList()
+                        : context.Customers
+                            .Include(c => c.Orders)
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => !list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList();
+
+                foreach (var customer in customers)
+                {
+                    CheckIsLoaded(
+                        context,
+                        customer,
+                        ordersLoaded: true,
+                        orderDetailsLoaded: false,
+                        productLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_OrderBy_list_contains(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var list = new List<string> { "ALFKI" };
+                var customers
+                    = useString
+                        ? context.Customers
+                            .Include("Orders")
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList()
+                        : context.Customers
+                            .Include(c => c.Orders)
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList();
+
+                foreach (var customer in customers)
+                {
+                    CheckIsLoaded(
+                        context,
+                        customer,
+                        ordersLoaded: true,
+                        orderDetailsLoaded: false,
+                        productLoaded: false);
+                }
+            }
+        }
+
+        [Theory]
+        [InlineData(false)]
+        [InlineData(true)]
+        public virtual void Include_collection_OrderBy_list_does_not_contains(bool useString)
+        {
+            using (var context = CreateContext())
+            {
+                var list = new List<string> { "ALFKI" };
+                var customers
+                    = useString
+                        ? context.Customers
+                            .Include("Orders")
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => !list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList()
+                        : context.Customers
+                            .Include(c => c.Orders)
+                            .Where(c => c.CustomerID.StartsWith("A"))
+                            .OrderBy(c => !list.Contains(c.CustomerID))
+                            .Skip(1)
+                            .ToList();
+
+                foreach (var customer in customers)
+                {
+                    CheckIsLoaded(
+                        context,
+                        customer,
+                        ordersLoaded: true,
+                        orderDetailsLoaded: false,
+                        productLoaded: false);
+                }
             }
         }
 

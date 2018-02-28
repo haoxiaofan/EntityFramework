@@ -22,12 +22,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             [NotNull] Expression valueBuffer,
             [NotNull] Type type,
             int index,
-            [CanBeNull] IProperty property);
+            [CanBeNull] IPropertyBase property);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        [Obsolete("Use CreateReadValueExpression making sure to pass bound property if available.")]
         Expression CreateReadValueCallExpression([NotNull] Expression valueBuffer, int index);
 
         /// <summary>
@@ -37,12 +38,23 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         Expression CreateMaterializeExpression(
             [NotNull] IEntityType entityType,
             [NotNull] Expression valueBufferExpression,
+            [NotNull] Expression contextExpression,
             [CanBeNull] int[] indexMap = null);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        Func<ValueBuffer, object> GetMaterializer([NotNull] IEntityType entityType);
+        [Obsolete("Use CreateMaterializeExpression taking a contextExpression.")]
+        Expression CreateMaterializeExpression(
+            [NotNull] IEntityType entityType,
+            [NotNull] Expression valueBufferExpression,
+            [CanBeNull] int[] indexMap = null);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        Func<ValueBuffer, DbContext, object> GetMaterializer([NotNull] IEntityType entityType);
     }
 }

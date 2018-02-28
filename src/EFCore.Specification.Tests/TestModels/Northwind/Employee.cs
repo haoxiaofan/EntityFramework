@@ -7,10 +7,14 @@ namespace Microsoft.EntityFrameworkCore.TestModels.Northwind
 {
     public class Employee
     {
+#if Test20
         public int EmployeeID { get; set; }
+#else
+        public uint EmployeeID { get; set; }
+#endif
         public string LastName { get; set; }
         public string FirstName { get; set; }
-        public string Title { get; set; } // shadow-prop in EF model
+        public string Title { get; set; }
         public string TitleOfCourtesy { get; set; }
         public DateTime? BirthDate { get; set; }
         public DateTime? HireDate { get; set; }
@@ -23,7 +27,11 @@ namespace Microsoft.EntityFrameworkCore.TestModels.Northwind
         public string Extension { get; set; }
         public byte[] Photo { get; set; }
         public string Notes { get; set; }
+#if Test20
         public int? ReportsTo { get; set; }
+#else
+        public uint? ReportsTo { get; set; }
+#endif
         public string PhotoPath { get; set; }
 
         public Employee Manager { get; set; }
@@ -32,7 +40,7 @@ namespace Microsoft.EntityFrameworkCore.TestModels.Northwind
 
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }

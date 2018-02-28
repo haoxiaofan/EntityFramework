@@ -27,5 +27,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual bool HasConstraintName([CanBeNull] string value) => SetName(value);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool CanSetName([CanBeNull] string value)
+            => Annotations.CanSetAnnotation(RelationalAnnotationNames.Name, value);
     }
 }

@@ -23,17 +23,22 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         IEntityTypeMemberIgnoredConvention
         where TAttribute : Attribute
     {
-        private readonly ITypeMapper _typeMapper;
+        private readonly ITypeMappingSource _typeMappingSource;
+        private readonly IParameterBindingFactories _parameterBindingFactories;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected NavigationAttributeEntityTypeConvention([NotNull] ITypeMapper typeMapper)
+        protected NavigationAttributeEntityTypeConvention(
+            [NotNull] ITypeMappingSource typeMappingSource,
+            [NotNull] IParameterBindingFactories parameterBindingFactories)
         {
-            Check.NotNull(typeMapper, nameof(typeMapper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
+            Check.NotNull(parameterBindingFactories, nameof(parameterBindingFactories));
 
-            _typeMapper = typeMapper;
+            _typeMappingSource = typeMappingSource;
+            _parameterBindingFactories = parameterBindingFactories;
         }
 
         /// <summary>
@@ -113,7 +118,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         /// </summary>
         public virtual InternalRelationshipBuilder Apply(InternalRelationshipBuilder relationshipBuilder, Navigation navigation)
         {
-            var navigationPropertyInfo = navigation.PropertyInfo;
+            var navigationPropertyInfo = navigation.GetIdentifyingMemberInfo();
             if (navigationPropertyInfo == null)
             {
                 return relationshipBuilder;
@@ -212,7 +217,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             Check.NotNull(propertyInfo, nameof(propertyInfo));
 
-            return propertyInfo.FindCandidateNavigationPropertyType(_typeMapper.IsTypeMapped);
+            return propertyInfo.FindCandidateNavigationPropertyType(_typeMappingSource, _parameterBindingFactories);
         }
 
         /// <summary>

@@ -3,7 +3,6 @@
 
 using System;
 using System.Linq;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -20,48 +19,12 @@ namespace Microsoft.EntityFrameworkCore.Query
 {
     public class AsyncSimpleQuerySqlServerTest : AsyncSimpleQueryTestBase<NorthwindQuerySqlServerFixture<NoopModelCustomizer>>
     {
-        private static readonly string EOL = Environment.NewLine;
-
         // ReSharper disable once UnusedParameter.Local
         public AsyncSimpleQuerySqlServerTest(NorthwindQuerySqlServerFixture<NoopModelCustomizer> fixture, ITestOutputHelper testOutputHelper)
             : base(fixture)
         {
-            fixture.TestSqlLoggerFactory.Clear();
-            //fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
-        }
-
-        public override async Task ToList_on_nav_in_projection_is_async()
-        {
-            await base.ToList_on_nav_in_projection_is_async();
-
-            Assert.Contains(
-                @"_SelectAsync(" + EOL +
-                @"            source: IAsyncEnumerable<Customer> _ShapedQuery(" + EOL +
-                @"                queryContext: queryContext, " + EOL +
-                @"                shaperCommandContext: SelectExpression: " + EOL +
-                @"                    SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]" + EOL +
-                @"                    FROM [Customers] AS [c]" + EOL +
-                @"                    WHERE [c].[CustomerID] = N'ALFKI', " + EOL +
-                @"                shaper: BufferedEntityShaper<Customer>), " + EOL +
-                @"            selector: (Customer c | CancellationToken ct) => Task<<>f__AnonymousType17<Customer, List<Order>>> _ExecuteAsync(" + EOL +
-                @"                taskFactories: new Func<Task<object>>[]{ () => Task<object> _ToObjectTask(Task<List<Order>> ToList((IAsyncEnumerable<Order>)EnumerableAdapter<Order> _ToEnumerable(IAsyncEnumerable<Order> _InjectParameters(" + EOL +
-                @"                                    queryContext: queryContext, " + EOL +
-                @"                                    source: IAsyncEnumerable<Order> _ShapedQuery(" + EOL +
-                @"                                        queryContext: queryContext, " + EOL +
-                @"                                        shaperCommandContext: SelectExpression: " + EOL +
-                @"                                            SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]" + EOL +
-                @"                                            FROM [Orders] AS [o]" + EOL +
-                @"                                            WHERE @_outer_CustomerID = [o].[CustomerID], " + EOL +
-                @"                                        shaper: BufferedEntityShaper<Order>), " + EOL +
-                @"                                    parameterNames: new string[]{ ""_outer_CustomerID"" }, " + EOL +
-                @"                                    parameterValues: new object[]{ string GetValueFromEntity(" + EOL +
-                @"                                            clrPropertyGetter: ClrPropertyGetter<Customer, string>, " + EOL +
-                @"                                            entity: c) })))) }, " + EOL +
-                @"                selector: (Object[] results) => new <>f__AnonymousType17<Customer, List<Order>>(" + EOL +
-                @"                    c, " + EOL +
-                @"                    (List<Order>)results[0]" + EOL +
-                @"                )))",
-                Fixture.TestSqlLoggerFactory.Log);
+            Fixture.TestSqlLoggerFactory.Clear();
+            //Fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
         }
 
         [ConditionalFact]
@@ -221,7 +184,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 using (var asyncEnumerator = context.Customers.AsAsyncEnumerable().GetEnumerator())
                 {
-                    while (await asyncEnumerator.MoveNext(default(CancellationToken)))
+                    while (await asyncEnumerator.MoveNext(default))
                     {
                         if (!context.GetService<IRelationalConnection>().IsMultipleActiveResultSetsEnabled)
                         {

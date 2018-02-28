@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using Microsoft.EntityFrameworkCore.Design;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
@@ -33,6 +34,49 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         public void DelimitString(string input, string expectedOutput)
         {
             Assert.Equal(expectedOutput, new CSharpUtilities().DelimitString(input));
+        }
+
+        [Fact]
+        public void Generate_MethodCallCodeFragment_works()
+        {
+            var method = new MethodCallCodeFragment("Test", true, 42);
+
+            var result = new CSharpUtilities().Generate(method);
+
+            Assert.Equal(".Test(true, 42)", result);
+        }
+
+        [Fact]
+        public void Generate_MethodCallCodeFragment_works_when_niladic()
+        {
+            var method = new MethodCallCodeFragment("Test");
+
+            var result = new CSharpUtilities().Generate(method);
+
+            Assert.Equal(".Test()", result);
+        }
+
+        [Fact]
+        public void Generate_MethodCallCodeFragment_works_when_chaining()
+        {
+            var method = new MethodCallCodeFragment("Test")
+                .Chain("Test");
+
+            var result = new CSharpUtilities().Generate(method);
+
+            Assert.Equal(".Test().Test()", result);
+        }
+
+        [Fact]
+        public void Generate_MethodCallCodeFragment_works_when_nested_closure()
+        {
+            var method = new MethodCallCodeFragment(
+                "Test",
+                new NestedClosureCodeFragment("x", new MethodCallCodeFragment("Test")));
+
+            var result = new CSharpUtilities().Generate(method);
+
+            Assert.Equal(".Test(x => x.Test())", result);
         }
     }
 }

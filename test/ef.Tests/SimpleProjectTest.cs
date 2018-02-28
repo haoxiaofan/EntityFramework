@@ -6,11 +6,11 @@
 using System;
 using System.Collections;
 using System.IO;
-using System.Linq;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Tools.TestUtilities;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Tools
 {
     [Collection("OperationExecutorTests")]
@@ -59,7 +59,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
         [Fact]
         public void AddMigration_output_dir_absolute_path_in_project()
         {
-            var outputDir = Path.Combine(_project.TargetDir, "A/B/C");
+            var outputDir = Path.Combine(_project.TargetDir, "A", "B", "C");
             var artifacts = _project.Executor.AddMigration("EmptyMigration1", outputDir, "SimpleContext");
             Assert.NotNull(artifacts);
             Assert.Equal(Path.Combine(outputDir, Path.GetFileName(artifacts["MigrationFile"] as string)), artifacts["MigrationFile"]);
@@ -76,13 +76,10 @@ namespace Microsoft.EntityFrameworkCore.Tools
             AssertDefaultMigrationName(artifacts);
         }
 
-        [Theory]
-        [InlineData("")]
-        [InlineData("     ")]
-        [InlineData(null)]
-        public void AddMigration_handles_empty_output_dir(string outputDir)
+        [Fact]
+        public void AddMigration_handles_empty_output_dir()
         {
-            var artifacts = _project.Executor.AddMigration("EmptyMigration2", outputDir, "SimpleContext");
+            var artifacts = _project.Executor.AddMigration("EmptyMigration2", /*outputDir: */ null, "SimpleContext");
             Assert.NotNull(artifacts);
             Assert.StartsWith(Path.Combine(_project.TargetDir, "Migrations"), artifacts["MigrationFile"] as string);
             AssertDefaultMigrationName(artifacts);
@@ -130,10 +127,12 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     TargetDir = TargetDir,
                     References =
                     {
+                        BuildReference.ByName("System.Collections.Immutable", true),
                         BuildReference.ByName("System.Diagnostics.DiagnosticSource", true),
                         BuildReference.ByName("System.Interactive.Async", true),
                         BuildReference.ByName("System.Data.SqlClient", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore", true),
+                        BuildReference.ByName("Microsoft.EntityFrameworkCore.Attributes", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Design", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Relational", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.SqlServer", true),
@@ -186,7 +185,8 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     build.TargetPath,
                     build.TargetDir,
                     build.TargetDir,
-                    "SimpleProject");
+                    "SimpleProject",
+                    "C#");
             }
 
             public string TargetDir => _directory.Path;
@@ -201,7 +201,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
         }
     }
 }
-#elif NETCOREAPP2_0
+#elif NETCOREAPP2_0 || NETCOREAPP2_1
 #else
 #error target frameworks need to be updated.
 #endif

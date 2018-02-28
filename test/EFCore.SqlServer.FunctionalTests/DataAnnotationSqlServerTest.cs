@@ -12,16 +12,19 @@ using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
+using Xunit.Abstractions;
 
 // ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public class DataAnnotationSqlServerTest : DataAnnotationTestBase<DataAnnotationSqlServerTest.DataAnnotationSqlServerFixture>
     {
-        public DataAnnotationSqlServerTest(DataAnnotationSqlServerFixture fixture)
+        // ReSharper disable once UnusedParameter.Local
+        public DataAnnotationSqlServerTest(DataAnnotationSqlServerFixture fixture, ITestOutputHelper testOutputHelper)
             : base(fixture)
         {
             fixture.TestSqlLoggerFactory.Clear();
+            //fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
         }
 
         protected override void UseTransaction(DatabaseFacade facade, IDbContextTransaction transaction)
@@ -82,7 +85,7 @@ namespace Microsoft.EntityFrameworkCore
             var modelBuilder = base.Key_and_MaxLength_64_produce_nvarchar_64();
 
             var property = GetProperty<ColumnKeyAnnotationClass2>(modelBuilder, "PersonFirstName");
-            Assert.Equal("nvarchar(64)", new SqlServerTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("nvarchar(64)", TestServiceFactory.Instance.Create<SqlServerTypeMappingSource>().GetMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -92,17 +95,7 @@ namespace Microsoft.EntityFrameworkCore
             var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength();
 
             var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "MaxTimestamp");
-            Assert.Equal("rowversion", new SqlServerTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
-
-            return modelBuilder;
-        }
-
-        public override ModelBuilder Timestamp_takes_precedence_over_MaxLength_with_value()
-        {
-            var modelBuilder = base.Timestamp_takes_precedence_over_MaxLength_with_value();
-
-            var property = GetProperty<TimestampAndMaxlen>(modelBuilder, "NonMaxTimestamp");
-            Assert.Equal("rowversion", new SqlServerTypeMapper(new RelationalTypeMapperDependencies()).FindMapping(property).StoreType);
+            Assert.Equal("rowversion", TestServiceFactory.Instance.Create<SqlServerTypeMappingSource>().GetMapping(property).StoreType);
 
             return modelBuilder;
         }
@@ -150,11 +143,11 @@ namespace Microsoft.EntityFrameworkCore
             base.ConcurrencyCheckAttribute_throws_if_value_in_database_changed();
 
             Assert.Equal(
-                @"SELECT TOP(1) [r].[UniqueNo], [r].[MaxLengthProperty], [r].[Name], [r].[RowVersion]
+                @"SELECT TOP(1) [r].[UniqueNo], [r].[MaxLengthProperty], [r].[Name], [r].[RowVersion], [r].[UniqueNo], [r].[Details_Name], [r].[UniqueNo], [r].[AdditionalDetails_Name]
 FROM [Sample] AS [r]
 WHERE [r].[UniqueNo] = 1
 
-SELECT TOP(1) [r].[UniqueNo], [r].[MaxLengthProperty], [r].[Name], [r].[RowVersion]
+SELECT TOP(1) [r].[UniqueNo], [r].[MaxLengthProperty], [r].[Name], [r].[RowVersion], [r].[UniqueNo], [r].[Details_Name], [r].[UniqueNo], [r].[AdditionalDetails_Name]
 FROM [Sample] AS [r]
 WHERE [r].[UniqueNo] = 1
 
@@ -186,13 +179,15 @@ SELECT @@ROWCOUNT;",
             base.DatabaseGeneratedAttribute_autogenerates_values_when_set_to_identity();
 
             Assert.Equal(
-                @"@p0='' (Size = 10) (DbType = String)
+                @"@p0='' (Size = 10)
 @p1='Third' (Nullable = false) (Size = 4000)
 @p2='00000000-0000-0000-0000-000000000003'
+@p3='Third Additional Name' (Size = 4000)
+@p4='Third Name' (Size = 4000)
 
 SET NOCOUNT ON;
-INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
-VALUES (@p0, @p1, @p2);
+INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion], [AdditionalDetails_Name], [Details_Name])
+VALUES (@p0, @p1, @p2, @p3, @p4);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
@@ -208,10 +203,12 @@ WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
                 @"@p0='Short' (Size = 10)
 @p1='ValidString' (Nullable = false) (Size = 4000)
 @p2='00000000-0000-0000-0000-000000000001'
+@p3='Third Additional Name' (Size = 4000)
+@p4='Third Name' (Size = 4000)
 
 SET NOCOUNT ON;
-INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
-VALUES (@p0, @p1, @p2);
+INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion], [AdditionalDetails_Name], [Details_Name])
+VALUES (@p0, @p1, @p2, @p3, @p4);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();
@@ -219,10 +216,12 @@ WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();
 @p0='VeryVeryVeryVeryVeryVeryLongString' (Size = -1)
 @p1='ValidString' (Nullable = false) (Size = 4000)
 @p2='00000000-0000-0000-0000-000000000002'
+@p3='Third Additional Name' (Size = 4000)
+@p4='Third Name' (Size = 4000)
 
 SET NOCOUNT ON;
-INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
-VALUES (@p0, @p1, @p2);
+INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion], [AdditionalDetails_Name], [Details_Name])
+VALUES (@p0, @p1, @p2, @p3, @p4);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
@@ -235,11 +234,11 @@ WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
             base.RequiredAttribute_for_navigation_throws_while_inserting_null_value();
 
             Assert.Contains(
-                @"@p1='1'" + EOL,
+                @"@p1='1'" + _eol,
                 Sql);
 
             Assert.Contains(
-                @"@p1='' (Nullable = false) (DbType = Int32)" + EOL,
+                @"@p1='' (Nullable = false) (DbType = Int32)" + _eol,
                 Sql);
         }
 
@@ -248,24 +247,28 @@ WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
             base.RequiredAttribute_for_property_throws_while_inserting_null_value();
 
             Assert.Equal(
-                @"@p0='' (Size = 10) (DbType = String)
+                @"@p0='' (Size = 10)
 @p1='ValidString' (Nullable = false) (Size = 4000)
 @p2='00000000-0000-0000-0000-000000000001'
+@p3='Two' (Size = 4000)
+@p4='One' (Size = 4000)
 
 SET NOCOUNT ON;
-INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
-VALUES (@p0, @p1, @p2);
+INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion], [AdditionalDetails_Name], [Details_Name])
+VALUES (@p0, @p1, @p2, @p3, @p4);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();
 
-@p0='' (Size = 10) (DbType = String)
-@p1='' (Nullable = false) (Size = 4000) (DbType = String)
+@p0='' (Size = 10)
+@p1='' (Nullable = false) (Size = 4000)
 @p2='00000000-0000-0000-0000-000000000002'
+@p3='Two' (Size = 4000)
+@p4='One' (Size = 4000)
 
 SET NOCOUNT ON;
-INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion])
-VALUES (@p0, @p1, @p2);
+INSERT INTO [Sample] ([MaxLengthProperty], [Name], [RowVersion], [AdditionalDetails_Name], [Details_Name])
+VALUES (@p0, @p1, @p2, @p3, @p4);
 SELECT [UniqueNo]
 FROM [Sample]
 WHERE @@ROWCOUNT = 1 AND [UniqueNo] = scope_identity();",
@@ -307,7 +310,7 @@ WHERE @@ROWCOUNT = 1 AND [Id] = scope_identity();",
             // row version value is not stable.
         }
 
-        private static readonly string EOL = Environment.NewLine;
+        private static readonly string _eol = Environment.NewLine;
 
         private string Sql => Fixture.TestSqlLoggerFactory.Sql;
 

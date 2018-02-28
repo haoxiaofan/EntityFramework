@@ -1,6 +1,7 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -43,21 +44,29 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql
         /// <param name="sqlGenerationHelper"> The SQL generation helper. </param>
         /// <param name="parameterNameGeneratorFactory"> The parameter name generator factory. </param>
         /// <param name="relationalTypeMapper"> The relational type mapper. </param>
+        /// <param name="typeMappingSource"> The type mapper. </param>
         public QuerySqlGeneratorDependencies(
             [NotNull] IRelationalCommandBuilderFactory commandBuilderFactory,
             [NotNull] ISqlGenerationHelper sqlGenerationHelper,
             [NotNull] IParameterNameGeneratorFactory parameterNameGeneratorFactory,
-            [NotNull] IRelationalTypeMapper relationalTypeMapper)
+#pragma warning disable 618
+            [NotNull] IRelationalTypeMapper relationalTypeMapper,
+#pragma warning restore 618
+            [NotNull] IRelationalTypeMappingSource typeMappingSource)
         {
             Check.NotNull(commandBuilderFactory, nameof(commandBuilderFactory));
             Check.NotNull(sqlGenerationHelper, nameof(sqlGenerationHelper));
             Check.NotNull(parameterNameGeneratorFactory, nameof(parameterNameGeneratorFactory));
             Check.NotNull(relationalTypeMapper, nameof(relationalTypeMapper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
 
             CommandBuilderFactory = commandBuilderFactory;
             SqlGenerationHelper = sqlGenerationHelper;
             ParameterNameGeneratorFactory = parameterNameGeneratorFactory;
+#pragma warning disable 618
             RelationalTypeMapper = relationalTypeMapper;
+#pragma warning restore 618
+            TypeMappingSource = typeMappingSource;
         }
 
         /// <summary>
@@ -76,9 +85,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql
         public IParameterNameGeneratorFactory ParameterNameGeneratorFactory { get; }
 
         /// <summary>
-        ///     Gets the relational type mapper.
+        ///     The relational type mapper.
         /// </summary>
+        [Obsolete("Use TypeMappingSource.")]
         public IRelationalTypeMapper RelationalTypeMapper { get; }
+
+        /// <summary>
+        ///     The type mapping source.
+        /// </summary>
+        public IRelationalTypeMappingSource TypeMappingSource { get; }
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -90,7 +105,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql
                 commandBuilderFactory,
                 SqlGenerationHelper,
                 ParameterNameGeneratorFactory,
-                RelationalTypeMapper);
+#pragma warning disable 618
+                RelationalTypeMapper,
+#pragma warning restore 618
+                TypeMappingSource);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -102,7 +120,10 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql
                 CommandBuilderFactory,
                 sqlGenerationHelper,
                 ParameterNameGeneratorFactory,
-                RelationalTypeMapper);
+#pragma warning disable 618
+                RelationalTypeMapper,
+#pragma warning restore 618
+                TypeMappingSource);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -114,18 +135,38 @@ namespace Microsoft.EntityFrameworkCore.Query.Sql
                 CommandBuilderFactory,
                 SqlGenerationHelper,
                 parameterNameGeneratorFactory,
-                RelationalTypeMapper);
+#pragma warning disable 618
+                RelationalTypeMapper,
+#pragma warning restore 618
+                TypeMappingSource);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="relationalTypeMapper"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
+        [Obsolete("Use IRelationalTypeMappingSource.")]
         public QuerySqlGeneratorDependencies With([NotNull] IRelationalTypeMapper relationalTypeMapper)
             => new QuerySqlGeneratorDependencies(
                 CommandBuilderFactory,
                 SqlGenerationHelper,
                 ParameterNameGeneratorFactory,
-                relationalTypeMapper);
+                relationalTypeMapper,
+                TypeMappingSource);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="typeMappingSource"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public QuerySqlGeneratorDependencies With([NotNull] IRelationalTypeMappingSource typeMappingSource)
+            => new QuerySqlGeneratorDependencies(
+                CommandBuilderFactory,
+                SqlGenerationHelper,
+                ParameterNameGeneratorFactory,
+#pragma warning disable 618
+                RelationalTypeMapper,
+#pragma warning restore 618
+                typeMappingSource);
     }
 }

@@ -26,15 +26,15 @@ namespace Microsoft.EntityFrameworkCore.Benchmarks
         }
 
         private static string GetFramework()
-        {
+            =>
 #if NET461
-            return ".NET Framework";
-#elif NETCOREAPP1_1
-            return ".NET Core 1.1";
+            ".NET Framework";
 #elif NETCOREAPP2_0
-            return ".NET Core 2.0";
+            ".NET Core 2.0";
+#elif NETCOREAPP2_1
+            ".NET Core 2.1";
 #endif
-        }
+
 
         public virtual void Process(Summary summary)
         {

@@ -3,13 +3,9 @@
 
 using System;
 using System.Globalization;
-using System.Linq;
-using System.Reflection;
-using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Metadata
@@ -86,76 +82,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         public virtual string ColumnName
         {
             get => (string)Annotations.Metadata[RelationalAnnotationNames.ColumnName]
-                   ?? GetDefaultColumnName();
+                   ?? ConstraintNamer.GetDefaultName(Property);
 
             [param: CanBeNull] set => SetColumnName(value);
-        }
-
-        private string GetDefaultColumnName()
-        {
-            var entityType = Property.DeclaringEntityType;
-            var pk = Property.GetContainingPrimaryKey();
-            if (pk != null)
-            {
-                foreach (var fk in entityType.FindForeignKeys(pk.Properties))
-                {
-                    if (!fk.PrincipalKey.IsPrimaryKey())
-                    {
-                        continue;
-                    }
-
-                    var principalEntityType = fk.PrincipalEntityType;
-                    var entityTypeAnnotations = GetAnnotations(entityType);
-                    var principalTypeAnnotations = GetAnnotations(principalEntityType);
-                    if (entityTypeAnnotations.TableName == principalTypeAnnotations.TableName
-                        && entityTypeAnnotations.Schema == principalTypeAnnotations.Schema)
-                    {
-                        return GetAnnotations(principalEntityType.FindPrimaryKey().Properties[pk.IndexOf(Property)]).ColumnName;
-                    }
-                }
-            }
-            else
-            {
-                StringBuilder builder = null;
-                do
-                {
-                    var ownership = entityType.GetForeignKeys().SingleOrDefault(fk => fk.IsOwnership);
-                    if (ownership == null)
-                    {
-                        entityType = null;
-                    }
-                    else
-                    {
-                        var ownerType = ownership.PrincipalEntityType;
-                        var entityTypeAnnotations = GetAnnotations(entityType);
-                        var ownerTypeAnnotations = GetAnnotations(ownerType);
-                        if (entityTypeAnnotations.TableName == ownerTypeAnnotations.TableName
-                            && entityTypeAnnotations.Schema == ownerTypeAnnotations.Schema)
-                        {
-                            if (builder == null)
-                            {
-                                builder = new StringBuilder();
-                            }
-                            builder.Insert(0, "_");
-                            builder.Insert(0, ownership.PrincipalToDependent.Name);
-                            entityType = ownerType;
-                        }
-                        else
-                        {
-                            entityType = null;
-                        }
-                    }
-                }
-                while (entityType != null);
-
-                if (builder != null)
-                {
-                    builder.Append(Property.Name);
-                    return builder.ToString();
-                }
-            }
-
-            return Property.Name;
         }
 
         /// <summary>
@@ -174,8 +103,20 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         /// </summary>
         public virtual string ColumnType
         {
-            get => (string)Annotations.Metadata[RelationalAnnotationNames.ColumnType]
-                   ?? ((RelationalTypeMapping)Annotations.Metadata[RelationalAnnotationNames.TypeMapping])?.StoreType;
+            get
+            {
+                var columnType = (string)Annotations.Metadata[RelationalAnnotationNames.ColumnType];
+                if (columnType != null)
+                {
+                    return columnType;
+                }
+
+                var sharedTablePrincipalPrimaryKeyProperty = Property.FindSharedTableRootPrimaryKeyProperty();
+                return sharedTablePrincipalPrimaryKeyProperty != null
+                    ? sharedTablePrincipalPrimaryKeyProperty.Relational().ColumnType
+                    : Property.FindRelationalMapping()?.StoreType;
+            }
+
             [param: CanBeNull] set => SetColumnType(value);
         }
 
@@ -208,11 +149,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         /// </param>
         /// <returns> The default constraint SQL expression that should be used when creating a column for this property. </returns>
         protected virtual string GetDefaultValueSql(bool fallback)
-            => fallback
-               && (GetDefaultValue(false) != null
-                   || GetComputedColumnSql(false) != null)
-                ? null
+        {
+            if (fallback
+                && (GetDefaultValue(false) != null
+                    || GetComputedColumnSql(false) != null))
+            {
+                return null;
+            }
+
+            var sharedTablePrincipalPrimaryKeyProperty = Property.FindSharedTableRootPrimaryKeyProperty();
+            return sharedTablePrincipalPrimaryKeyProperty != null
+                ? ((RelationalPropertyAnnotations)sharedTablePrincipalPrimaryKeyProperty.Relational()).GetDefaultValueSql(fallback)
                 : (string)Annotations.Metadata[RelationalAnnotationNames.DefaultValueSql];
+        }
 
         /// <summary>
         ///     Attempts to set the <see cref="DefaultValueSql" /> using the semantics of
@@ -304,11 +253,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         /// </param>
         /// <returns> The computed constraint SQL expression that should be used when creating a column for this property. </returns>
         protected virtual string GetComputedColumnSql(bool fallback)
-            => fallback
-               && (GetDefaultValue(false) != null
-                   || GetDefaultValueSql(false) != null)
-                ? null
+        {
+            if (fallback
+                && (GetDefaultValue(false) != null
+                    || GetDefaultValueSql(false) != null))
+            {
+                return null;
+            }
+
+            var sharedTablePrincipalPrimaryKeyProperty = Property.FindSharedTableRootPrimaryKeyProperty();
+            return sharedTablePrincipalPrimaryKeyProperty != null
+                ? ((RelationalPropertyAnnotations)sharedTablePrincipalPrimaryKeyProperty.Relational()).GetComputedColumnSql(fallback)
                 : (string)Annotations.Metadata[RelationalAnnotationNames.ComputedColumnSql];
+        }
 
         /// <summary>
         ///     Attempts to set the <see cref="ComputedColumnSql" /> using the semantics of
@@ -400,11 +357,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         /// </param>
         /// <returns> The default value to use in the definition of the column when creating a column for this property. </returns>
         protected virtual object GetDefaultValue(bool fallback)
-            => fallback
-               && (GetDefaultValueSql(false) != null
-                   || GetComputedColumnSql(false) != null)
-                ? null
+        {
+            if (fallback
+                && (GetDefaultValueSql(false) != null
+                    || GetComputedColumnSql(false) != null))
+            {
+                return null;
+            }
+
+            var sharedTablePrincipalPrimaryKeyProperty = Property.FindSharedTableRootPrimaryKeyProperty();
+            return sharedTablePrincipalPrimaryKeyProperty != null
+                ? ((RelationalPropertyAnnotations)sharedTablePrincipalPrimaryKeyProperty.Relational()).GetDefaultValue(fallback)
                 : Annotations.Metadata[RelationalAnnotationNames.DefaultValue];
+        }
 
         /// <summary>
         ///     Attempts to set the <see cref="DefaultValue" /> using the semantics of
@@ -430,11 +395,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata
                             RelationalStrings.IncorrectDefaultValueType(
                                 value, valueType, Property.Name, Property.ClrType, Property.DeclaringEntityType.DisplayName()));
                     }
-                }
-
-                if (valueType.GetTypeInfo().IsEnum)
-                {
-                    value = Convert.ChangeType(value, valueType.UnwrapEnumType(), CultureInfo.InvariantCulture);
                 }
             }
 
@@ -512,5 +472,30 @@ namespace Microsoft.EntityFrameworkCore.Metadata
             SetDefaultValueSql(null);
             SetComputedColumnSql(null);
         }
+
+        /// <summary>
+        ///     A flag indicating if the property as capable of storing only fixed-length data, such as strings.
+        /// </summary>
+        public virtual bool IsFixedLength
+        {
+            get
+            {
+                var fixedLength = Annotations.Metadata[RelationalAnnotationNames.IsFixedLength];
+                return fixedLength != null && (bool)fixedLength;
+            }
+
+            set => SetFixedLength(value);
+        }
+
+        /// <summary>
+        ///     Configures the property as capable of storing only fixed-length data, such as strings.
+        /// </summary>
+        /// <param name="fixedLength"> A value indicating whether the property is constrained to fixed length values. </param>
+        /// <returns> <c>True</c> if the value can be set; <c>false</c> otherwise. </returns>
+        protected virtual bool SetFixedLength(bool fixedLength)
+            => Annotations.SetAnnotation(
+                RelationalAnnotationNames.IsFixedLength,
+                fixedLength);
+
     }
 }

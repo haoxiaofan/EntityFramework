@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -127,27 +128,27 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
 
         private InternalRelationshipBuilder WithOneBuilder(PropertyIdentity reference)
         {
-            var foreingKey = Builder.Metadata;
+            var foreignKey = Builder.Metadata;
             var referenceName = reference.Name;
             if (referenceName != null
-                && foreingKey.DependentToPrincipal != null
-                && foreingKey.GetDependentToPrincipalConfigurationSource() == ConfigurationSource.Explicit
-                && foreingKey.DependentToPrincipal.Name != referenceName)
+                && foreignKey.DependentToPrincipal != null
+                && foreignKey.GetDependentToPrincipalConfigurationSource() == ConfigurationSource.Explicit
+                && foreignKey.DependentToPrincipal.Name != referenceName)
             {
                 throw new InvalidOperationException(
                     CoreStrings.ConflictingRelationshipNavigation(
-                        foreingKey.PrincipalEntityType.DisplayName(),
-                        foreingKey.PrincipalToDependent.Name,
-                        foreingKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.PrincipalEntityType.DisplayName(),
+                        foreignKey.PrincipalToDependent.Name,
+                        foreignKey.DeclaringEntityType.DisplayName(),
                         referenceName,
-                        foreingKey.PrincipalEntityType.DisplayName(),
-                        foreingKey.PrincipalToDependent.Name,
-                        foreingKey.DeclaringEntityType.DisplayName(),
-                        foreingKey.DependentToPrincipal.Name));
+                        foreignKey.PrincipalEntityType.DisplayName(),
+                        foreignKey.PrincipalToDependent.Name,
+                        foreignKey.DeclaringEntityType.DisplayName(),
+                        foreignKey.DependentToPrincipal.Name));
             }
 
             if (referenceName != null
-                && RelatedEntityType != foreingKey.DeclaringEntityType)
+                && RelatedEntityType != foreignKey.DeclaringEntityType)
             {
                 return reference.Property == null && CollectionProperty == null
                     ? Builder.Navigations(reference.Name, CollectionName, DeclaringEntityType, RelatedEntityType, ConfigurationSource.Explicit)
@@ -158,5 +159,31 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                 ? Builder.DependentToPrincipal(reference.Name, ConfigurationSource.Explicit)
                 : Builder.DependentToPrincipal(reference.Property, ConfigurationSource.Explicit);
         }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

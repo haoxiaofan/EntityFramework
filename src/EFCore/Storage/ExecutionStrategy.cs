@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -90,7 +91,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
         protected virtual List<Exception> ExceptionsEncountered { get; } = new List<Exception>();
 
         /// <summary>
-        ///     A pseudo-random number generater that can be used to vary the delay between retries.
+        ///     A pseudo-random number generator that can be used to vary the delay between retries.
         /// </summary>
         protected virtual Random Random { get; } = new Random();
 
@@ -198,6 +199,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
                         throw new RetryLimitExceededException(CoreStrings.RetryLimitExceeded(MaxRetryCount, GetType().Name), ex);
                     }
 
+                    Dependencies.Logger.ExecutionStrategyRetrying(ExceptionsEncountered, delay.Value, async: true);
+
                     OnRetry();
                 }
 
@@ -234,7 +237,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
             TState state,
             Func<DbContext, TState, CancellationToken, Task<TResult>> operation,
             Func<DbContext, TState, CancellationToken, Task<ExecutionResult<TResult>>> verifySucceeded,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             Check.NotNull(operation, nameof(operation));
 
@@ -291,6 +294,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
                         throw new RetryLimitExceededException(CoreStrings.RetryLimitExceeded(MaxRetryCount, GetType().Name), ex);
                     }
 
+                    Dependencies.Logger.ExecutionStrategyRetrying(ExceptionsEncountered, delay.Value, async: true);
+
                     OnRetry();
                 }
 
@@ -303,7 +308,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// </summary>
         protected virtual void OnFirstExecution()
         {
-            if (Dependencies.CurrentDbContext.Context.Database.CurrentTransaction != null)
+            if (Dependencies.CurrentDbContext.Context.Database.CurrentTransaction != null
+                || Dependencies.CurrentDbContext.Context.Database.GetEnlistedTransaction() != null
+                || Transaction.Current != null)
             {
                 throw new InvalidOperationException(
                     CoreStrings.ExecutionStrategyExistingTransaction(
@@ -378,11 +385,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// </returns>
         public static TResult CallOnWrappedException<TResult>(
             [NotNull] Exception exception, [NotNull] Func<Exception, TResult> exceptionHandler)
-        {
-            var dbUpdateException = exception as DbUpdateException;
-            return dbUpdateException != null
+            => exception is DbUpdateException dbUpdateException
                 ? CallOnWrappedException(dbUpdateException.InnerException, exceptionHandler)
                 : exceptionHandler(exception);
-        }
     }
 }

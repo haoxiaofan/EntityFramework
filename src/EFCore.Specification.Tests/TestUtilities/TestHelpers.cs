@@ -3,12 +3,10 @@
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -17,7 +15,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
-using Microsoft.Extensions.Logging;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.TestUtilities
@@ -40,21 +37,29 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
 
             var dependencies = services1.GetService<TDependencies>();
 
-            var constructor = typeof(TDependencies).GetTypeInfo().DeclaredConstructors.Single();
-            var constructorParameters = constructor.GetParameters();
-
             var serviceProperties = typeof(TDependencies).GetTypeInfo()
                 .DeclaredProperties
                 .Where(p => !ignoreProperties.Contains(p.Name))
                 .ToList();
 
-            Assert.Equal(constructorParameters.Length, serviceProperties.Count);
+            var obsoleteTypes = serviceProperties
+                .Where(p => p.CustomAttributes.Any(a => a.AttributeType == typeof(ObsoleteAttribute)))
+                .Select(p => p.PropertyType)
+                .ToList();
 
-            foreach (var serviceType in constructorParameters.Select(p => p.ParameterType))
+            serviceProperties = serviceProperties.Where(p => !obsoleteTypes.Contains(p.PropertyType)).ToList();
+
+            var constructor = typeof(TDependencies).GetTypeInfo().DeclaredConstructors.OrderByDescending(c => c.GetParameters().Length).First();
+            var constructorParameters = constructor.GetParameters().Where(p => !obsoleteTypes.Contains(p.ParameterType)).ToList();
+
+            Assert.Equal(constructorParameters.Count, serviceProperties.Count);
+
+            foreach (var serviceType in constructorParameters.Where(p => !ignoreProperties.Contains(p.Name)).Select(p => p.ParameterType))
             {
                 var withMethod = typeof(TDependencies).GetTypeInfo().DeclaredMethods
                     .Single(
-                        m => m.Name == "With"
+                        m => m.CustomAttributes.All(a => a.AttributeType != typeof(ObsoleteAttribute))
+                            && m.Name == "With"
                              && m.GetParameters()[0].ParameterType == serviceType);
 
                 var clone = withMethod.Invoke(dependencies, new[] { services2.GetService(serviceType) });
@@ -77,173 +82,6 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         private class FakeCurrentDbContext : ICurrentDbContext
         {
             public DbContext Context { get; }
-        }
-
-        public void TestEventLogging(
-            Type eventIdType,
-            Type loggerExtensionsType,
-            IDictionary<Type, Func<object>> fakeFactories)
-        {
-            var eventIdFields = eventIdType.GetTypeInfo()
-                .DeclaredFields
-                .Where(p => p.FieldType == typeof(EventId) && p.GetCustomAttribute<ObsoleteAttribute>() == null)
-                .ToList();
-
-            var declaredMethods = loggerExtensionsType.GetTypeInfo()
-                .DeclaredMethods
-                .Where(m => m.IsPublic)
-                .OrderBy(e => e.Name)
-                .ToList();
-
-            var loggerMethods = declaredMethods
-                .ToDictionary(m => m.Name);
-
-            foreach (var eventIdField in eventIdFields)
-            {
-                var eventName = eventIdField.Name;
-                Assert.Contains(eventName, loggerMethods.Keys);
-
-                var loggerMethod = loggerMethods[eventName];
-
-                var loggerParameters = loggerMethod.GetParameters();
-                var category = loggerParameters[0].ParameterType.GenericTypeArguments[0];
-
-                if (category.GetTypeInfo().ContainsGenericParameters)
-                {
-                    category = typeof(DbLoggerCategory.Infrastructure);
-                    loggerMethod = loggerMethod.MakeGenericMethod(category);
-                }
-
-                var eventId = (EventId)eventIdField.GetValue(null);
-
-                var categoryName = Activator.CreateInstance(category).ToString();
-                Assert.Equal(categoryName + "." + eventName, eventId.Name);
-
-                var testLogger = (TestLoggerBase)Activator.CreateInstance(typeof(TestLogger<>).MakeGenericType(category));
-                var testDiagnostics = (TestDiagnosticSource)testLogger.DiagnosticSource;
-
-                var args = new object[loggerParameters.Length];
-                args[0] = testLogger;
-
-                for (var i = 1; i < args.Length; i++)
-                {
-                    var type = loggerParameters[i].ParameterType;
-
-                    if (fakeFactories.TryGetValue(type, out var factory))
-                    {
-                        args[i] = factory();
-                    }
-                    else
-                    {
-                        try
-                        {
-                            args[i] = Activator.CreateInstance(type);
-                        }
-                        catch (Exception)
-                        {
-                            Assert.True(false, "Need to add factory for type " + type.DisplayName());
-                        }
-                    }
-                }
-
-                foreach (var enableFor in new[] { "Foo", eventId.Name })
-                {
-                    testDiagnostics.EnableFor = enableFor;
-
-                    var logged = false;
-                    foreach (LogLevel logLevel in Enum.GetValues(typeof(LogLevel)))
-                    {
-                        testLogger.EnabledFor = logLevel;
-                        testLogger.LoggedAt = null;
-                        testDiagnostics.LoggedEventName = null;
-
-                        loggerMethod.Invoke(null, args);
-
-                        if (testLogger.LoggedAt != null)
-                        {
-                            Assert.Equal(logLevel, testLogger.LoggedAt);
-                            logged = true;
-                        }
-
-                        if (enableFor == eventId.Name
-                            && categoryName != DbLoggerCategory.Scaffolding.Name)
-                        {
-                            Assert.Equal(eventId.Name, testDiagnostics.LoggedEventName);
-                            if (testDiagnostics.LoggedMessage != null)
-                            {
-                                Assert.Equal(testLogger.Message, testDiagnostics.LoggedMessage);
-                            }
-                        }
-                        else
-                        {
-                            Assert.Null(testDiagnostics.LoggedEventName);
-                        }
-                    }
-
-                    Assert.True(logged, "Failed for " + eventId.Name);
-                }
-            }
-        }
-
-        private class TestLoggerBase
-        {
-            public LogLevel EnabledFor { get; set; }
-            public LogLevel? LoggedAt { get; set; }
-            public EventId LoggedEvent { get; set; }
-            public string Message { get; set; }
-
-            public DiagnosticSource DiagnosticSource { get; } = new TestDiagnosticSource();
-        }
-
-        private class TestLogger<TCategory> : TestLoggerBase, IDiagnosticsLogger<TCategory>, ILogger
-            where TCategory : LoggerCategory<TCategory>, new()
-        {
-            public ILoggingOptions Options => null;
-
-            public WarningBehavior GetLogBehavior(EventId eventId, LogLevel logLevel)
-            {
-                LoggedEvent = eventId;
-                return EnabledFor == logLevel ? WarningBehavior.Log : WarningBehavior.Ignore;
-            }
-
-            public bool IsEnabled(LogLevel logLevel) => EnabledFor == logLevel;
-
-            public IDisposable BeginScope<TState>(TState state) => null;
-
-            public void Log<TState>(LogLevel logLevel, EventId eventId, TState state, Exception exception, Func<TState, Exception, string> formatter)
-            {
-                LoggedAt = logLevel;
-                Assert.Equal(LoggedEvent, eventId);
-                Message = formatter(state, exception);
-            }
-
-            public bool ShouldLogSensitiveData() => false;
-
-            public ILogger Logger => this;
-        }
-
-        private class TestDiagnosticSource : DiagnosticSource
-        {
-            public string EnableFor { get; set; }
-            public string LoggedEventName { get; set; }
-            public string LoggedMessage { get; set; }
-
-            public override void Write(string name, object value)
-            {
-                LoggedEventName = name;
-
-                Assert.IsAssignableFrom<EventData>(value);
-
-                LoggedMessage = value.ToString();
-
-                var exceptionProperty = value.GetType().GetTypeInfo().GetDeclaredProperty("Exception");
-                if (exceptionProperty != null)
-                {
-                    Assert.IsAssignableFrom<IErrorEventData>(value);
-                }
-            }
-
-            public override bool IsEnabled(string name) => name == EnableFor;
         }
 
         public DbContextOptions CreateOptions(IModel model, IServiceProvider serviceProvider = null)
@@ -356,16 +194,13 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         {
             var contextServices = CreateContextServices();
 
-            var conventionSetBuilder = contextServices.GetRequiredService<IConventionSetBuilder>();
+            var conventionSetBuilder = new CompositeConventionSetBuilder(contextServices.GetRequiredService<IEnumerable<IConventionSetBuilder>>().ToList());
             var conventionSet = contextServices.GetRequiredService<ICoreConventionSetBuilder>().CreateConventionSet();
             conventionSet = conventionSetBuilder == null
                 ? conventionSet
                 : conventionSetBuilder.AddConventions(conventionSet);
             return new ModelBuilder(conventionSet);
         }
-
-        public IModelValidator CreateModelValidator()
-            => CreateContextServices().GetRequiredService<IModelValidator>();
 
         public InternalEntityEntry CreateInternalEntry<TEntity>(
             IModel model, EntityState entityState = EntityState.Detached, TEntity entity = null)
@@ -421,6 +256,14 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         {
             Assert.Equal(expected.Count, actual.Count);
 
+            if (elementSorter == null && !verifyOrdered)
+            {
+                if (ShouldPerformUnsortedVerification(expected))
+                {
+                    return AssertResults(expected, actual, assertOrder: false);
+                }
+            }
+
             elementSorter = elementSorter ?? (e => e);
             elementAsserter = elementAsserter ?? Assert.Equal;
             if (!verifyOrdered)
@@ -445,6 +288,14 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             bool verifyOrdered)
         {
             Assert.Equal(expected.Count, actual.Count);
+
+            if (elementSorter == null && !verifyOrdered)
+            {
+                if (ShouldPerformUnsortedVerification(expected))
+                {
+                    return AssertResults(expected, actual, assertOrder: false);
+                }
+            }
 
             elementAsserter = elementAsserter ?? Assert.Equal;
             if (!verifyOrdered)
@@ -471,6 +322,14 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
         {
             Assert.Equal(expected.Count, actual.Count);
 
+            if (elementSorter == null && !verifyOrdered)
+            {
+                if (ShouldPerformUnsortedVerification(expected))
+                {
+                    return AssertResults(expected, actual, assertOrder: false);
+                }
+            }
+
             elementAsserter = elementAsserter ?? Assert.Equal;
             if (!verifyOrdered)
             {
@@ -484,6 +343,18 @@ namespace Microsoft.EntityFrameworkCore.TestUtilities
             }
 
             return actual.Count;
+        }
+
+        private static bool ShouldPerformUnsortedVerification<T>(IList<T> expected)
+        {
+            if (expected.Count > 1)
+            {
+                var nonNullElement = expected.FirstOrDefault(e => e != null);
+
+                return nonNullElement != null && nonNullElement.GetType().GetInterface(nameof(IComparable)) == null;
+            }
+
+            return false;
         }
 
         public static void ExecuteWithStrategyInTransaction<TContext>(

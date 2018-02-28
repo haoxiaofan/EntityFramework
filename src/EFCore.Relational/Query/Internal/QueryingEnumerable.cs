@@ -50,11 +50,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             private readonly RelationalQueryContext _relationalQueryContext;
             private readonly ShaperCommandContext _shaperCommandContext;
             private readonly IShaper<T> _shaper;
+            private readonly Func<DbContext, bool, bool> _bufferlessMoveNext;
 
             private RelationalDataReader _dataReader;
             private Queue<ValueBuffer> _buffer;
             private DbDataReader _dbDataReader;
             private IRelationalValueBufferFactory _valueBufferFactory;
+            private IExecutionStrategy _executionStrategy;
 
             private bool _disposed;
 
@@ -64,15 +66,19 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 _valueBufferFactory = _shaperCommandContext.ValueBufferFactory;
                 _relationalQueryContext = queryingEnumerable._relationalQueryContext;
                 _shaper = queryingEnumerable._shaper;
+                _bufferlessMoveNext = BufferlessMoveNext;
             }
 
             public bool MoveNext()
             {
                 if (_buffer == null)
                 {
-                    var executionStrategy = _relationalQueryContext.ExecutionStrategyFactory.Create();
-
-                    return executionStrategy.Execute(executionStrategy.RetriesOnFailure, BufferlessMoveNext);
+                    if (_executionStrategy == null)
+                    {
+                        _executionStrategy = _relationalQueryContext.ExecutionStrategyFactory.Create();
+                    }
+                    
+                    return _executionStrategy.Execute(_executionStrategy.RetriesOnFailure, _bufferlessMoveNext, null);
                 }
 
                 if (_buffer.Count > 0)
@@ -85,14 +91,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 return false;
             }
 
-            private bool BufferlessMoveNext(bool buffer)
+            private bool BufferlessMoveNext(DbContext _, bool buffer)
             {
-                try
+                if (_dataReader == null)
                 {
-                    if (_dataReader == null)
-                    {
-                        _relationalQueryContext.Connection.Open();
+                    _relationalQueryContext.Connection.Open();
 
+                    try
+                    {
                         var relationalCommand
                             = _shaperCommandContext
                                 .GetRelationalCommand(_relationalQueryContext.ParameterValues);
@@ -103,33 +109,34 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                             = relationalCommand.ExecuteReader(
                                 _relationalQueryContext.Connection,
                                 _relationalQueryContext.ParameterValues);
-
-                        _dbDataReader = _dataReader.DbDataReader;
-                        _shaperCommandContext.NotifyReaderCreated(_dbDataReader);
-                        _valueBufferFactory = _shaperCommandContext.ValueBufferFactory;
                     }
-
-                    var hasNext = _dataReader.Read();
-
-                    Current
-                        = hasNext
-                            ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader))
-                            : default(T);
-
-                    if (buffer)
+                    catch
                     {
-                        BufferAll();
+                        // If failure happens creating the data reader, then it won't be available to
+                        // handle closing the connection, so do it explicitly here to preserve ref counting.
+                        _relationalQueryContext.Connection.Close();
+
+                        throw;
                     }
 
-                    return hasNext;
+                    _dbDataReader = _dataReader.DbDataReader;
+                    _shaperCommandContext.NotifyReaderCreated(_dbDataReader);
+                    _valueBufferFactory = _shaperCommandContext.ValueBufferFactory;
                 }
-                catch (Exception)
-                {
-                    _dataReader = null;
-                    _dbDataReader = null;
 
-                    throw;
+                var hasNext = _dataReader.Read();
+
+                Current
+                    = hasNext
+                        ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader))
+                        : default;
+
+                if (buffer)
+                {
+                    BufferAll();
                 }
+
+                return hasNext;
             }
 
             public T Current { get; private set; }
@@ -199,10 +206,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 }
             }
 
-            public void Reset()
-            {
-                throw new NotImplementedException();
-            }
+            public void Reset() => throw new NotImplementedException();
         }
     }
 }

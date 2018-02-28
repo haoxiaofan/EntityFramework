@@ -1,8 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Migrations
@@ -44,26 +46,43 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         ///     </para>
         /// </summary>
         /// <param name="commandBuilderFactory"> The command builder factory. </param>
+        /// <param name="updateSqlGenerator"> High level SQL generator. </param>
         /// <param name="sqlGenerationHelper"> Helpers for SQL generation. </param>
         /// <param name="typeMapper"> The type mapper being used. </param>
+        /// <param name="typeMappingSource"> The type mapper. </param>
         public MigrationsSqlGeneratorDependencies(
             [NotNull] IRelationalCommandBuilderFactory commandBuilderFactory,
+            [NotNull] ISingletonUpdateSqlGenerator updateSqlGenerator,
             [NotNull] ISqlGenerationHelper sqlGenerationHelper,
-            [NotNull] IRelationalTypeMapper typeMapper)
+#pragma warning disable 618
+            [NotNull] IRelationalTypeMapper typeMapper,
+#pragma warning restore 618
+            [NotNull] IRelationalTypeMappingSource typeMappingSource)
         {
             Check.NotNull(commandBuilderFactory, nameof(commandBuilderFactory));
+            Check.NotNull(updateSqlGenerator, nameof(updateSqlGenerator));
             Check.NotNull(sqlGenerationHelper, nameof(sqlGenerationHelper));
             Check.NotNull(typeMapper, nameof(typeMapper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
 
             CommandBuilderFactory = commandBuilderFactory;
             SqlGenerationHelper = sqlGenerationHelper;
+            UpdateSqlGenerator = updateSqlGenerator;
+#pragma warning disable 618
             TypeMapper = typeMapper;
+#pragma warning restore 618
+            TypeMappingSource = typeMappingSource;
         }
 
         /// <summary>
         ///     The command builder factory.
         /// </summary>
         public IRelationalCommandBuilderFactory CommandBuilderFactory { get; }
+
+        /// <summary>
+        ///     High level SQL generator.
+        /// </summary>
+        public ISingletonUpdateSqlGenerator UpdateSqlGenerator { get; }
 
         /// <summary>
         ///     Helpers for SQL generation.
@@ -73,7 +92,13 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         /// <summary>
         ///     The type mapper being used.
         /// </summary>
+        [Obsolete("Use TypeMappingSource.")]
         public IRelationalTypeMapper TypeMapper { get; }
+
+        /// <summary>
+        ///     The type mapper.
+        /// </summary>
+        public IRelationalTypeMappingSource TypeMappingSource { get; }
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -83,8 +108,27 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         public MigrationsSqlGeneratorDependencies With([NotNull] IRelationalCommandBuilderFactory commandBuilderFactory)
             => new MigrationsSqlGeneratorDependencies(
                 commandBuilderFactory,
+                UpdateSqlGenerator,
                 SqlGenerationHelper,
-                TypeMapper);
+#pragma warning disable 618
+                TypeMapper,
+#pragma warning restore 618
+                TypeMappingSource);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="updateSqlGenerator"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public MigrationsSqlGeneratorDependencies With([NotNull] ISingletonUpdateSqlGenerator updateSqlGenerator)
+            => new MigrationsSqlGeneratorDependencies(
+                CommandBuilderFactory,
+                updateSqlGenerator,
+                SqlGenerationHelper,
+#pragma warning disable 618
+                TypeMapper,
+#pragma warning restore 618
+                TypeMappingSource);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -94,18 +138,40 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         public MigrationsSqlGeneratorDependencies With([NotNull] ISqlGenerationHelper sqlGenerationHelper)
             => new MigrationsSqlGeneratorDependencies(
                 CommandBuilderFactory,
+                UpdateSqlGenerator,
                 sqlGenerationHelper,
-                TypeMapper);
+#pragma warning disable 618
+                TypeMapper,
+#pragma warning restore 618
+                TypeMappingSource);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="typeMappingSource"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public MigrationsSqlGeneratorDependencies With([NotNull] IRelationalTypeMappingSource typeMappingSource)
+            => new MigrationsSqlGeneratorDependencies(
+                CommandBuilderFactory,
+                UpdateSqlGenerator,
+                SqlGenerationHelper,
+#pragma warning disable 618
+                TypeMapper,
+#pragma warning restore 618
+                typeMappingSource);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="typeMapper"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
+        [Obsolete("Use IRelationalTypeMappingSource.")]
         public MigrationsSqlGeneratorDependencies With([NotNull] IRelationalTypeMapper typeMapper)
             => new MigrationsSqlGeneratorDependencies(
                 CommandBuilderFactory,
+                UpdateSqlGenerator,
                 SqlGenerationHelper,
-                typeMapper);
+                typeMapper,
+                TypeMappingSource);
     }
 }

@@ -4,7 +4,8 @@
 using System.Diagnostics;
 using System.Linq;
 using JetBrains.Annotations;
-using Microsoft.EntityFrameworkCore.Utilities;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 
 // ReSharper disable once CheckNamespace
 namespace System.Reflection
@@ -15,14 +16,17 @@ namespace System.Reflection
         public static bool IsStatic(this PropertyInfo property)
             => (property.GetMethod ?? property.SetMethod).IsStatic;
 
-        public static bool IsCandidateProperty(this PropertyInfo propertyInfo, bool needsWrite = true)
+        public static bool IsCandidateProperty(this PropertyInfo propertyInfo, bool needsWrite = true, bool publicOnly = true)
             => !propertyInfo.IsStatic()
                && propertyInfo.GetIndexParameters().Length == 0
                && propertyInfo.CanRead
                && (!needsWrite || propertyInfo.CanWrite)
-               && propertyInfo.GetMethod != null && propertyInfo.GetMethod.IsPublic;
+               && propertyInfo.GetMethod != null && (!publicOnly || propertyInfo.GetMethod.IsPublic);
 
-        public static Type FindCandidateNavigationPropertyType(this PropertyInfo propertyInfo, Func<Type, bool> isPrimitiveProperty)
+        public static Type FindCandidateNavigationPropertyType(
+            this PropertyInfo propertyInfo,
+            ITypeMappingSource typeMappingSource,
+            IParameterBindingFactories parameterBindingFactories)
         {
             var targetType = propertyInfo.PropertyType;
             var targetSequenceType = targetType.TryGetSequenceType();
@@ -34,29 +38,16 @@ namespace System.Reflection
             targetType = targetSequenceType ?? targetType;
             targetType = targetType.UnwrapNullableType();
 
-            if (isPrimitiveProperty(targetType)
+            if (typeMappingSource.FindMapping(propertyInfo) != null
                 || targetType.GetTypeInfo().IsInterface
                 || targetType.GetTypeInfo().IsValueType
-                || targetType == typeof(object))
+                || targetType == typeof(object)
+                || parameterBindingFactories.FindFactory(propertyInfo.PropertyType, propertyInfo.Name) != null)
             {
                 return null;
             }
 
             return targetType;
-        }
-
-        public static bool IsSameAs(this PropertyInfo propertyInfo, PropertyInfo otherPropertyInfo)
-        {
-            Check.NotNull(propertyInfo, nameof(propertyInfo));
-            Check.NotNull(otherPropertyInfo, nameof(otherPropertyInfo));
-
-            return Equals(propertyInfo, otherPropertyInfo)
-                   || propertyInfo.Name == otherPropertyInfo.Name
-                   && (propertyInfo.DeclaringType == otherPropertyInfo.DeclaringType
-                       || propertyInfo.DeclaringType.GetTypeInfo().IsSubclassOf(otherPropertyInfo.DeclaringType)
-                       || otherPropertyInfo.DeclaringType.GetTypeInfo().IsSubclassOf(propertyInfo.DeclaringType)
-                       || propertyInfo.DeclaringType.GetTypeInfo().ImplementedInterfaces.Contains(otherPropertyInfo.DeclaringType)
-                       || otherPropertyInfo.DeclaringType.GetTypeInfo().ImplementedInterfaces.Contains(propertyInfo.DeclaringType));
         }
 
         public static PropertyInfo FindGetterProperty([NotNull] this PropertyInfo propertyInfo)

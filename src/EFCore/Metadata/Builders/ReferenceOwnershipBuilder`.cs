@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
@@ -91,7 +92,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                     RelatedEntityType,
                     ConfigurationSource.Explicit),
                 this,
-                foreignKeySet: true);
+                foreignKeySet: foreignKeyPropertyNames.Any());
 
         /// <summary>
         ///     <para>
@@ -154,7 +155,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                     Check.NotNull(keyPropertyNames, nameof(keyPropertyNames)),
                     ConfigurationSource.Explicit),
                 this,
-                principalKeySet: true);
+                principalKeySet: keyPropertyNames.Any());
 
         /// <summary>
         ///     Configures the unique property(s) that this relationship targets. Typically you would only call this
@@ -340,14 +341,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             where TNewRelatedEntity : class
         {
             InternalRelationshipBuilder relationship;
-            using (RelatedEntityType.Model.ConventionDispatcher.StartBatch())
+            using (var batch = RelatedEntityType.Model.ConventionDispatcher.StartBatch())
             {
                 relationship = RelatedEntityType.Builder.Owns(typeof(TNewRelatedEntity), navigation, ConfigurationSource.Explicit);
                 relationship.IsUnique(true, ConfigurationSource.Explicit);
+                relationship = batch.Run(relationship.Metadata).Builder;
             }
 
             return new ReferenceOwnershipBuilder<TRelatedEntity, TNewRelatedEntity>(
-                RelatedEntityType,
+                relationship.Metadata.PrincipalEntityType,
                 relationship.Metadata.DeclaringEntityType,
                 relationship);
         }
@@ -379,9 +381,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             [CanBeNull] Expression<Func<TRelatedEntity, TNewRelatedEntity>> navigationExpression = null)
             where TNewRelatedEntity : class
         {
-            var relatedEntityType = RelatedEntityType.FindInDefinitionPath(typeof(TNewRelatedEntity)) ??
-                                    Builder.ModelBuilder.Entity(typeof(TNewRelatedEntity), ConfigurationSource.Explicit).Metadata;
             var navigation = navigationExpression?.GetPropertyAccess();
+            var relatedEntityType =
+                RelatedEntityType.FindInDefinitionPath(typeof(TNewRelatedEntity)) ??
+                Builder.ModelBuilder.Metadata.FindEntityType(typeof(TNewRelatedEntity), navigation?.Name, RelatedEntityType) ??
+                Builder.ModelBuilder.Entity(typeof(TNewRelatedEntity), ConfigurationSource.Explicit).Metadata;
 
             return new ReferenceNavigationBuilder<TRelatedEntity, TNewRelatedEntity>(
                 RelatedEntityType,
@@ -454,7 +458,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for all properties of this entity type as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
@@ -466,5 +470,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         /// <returns> The same builder instance so that multiple configuration calls can be chained. </returns>
         public new virtual ReferenceOwnershipBuilder<TEntity, TRelatedEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
             => (ReferenceOwnershipBuilder<TEntity, TRelatedEntity>)base.UsePropertyAccessMode(propertyAccessMode);
+
+        /// <summary>
+        ///     Configures this entity to have seed data. It is used to generate data motion migrations.
+        /// </summary>
+        /// <param name="data">
+        ///     An array of seed data.
+        /// </param>
+        public virtual ReferenceOwnershipBuilder<TEntity, TRelatedEntity> SeedData([NotNull] params TRelatedEntity[] data)
+            => (ReferenceOwnershipBuilder<TEntity, TRelatedEntity>)base.SeedData(data);
     }
 }

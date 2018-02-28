@@ -11,6 +11,8 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
+// ReSharper disable AssignNullToNotNullAttribute
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
     public class ModelBuilderNonGenericStringTest : ModelBuilderNonGenericTest
@@ -177,6 +179,9 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public NonGenericStringTestEntityTypeBuilder Entity(string name)
                 => new NonGenericStringTestEntityTypeBuilder(ModelBuilder.Entity(name));
+
+            public override void Owned<TEntity>()
+                => ModelBuilder.Owned(typeof(TEntity));
 
             public override TestModelBuilder Ignore<TEntity>()
             {

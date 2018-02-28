@@ -50,6 +50,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual IEntityType GetRootType()
+            => EntityTypes.SingleOrDefault(
+                t => t.BaseType == null
+                     && t.FindForeignKeys(t.FindDeclaredPrimaryKey().Properties)
+                         .All(fk => !fk.PrincipalKey.IsPrimaryKey()
+                                    || fk.PrincipalEntityType.RootType() == t
+                                    || t.Relational().TableName != fk.PrincipalEntityType.Relational().TableName
+                                    || t.Relational().Schema != fk.PrincipalEntityType.Relational().Schema));
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual IEnumerable<IProperty> GetProperties()
             => EntityTypes.SelectMany(EntityTypeExtensions.GetDeclaredProperties)
                 .Distinct((x, y) => x.Relational().ColumnName == y.Relational().ColumnName);
@@ -89,7 +102,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         public static IReadOnlyList<TableMapping> GetTableMappings([NotNull] IModel model)
         {
             var tables = new Dictionary<(string Schema, string TableName), List<IEntityType>>();
-            foreach (var entityType in model.GetEntityTypes())
+            foreach (var entityType in model.GetEntityTypes().Where(et => !et.IsQueryType))
             {
                 var fullName = (entityType.Relational().Schema, entityType.Relational().TableName);
                 if (!tables.TryGetValue(fullName, out var mappedEntityTypes))

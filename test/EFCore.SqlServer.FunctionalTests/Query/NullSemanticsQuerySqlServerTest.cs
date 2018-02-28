@@ -13,7 +13,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         public NullSemanticsQuerySqlServerTest(NullSemanticsQuerySqlServerFixture fixture, ITestOutputHelper testOutputHelper)
             : base(fixture)
         {
-            fixture.TestSqlLoggerFactory.Clear();
+            Fixture.TestSqlLoggerFactory.Clear();
+            //Fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
         }
 
         public override void Compare_bool_with_bool_equal()
@@ -390,9 +391,53 @@ FROM [Entities1] AS [e]
 WHERE ([e].[NullableBoolA] = [e].[NullableBoolB]) OR ([e].[NullableBoolA] IS NULL AND [e].[NullableBoolB] IS NULL)");
         }
 
+        public override void Compare_equals_method_static()
+        {
+            base.Compare_equals_method_static();
+
+            AssertSql(
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE [e].[BoolA] = [e].[BoolB]",
+                //
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE [e].[BoolA] = [e].[NullableBoolB]",
+                //
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE [e].[NullableBoolA] = [e].[BoolB]",
+                //
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE ([e].[NullableBoolA] = [e].[NullableBoolB]) OR ([e].[NullableBoolA] IS NULL AND [e].[NullableBoolB] IS NULL)");
+        }
+
         public override void Compare_equals_method_negated()
         {
             base.Compare_equals_method_negated();
+
+            AssertSql(
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE [e].[BoolA] <> [e].[BoolB]",
+                //
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE ([e].[BoolA] <> [e].[NullableBoolB]) OR [e].[NullableBoolB] IS NULL",
+                //
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE ([e].[NullableBoolA] <> [e].[BoolB]) OR [e].[NullableBoolA] IS NULL",
+                //
+                @"SELECT [e].[Id]
+FROM [Entities1] AS [e]
+WHERE (([e].[NullableBoolA] <> [e].[NullableBoolB]) OR ([e].[NullableBoolA] IS NULL OR [e].[NullableBoolB] IS NULL)) AND ([e].[NullableBoolA] IS NOT NULL OR [e].[NullableBoolB] IS NOT NULL)");
+        }
+
+        public override void Compare_equals_method_negated_static()
+        {
+            base.Compare_equals_method_negated_static();
 
             AssertSql(
                 @"SELECT [e].[Id]
@@ -667,7 +712,7 @@ INNER JOIN [Entities2] AS [e2] ON [e1].[NullableIntA] = [e2].[NullableIntB]");
             AssertSql(
                 @"SELECT [e].[Id]
 FROM [Entities1] AS [e]
-WHERE ([e].[NullableStringA] IN (N'Foo') OR [e].[NullableStringA] IS NULL)");
+WHERE [e].[NullableStringA] IN (N'Foo') OR [e].[NullableStringA] IS NULL");
         }
 
         public override void Contains_with_local_array_closure_false_with_null()
@@ -687,7 +732,7 @@ WHERE [e].[NullableStringA] NOT IN (N'Foo') AND [e].[NullableStringA] IS NOT NUL
             AssertSql(
                 @"SELECT [e].[Id]
 FROM [Entities1] AS [e]
-WHERE ([e].[NullableStringA] IN (N'Foo') OR [e].[NullableStringA] IS NULL)");
+WHERE [e].[NullableStringA] IN (N'Foo') OR [e].[NullableStringA] IS NULL");
         }
 
         public override void Where_multiple_ors_with_null()
@@ -717,7 +762,7 @@ WHERE [e].[NullableStringA] NOT IN (N'Foo', N'Blah') AND [e].[NullableStringA] I
             AssertSql(
                 @"SELECT [e].[Id]
 FROM [Entities1] AS [e]
-WHERE ([e].[NullableStringA] IN (N'Foo') OR [e].[NullableStringA] IS NULL)");
+WHERE [e].[NullableStringA] IN (N'Foo') OR [e].[NullableStringA] IS NULL");
         }
 
         public override void Where_multiple_ands_with_nullable_parameter_and_constant()
@@ -981,7 +1026,7 @@ WHERE [e].[NullableBoolA] IS NOT NULL AND ([e].[NullableBoolA] = 1)");
             base.Where_equal_using_relational_null_semantics_with_parameter();
 
             AssertSql(
-                @"@__prm_0='' (DbType = String)
+                @"@__prm_0=''
 
 SELECT [e].[Id]
 FROM [Entities1] AS [e]
@@ -1013,7 +1058,7 @@ WHERE [e].[NullableBoolA] <> [e].[NullableBoolB]");
             base.Where_not_equal_using_relational_null_semantics_with_parameter();
 
             AssertSql(
-                @"@__prm_0='' (DbType = String)
+                @"@__prm_0=''
 
 SELECT [e].[Id]
 FROM [Entities1] AS [e]
@@ -1035,13 +1080,13 @@ WHERE [e].[NullableBoolA] <> [e].[NullableBoolB]");
             base.Where_comparison_null_constant_and_null_parameter();
 
             AssertSql(
-                @"@__prm_0='' (Size = 4000) (DbType = String)
+                @"@__prm_0='' (Size = 4000)
 
 SELECT [e].[Id]
 FROM [Entities1] AS [e]
 WHERE @__prm_0 IS NULL",
                 //
-                @"@__prm_0='' (Size = 4000) (DbType = String)
+                @"@__prm_0='' (Size = 4000)
 
 SELECT [e].[Id]
 FROM [Entities1] AS [e]

@@ -22,6 +22,19 @@ namespace Microsoft.EntityFrameworkCore
 {
     public class DbContextPoolingTest
     {
+        private static IServiceProvider BuildServiceProvider<TContextService, TContext>(int poolSize = 32)
+            where TContext : DbContext, TContextService
+            where TContextService : class
+            => new ServiceCollection()
+                .AddEntityFrameworkSqlServer()
+                .AddDbContextPool<TContextService, TContext>(
+                    ob => ob.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString),
+                    poolSize)
+                .AddDbContextPool<ISecondContext, SecondContext>(
+                    ob => ob.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString),
+                    poolSize)
+                .BuildServiceProvider();
+
         private static IServiceProvider BuildServiceProvider<TContext>(int poolSize = 32)
             where TContext : DbContext
             => new ServiceCollection()
@@ -29,9 +42,16 @@ namespace Microsoft.EntityFrameworkCore
                 .AddDbContextPool<TContext>(
                     ob => ob.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString),
                     poolSize)
+                .AddDbContextPool<SecondContext>(
+                    ob => ob.UseSqlServer(SqlServerNorthwindTestStoreFactory.NorthwindConnectionString),
+                    poolSize)
                 .BuildServiceProvider();
 
-        private class PooledContext : DbContext
+        private interface IPooledContext
+        {
+        }
+
+        private class PooledContext : DbContext, IPooledContext
         {
             public static int DisposedCount;
             public static int InstanceCount;
@@ -74,29 +94,47 @@ namespace Microsoft.EntityFrameworkCore
             }
         }
 
+        private interface ISecondContext
+        {
+        }
+
+        private class SecondContext : DbContext, ISecondContext
+        {
+            public SecondContext(DbContextOptions options)
+                : base(options)
+            {
+            }
+        }
+
         [Fact]
         public void Invalid_pool_size()
         {
             Assert.Throws<ArgumentOutOfRangeException>(
-                () => BuildServiceProvider<PooledContext>(0));
+                () => BuildServiceProvider<PooledContext>(poolSize: 0));
 
             Assert.Throws<ArgumentOutOfRangeException>(
-                () => BuildServiceProvider<PooledContext>(-1));
+                () => BuildServiceProvider<PooledContext>(poolSize: -1));
         }
 
-        [Fact]
-        public void Options_modified_in_on_configuring()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Options_modified_in_on_configuring(bool useInterface)
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
-            var serviceScope1 = serviceProvider.CreateScope();
+            var scopedProvider = serviceProvider.CreateScope().ServiceProvider;
 
             PooledContext.ModifyOptions = true;
 
             try
             {
                 Assert.Throws<InvalidOperationException>(
-                    () => serviceScope1.ServiceProvider.GetService<PooledContext>());
+                    () => useInterface
+                        ? scopedProvider.GetService<IPooledContext>()
+                        : scopedProvider.GetService<PooledContext>());
             }
             finally
             {
@@ -157,45 +195,87 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Same(context2, context4);
         }
 
-        [Fact]
-        public void Contexts_are_pooled()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Contexts_are_pooled(bool useInterface)
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
             var serviceScope1 = serviceProvider.CreateScope();
+            var scopedProvider1 = serviceScope1.ServiceProvider;
 
-            var context1 = serviceScope1.ServiceProvider.GetService<PooledContext>();
+            var context1 = useInterface
+                ? scopedProvider1.GetService<IPooledContext>()
+                : scopedProvider1.GetService<PooledContext>();
+
+            var secondContext1 = useInterface
+                ? scopedProvider1.GetService<ISecondContext>()
+                : scopedProvider1.GetService<SecondContext>();
 
             var serviceScope2 = serviceProvider.CreateScope();
+            var scopedProvider2 = serviceScope2.ServiceProvider;
 
-            var context2 = serviceScope2.ServiceProvider.GetService<PooledContext>();
+            var context2 = useInterface
+                ? scopedProvider2.GetService<IPooledContext>()
+                : scopedProvider2.GetService<PooledContext>();
+
+            var secondContext2 = useInterface
+                ? scopedProvider2.GetService<ISecondContext>()
+                : scopedProvider2.GetService<SecondContext>();
 
             Assert.NotSame(context1, context2);
+            Assert.NotSame(secondContext1, secondContext2);
 
             serviceScope1.Dispose();
             serviceScope2.Dispose();
 
             var serviceScope3 = serviceProvider.CreateScope();
+            var scopedProvider3 = serviceScope3.ServiceProvider;
 
-            var context3 = serviceScope3.ServiceProvider.GetService<PooledContext>();
+            var context3 = useInterface
+                ? scopedProvider3.GetService<IPooledContext>()
+                : scopedProvider3.GetService<PooledContext>();
+
+            var secondContext3 = useInterface
+                ? scopedProvider3.GetService<ISecondContext>()
+                : scopedProvider3.GetService<SecondContext>();
 
             Assert.Same(context1, context3);
+            Assert.Same(secondContext1, secondContext3);
 
             var serviceScope4 = serviceProvider.CreateScope();
+            var scopedProvider4 = serviceScope4.ServiceProvider;
 
-            var context4 = serviceScope4.ServiceProvider.GetService<PooledContext>();
+            var context4 = useInterface
+                ? scopedProvider4.GetService<IPooledContext>()
+                : scopedProvider4.GetService<PooledContext>();
+
+            var secondContext4 = useInterface
+                ? scopedProvider4.GetService<ISecondContext>()
+                : scopedProvider4.GetService<SecondContext>();
 
             Assert.Same(context2, context4);
+            Assert.Same(secondContext2, secondContext4);
         }
 
-        [Fact]
-        public void Context_configuration_is_reset()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Context_configuration_is_reset(bool useInterface)
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
             var serviceScope = serviceProvider.CreateScope();
+            var scopedProvider = serviceScope.ServiceProvider;
 
-            var context1 = serviceScope.ServiceProvider.GetService<PooledContext>();
+            var context1 = useInterface
+                ? (DbContext)scopedProvider.GetService<IPooledContext>()
+                : scopedProvider.GetService<PooledContext>();
 
             context1.ChangeTracker.AutoDetectChangesEnabled = true;
             context1.ChangeTracker.QueryTrackingBehavior = QueryTrackingBehavior.NoTracking;
@@ -204,8 +284,11 @@ namespace Microsoft.EntityFrameworkCore
             serviceScope.Dispose();
 
             serviceScope = serviceProvider.CreateScope();
+            scopedProvider = serviceScope.ServiceProvider;
 
-            var context2 = serviceScope.ServiceProvider.GetService<PooledContext>();
+            var context2 = useInterface
+                ? (DbContext)scopedProvider.GetService<IPooledContext>()
+                : scopedProvider.GetService<PooledContext>();
 
             Assert.Same(context1, context2);
 
@@ -214,27 +297,37 @@ namespace Microsoft.EntityFrameworkCore
             Assert.False(context2.Database.AutoTransactionsEnabled);
         }
 
-        [Fact]
-        public void State_manager_is_reset()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void State_manager_is_reset(bool useInterface)
         {
             var weakRef = Scoper(
                 () =>
                     {
-                        var serviceProvider = BuildServiceProvider<PooledContext>();
+                        var serviceProvider = useInterface
+                            ? BuildServiceProvider<IPooledContext, PooledContext>()
+                            : BuildServiceProvider<PooledContext>();
 
                         var serviceScope = serviceProvider.CreateScope();
+                        var scopedProvider = serviceScope.ServiceProvider;
 
-                        var context1 = serviceScope.ServiceProvider.GetService<PooledContext>();
+                        var context1 = useInterface
+                            ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                            : scopedProvider.GetService<PooledContext>();
 
                         var entity = context1.Customers.First(c => c.CustomerId == "ALFKI");
 
-                        Assert.Equal(1, context1.ChangeTracker.Entries().Count());
+                        Assert.Equal(expected: 1, actual: context1.ChangeTracker.Entries().Count());
 
                         serviceScope.Dispose();
 
                         serviceScope = serviceProvider.CreateScope();
+                        scopedProvider = serviceScope.ServiceProvider;
 
-                        var context2 = serviceScope.ServiceProvider.GetService<PooledContext>();
+                        var context2 = useInterface
+                            ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                            : scopedProvider.GetService<PooledContext>();
 
                         Assert.Same(context1, context2);
                         Assert.Empty(context2.ChangeTracker.Entries());
@@ -247,23 +340,35 @@ namespace Microsoft.EntityFrameworkCore
             Assert.False(weakRef.IsAlive);
         }
 
-        private static T Scoper<T>(Func<T> getter)
-        {
-            return getter();
-        }
+        private static T Scoper<T>(Func<T> getter) => getter();
 
-        [Fact]
-        public void Pool_disposes_context_when_context_not_pooled()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Pool_disposes_context_when_context_not_pooled(bool useInterface)
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>(poolSize: 1);
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
             var serviceScope1 = serviceProvider.CreateScope();
+            var scopedProvider1 = serviceScope1.ServiceProvider;
 
-            serviceScope1.ServiceProvider.GetService<PooledContext>();
+            if (useInterface)
+            {
+                scopedProvider1.GetService<IPooledContext>();
+            }
+            else
+            {
+                scopedProvider1.GetService<PooledContext>();
+            }
 
             var serviceScope2 = serviceProvider.CreateScope();
+            var scopedProvider2 = serviceScope2.ServiceProvider;
 
-            var context = serviceScope2.ServiceProvider.GetService<PooledContext>();
+            var context = useInterface
+                ? (PooledContext)scopedProvider2.GetService<IPooledContext>()
+                : scopedProvider2.GetService<PooledContext>();
 
             serviceScope1.Dispose();
             serviceScope2.Dispose();
@@ -271,14 +376,21 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Throws<ObjectDisposedException>(() => context.Customers.ToList());
         }
 
-        [Fact]
-        public void Pool_disposes_contexts_when_disposed()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Pool_disposes_contexts_when_disposed(bool useInterface)
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
             var serviceScope = serviceProvider.CreateScope();
+            var scopedProvider = serviceScope.ServiceProvider;
 
-            var context = serviceScope.ServiceProvider.GetService<PooledContext>();
+            var context = useInterface
+                ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                : scopedProvider.GetService<PooledContext>();
 
             serviceScope.Dispose();
 
@@ -287,28 +399,64 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Throws<ObjectDisposedException>(() => context.Customers.ToList());
         }
 
-        [Fact]
-        public void Object_in_pool_is_disposed()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Object_in_pool_is_disposed(bool useInterface)
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
             var serviceScope = serviceProvider.CreateScope();
+            var scopedProvider = serviceScope.ServiceProvider;
 
-            var context = serviceScope.ServiceProvider.GetService<PooledContext>();
+            var context = useInterface
+                ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                : scopedProvider.GetService<PooledContext>();
 
             serviceScope.Dispose();
 
             Assert.Throws<ObjectDisposedException>(() => context.Customers.ToList());
         }
 
-        [Fact]
-        public void Provider_services_are_reset()
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Double_dispose_does_not_enter_pool_twice(bool useInterface)
         {
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
+
+            var contextPool = serviceProvider.GetService<DbContextPool<PooledContext>>();
+
+            var context = contextPool.Rent();
+
+            context.Dispose();
+            context.Dispose();
+
+            var context1 = contextPool.Rent();
+            var context2 = contextPool.Rent();
+
+            Assert.NotSame(context1, context2);
+        }
+
+        [Theory]
+        [InlineData(true)]
+        [InlineData(false)]
+        public void Provider_services_are_reset(bool useInterface)
+        {
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
             var serviceScope = serviceProvider.CreateScope();
+            var scopedProvider = serviceScope.ServiceProvider;
 
-            var context1 = serviceScope.ServiceProvider.GetService<PooledContext>();
+            var context1 = useInterface
+                ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                : scopedProvider.GetService<PooledContext>();
 
             context1.Database.BeginTransaction();
 
@@ -317,8 +465,11 @@ namespace Microsoft.EntityFrameworkCore
             serviceScope.Dispose();
 
             serviceScope = serviceProvider.CreateScope();
+            scopedProvider = serviceScope.ServiceProvider;
 
-            var context2 = serviceScope.ServiceProvider.GetService<PooledContext>();
+            var context2 = useInterface
+                ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                : scopedProvider.GetService<PooledContext>();
 
             Assert.Same(context1, context2);
             Assert.Null(context2.Database.CurrentTransaction);
@@ -330,22 +481,58 @@ namespace Microsoft.EntityFrameworkCore
             serviceScope.Dispose();
 
             serviceScope = serviceProvider.CreateScope();
+            scopedProvider = serviceScope.ServiceProvider;
 
-            var context3 = serviceScope.ServiceProvider.GetService<PooledContext>();
+            var context3 = useInterface
+                ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                : scopedProvider.GetService<PooledContext>();
 
             Assert.Same(context2, context3);
             Assert.Null(context3.Database.CurrentTransaction);
         }
 
-        [ConditionalFact]
-        public async Task Concurrency_test()
+        [ConditionalTheory]
+        [InlineData(true)]
+        [InlineData(false)]
+        [PlatformSkipCondition(TestPlatform.Linux, SkipReason = "Test is flaky on CI.")]
+        public void Double_dispose_concurrency_test(bool useInterface)
+        {
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
+
+            Parallel.For(
+                fromInclusive: 0, toExclusive: 100, body: s =>
+                    {
+                        using (var scope = serviceProvider.CreateScope())
+                        {
+                            var scopedProvider = scope.ServiceProvider;
+
+                            var context = useInterface
+                                ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                                : scopedProvider.GetService<PooledContext>();
+
+                            var _ = context.Customers.ToList();
+
+                            context.Dispose();
+                        }
+                    });
+        }
+
+        [ConditionalTheory]
+        [InlineData(true)]
+        [InlineData(false)]
+        [PlatformSkipCondition(TestPlatform.Linux, SkipReason = "Test is flaky on CI.")]
+        public async Task Concurrency_test(bool useInterface)
         {
             PooledContext.InstanceCount = 0;
             PooledContext.DisposedCount = 0;
 
             var results = WriteResults();
 
-            var serviceProvider = BuildServiceProvider<PooledContext>();
+            var serviceProvider = useInterface
+                ? BuildServiceProvider<IPooledContext, PooledContext>()
+                : BuildServiceProvider<PooledContext>();
 
             async Task ProcessRequest()
             {
@@ -353,7 +540,11 @@ namespace Microsoft.EntityFrameworkCore
                 {
                     using (var serviceScope = serviceProvider.CreateScope())
                     {
-                        var context = serviceScope.ServiceProvider.GetService<PooledContext>();
+                        var scopedProvider = serviceScope.ServiceProvider;
+
+                        var context = useInterface
+                            ? (PooledContext)scopedProvider.GetService<IPooledContext>()
+                            : scopedProvider.GetService<PooledContext>();
 
                         await context.Customers.AsNoTracking().FirstAsync(c => c.CustomerId == "ALFKI");
 
@@ -373,10 +564,10 @@ namespace Microsoft.EntityFrameworkCore
             await results;
 
             Assert.Equal(_requests, PooledContext.DisposedCount);
-            Assert.InRange(PooledContext.InstanceCount, 32, 64);
+            Assert.InRange(PooledContext.InstanceCount, low: 32, high: 64);
         }
 
-        private readonly TimeSpan _duration = TimeSpan.FromSeconds(10);
+        private readonly TimeSpan _duration = TimeSpan.FromSeconds(value: 10);
 
         private int _stopwatchStarted;
 
@@ -386,7 +577,7 @@ namespace Microsoft.EntityFrameworkCore
 
         private async Task WriteResults()
         {
-            if (Interlocked.Exchange(ref _stopwatchStarted, 1) == 0)
+            if (Interlocked.Exchange(ref _stopwatchStarted, value: 1) == 0)
             {
                 _stopwatch.Start();
             }
@@ -396,7 +587,7 @@ namespace Microsoft.EntityFrameworkCore
 
             while (_stopwatch.IsRunning)
             {
-                await Task.Delay(TimeSpan.FromSeconds(1));
+                await Task.Delay(TimeSpan.FromSeconds(value: 1));
 
                 var currentRequests = _requests - lastRequests;
                 lastRequests = _requests;
@@ -412,7 +603,7 @@ namespace Microsoft.EntityFrameworkCore
 
                 if (elapsed > _duration)
                 {
-                    _testOutputHelper?.WriteLine("");
+                    _testOutputHelper?.WriteLine(message: "");
                     _testOutputHelper?.WriteLine($"Average RPS: {Math.Round(_requests / elapsed.TotalSeconds)}");
 
                     _stopwatch.Stop();

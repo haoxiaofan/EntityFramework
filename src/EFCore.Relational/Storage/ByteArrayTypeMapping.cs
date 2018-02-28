@@ -5,6 +5,8 @@ using System.Data;
 using System.Globalization;
 using System.Text;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.ChangeTracking;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Storage
@@ -28,9 +30,45 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
         public ByteArrayTypeMapping(
             [NotNull] string storeType,
+            DbType? dbType,
+            int? size)
+            : this(storeType, null, null, dbType, size)
+        {
+        }
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="ByteArrayTypeMapping" /> class.
+        /// </summary>
+        /// <param name="storeType"> The name of the database type. </param>
+        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
+        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
+        /// <param name="fixedLength"> A value indicating whether the type is constrained to fixed-length data. </param>
+        public ByteArrayTypeMapping(
+            [NotNull] string storeType,
             DbType? dbType = null,
-            int? size = null)
-            : base(storeType, typeof(byte[]), dbType, size: size)
+            int? size = null,
+            bool fixedLength = false)
+            : this(storeType, null, null, dbType, size, fixedLength)
+        {
+        }
+
+        /// <summary>
+        ///     Initializes a new instance of the <see cref="ByteArrayTypeMapping" /> class.
+        /// </summary>
+        /// <param name="storeType"> The name of the database type. </param>
+        /// <param name="converter"> Converts values to and from the store whenever this mapping is used. </param>
+        /// <param name="comparer"> Supports custom value snapshotting and comparisons. </param>
+        /// <param name="dbType"> The <see cref="DbType" /> to be used. </param>
+        /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
+        /// <param name="fixedLength"> A value indicating whether the type is constrained to fixed-length data. </param>
+        public ByteArrayTypeMapping(
+            [NotNull] string storeType,
+            [CanBeNull] ValueConverter converter,
+            [CanBeNull] ValueComparer comparer,
+            DbType? dbType = null,
+            int? size = null,
+            bool fixedLength = false)
+            : base(storeType, typeof(byte[]), converter, comparer, dbType, size: size, fixedLength: fixedLength)
         {
         }
 
@@ -41,10 +79,16 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <param name="size"> The size of data the property is configured to store, or null if no size is configured. </param>
         /// <returns> The newly created mapping. </returns>
         public override RelationalTypeMapping Clone(string storeType, int? size)
-            => new ByteArrayTypeMapping(
-                storeType,
-                DbType,
-                size);
+            => new ByteArrayTypeMapping(storeType, Converter, Comparer, DbType, size, IsFixedLength);
+
+        /// <summary>
+        ///    Returns a new copy of this type mapping with the given <see cref="ValueConverter"/>
+        ///    added.
+        /// </summary>
+        /// <param name="converter"> The converter to use. </param>
+        /// <returns> A new type mapping </returns>
+        public override CoreTypeMapping Clone(ValueConverter converter)
+            => new ByteArrayTypeMapping(StoreType, ComposeConverter(converter), Comparer, DbType, Size, IsFixedLength);
 
         /// <summary>
         ///     Generates the SQL representation of a literal value.

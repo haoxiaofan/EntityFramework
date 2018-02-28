@@ -6,18 +6,22 @@ using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.Linq;
 using System.Reflection;
-using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable UnusedMember.Local
+// ReSharper disable CollectionNeverUpdated.Local
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public partial class DbContextTest
@@ -38,18 +42,39 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [Fact]
+        public void Set_throws_for_weak_types()
+        {
+            var model = new Model(new ConventionSet());
+            var question = model.AddEntityType(typeof(Question));
+            model.AddEntityType(typeof(User), nameof(Question.Author), question);
+
+            var optionsBuilder = new DbContextOptionsBuilder();
+            optionsBuilder
+                .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                .UseInternalServiceProvider(InMemoryTestHelpers.Instance.CreateServiceProvider())
+                .UseModel(model);
+            using (var context = new DbContext(optionsBuilder.Options))
+            {
+                var ex = Assert.Throws<InvalidOperationException>(() => context.Set<User>().Local);
+                Assert.Equal(CoreStrings.InvalidSetTypeWeak(nameof(User)), ex.Message);
+            }
+        }
+
+        [Fact]
         public void SaveChanges_calls_DetectChanges()
         {
             var services = new ServiceCollection()
                 .AddScoped<IStateManager, FakeStateManager>()
                 .AddScoped<IChangeDetector, FakeChangeDetector>();
 
+            var model = new ModelBuilder(new ConventionSet()).Entity<User>().Metadata.Model;
             var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider(services);
 
             using (var context = new DbContext(
                 new DbContextOptionsBuilder()
                     .UseInternalServiceProvider(serviceProvider)
                     .UseInMemoryDatabase(Guid.NewGuid().ToString())
+                    .UseModel(model)
                     .Options))
             {
                 var changeDetector = (FakeChangeDetector)context.GetService<IChangeDetector>();
@@ -80,167 +105,6 @@ namespace Microsoft.EntityFrameworkCore
                     "entity",
                     // ReSharper disable once AssignNullToNotNullAttribute
                     Assert.Throws<ArgumentNullException>(() => context.Entry<Random>(null)).ParamName);
-            }
-        }
-
-        private class FakeStateManager : IStateManager
-        {
-            public IEnumerable<InternalEntityEntry> InternalEntries { get; set; }
-            public bool SaveChangesCalled { get; set; }
-            public bool SaveChangesAsyncCalled { get; set; }
-
-            public TrackingQueryMode GetTrackingQueryMode(IEntityType entityType) => TrackingQueryMode.Multiple;
-
-            public void EndSingleQueryMode()
-            {
-            }
-
-            public void ResetState()
-            {
-            }
-
-            public void Unsubscribe()
-            {
-            }
-
-            public void UpdateIdentityMap(InternalEntityEntry entry, IKey principalKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public void UpdateDependentMap(InternalEntityEntry entry, IForeignKey foreignKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public IEnumerable<InternalEntityEntry> GetDependents(InternalEntityEntry principalEntry, IForeignKey foreignKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public IEnumerable<InternalEntityEntry> GetDependentsUsingRelationshipSnapshot(InternalEntityEntry principalEntry, IForeignKey foreignKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public IEnumerable<InternalEntityEntry> GetDependentsFromNavigation(InternalEntityEntry principalEntry, IForeignKey foreignKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public int SaveChanges(bool acceptAllChangesOnSuccess)
-            {
-                SaveChangesCalled = true;
-                return 1;
-            }
-
-            public Task<int> SaveChangesAsync(bool acceptAllChangesOnSuccess, CancellationToken cancellationToken = new CancellationToken())
-            {
-                SaveChangesAsyncCalled = true;
-                return Task.FromResult(1);
-            }
-
-            public virtual void AcceptAllChanges()
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry GetOrCreateEntry(object entity)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry GetOrCreateEntry(object entity, IEntityType entityType)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry StartTrackingFromQuery(
-                IEntityType baseEntityType,
-                object entity,
-                ValueBuffer valueBuffer,
-                ISet<IForeignKey> handledForeignKeys)
-            {
-                throw new NotImplementedException();
-            }
-
-            public void BeginTrackingQuery()
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry TryGetEntry(IKey key, object[] keyValues)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry TryGetEntry(IKey key, ValueBuffer valueBuffer, bool throwOnNullKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry TryGetEntry(object entity)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry TryGetEntry(object entity, IEntityType type)
-            {
-                throw new NotImplementedException();
-            }
-
-            public IEnumerable<InternalEntityEntry> Entries => Entries ?? Enumerable.Empty<InternalEntityEntry>();
-
-            public int ChangedCount { get; set; }
-
-            public IInternalEntityEntryNotifier Notify
-            {
-                get { throw new NotImplementedException(); }
-            }
-
-            public IValueGenerationManager ValueGeneration
-            {
-                get { throw new NotImplementedException(); }
-            }
-
-            public InternalEntityEntry StartTracking(InternalEntityEntry entry)
-            {
-                throw new NotImplementedException();
-            }
-
-            public void StopTracking(InternalEntityEntry entry)
-            {
-                throw new NotImplementedException();
-            }
-
-            public void RecordReferencedUntrackedEntity(object referencedEntity, INavigation navigation, InternalEntityEntry referencedFromEntry)
-            {
-                throw new NotImplementedException();
-            }
-
-            public IEnumerable<Tuple<INavigation, InternalEntityEntry>> GetRecordedReferers(object referencedEntity, bool clear)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry GetPrincipal(InternalEntityEntry entityEntry, IForeignKey foreignKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry GetPrincipalUsingPreStoreGeneratedValues(InternalEntityEntry entityEntry, IForeignKey foreignKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public InternalEntityEntry GetPrincipalUsingRelationshipSnapshot(InternalEntityEntry entityEntry, IForeignKey foreignKey)
-            {
-                throw new NotImplementedException();
-            }
-
-            public DbContext Context
-            {
-                get { throw new NotImplementedException(); }
             }
         }
 
@@ -460,6 +324,7 @@ namespace Microsoft.EntityFrameworkCore
 
             protected internal override void OnModelCreating(ModelBuilder modelBuilder)
             {
+                // ReSharper disable once AssignmentIsFullyDiscarded
                 _ = Model;
             }
 
@@ -496,6 +361,7 @@ namespace Microsoft.EntityFrameworkCore
             public DbSet<Product> Products { get; set; }
 
             protected internal override void OnModelCreating(ModelBuilder modelBuilder)
+                // ReSharper disable once ReturnValueOfPureMethodIsNotUsed
                 => Products.ToList();
 
             protected internal override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
@@ -534,6 +400,7 @@ namespace Microsoft.EntityFrameworkCore
             {
                 optionsBuilder.UseInternalServiceProvider(_serviceProvider);
 
+                // ReSharper disable once ReturnValueOfPureMethodIsNotUsed
                 Products.ToList();
 
                 base.OnConfiguring(optionsBuilder);
@@ -733,7 +600,7 @@ namespace Microsoft.EntityFrameworkCore
                 context.RemoveRange(new Product { Id = id++, Name = "Little Hedgehogs" });
                 context.RemoveRange(new Product { Id = id++, Name = "Little Hedgehogs" });
                 context.RemoveRange(new List<Product> { new Product { Id = id++, Name = "Little Hedgehogs" } });
-                context.RemoveRange(new List<object> { new Product { Id = id++, Name = "Little Hedgehogs" } });
+                context.RemoveRange(new List<object> { new Product { Id = id, Name = "Little Hedgehogs" } });
 
                 Assert.False(changeDetector.DetectChangesCalled);
 
@@ -745,6 +612,13 @@ namespace Microsoft.EntityFrameworkCore
 
         private class ChangeDetectorProxy : ChangeDetector
         {
+            public ChangeDetectorProxy(
+                IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> logger,
+                ILoggingOptions loggingOptions)
+                : base(logger, loggingOptions)
+            {
+            }
+
             public bool DetectChangesCalled { get; set; }
 
             public override void DetectChanges(InternalEntityEntry entry)
@@ -770,6 +644,7 @@ namespace Microsoft.EntityFrameworkCore
 
             // methods (tests all paths)
             Assert.Throws<ObjectDisposedException>(() => context.Add(new object()));
+            Assert.Throws<ObjectDisposedException>(() => context.Query<object>());
             Assert.Throws<ObjectDisposedException>(() => context.Find(typeof(Random), 77));
             Assert.Throws<ObjectDisposedException>(() => context.Attach(new object()));
             Assert.Throws<ObjectDisposedException>(() => context.Update(new object()));
@@ -780,7 +655,7 @@ namespace Microsoft.EntityFrameworkCore
             await Assert.ThrowsAsync<ObjectDisposedException>(() => context.FindAsync(typeof(Random), 77));
 
             var methodCount = typeof(DbContext).GetMethods(BindingFlags.Public | BindingFlags.Instance | BindingFlags.DeclaredOnly).Count();
-            var expectedMethodCount = 37;
+            var expectedMethodCount = 41;
             Assert.True(
                 methodCount == expectedMethodCount,
                 userMessage: $"Expected {expectedMethodCount} methods on DbContext but found {methodCount}. " +
@@ -790,7 +665,12 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Throws<ObjectDisposedException>(() => context.ChangeTracker);
             Assert.Throws<ObjectDisposedException>(() => context.Model);
 
-            var expectedProperties = new List<string> { "ChangeTracker", "Database", "Model" };
+            var expectedProperties = new List<string>
+            {
+                nameof(DbContext.ChangeTracker),
+                nameof(DbContext.Database),
+                nameof(DbContext.Model)
+            };
 
             Assert.True(
                 expectedProperties.SequenceEqual(
@@ -812,7 +692,7 @@ namespace Microsoft.EntityFrameworkCore
 
             context.Dispose();
 
-            var ex = Assert.Throws<ObjectDisposedException>(() => context.Model);
+            Assert.Throws<ObjectDisposedException>(() => context.Model);
         }
 
         [Fact]

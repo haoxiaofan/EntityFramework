@@ -1,12 +1,14 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
 using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Internal
@@ -17,6 +19,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
     /// </summary>
     public static class PropertyExtensions
     {
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static CoreTypeMapping FindMapping(
+            [NotNull] this IProperty property)
+            => (CoreTypeMapping)property[CoreAnnotationNames.TypeMapping];
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -96,13 +106,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static int GetOriginalValueIndex([NotNull] this IProperty property)
-            => property.GetPropertyIndexes().OriginalValueIndex;
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
         public static bool MayBeStoreGenerated([NotNull] this IProperty property)
         {
             if (property.ValueGenerated != ValueGenerated.Never)
@@ -166,6 +169,51 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static IEnumerable<IProperty> FindPrincipals([NotNull] this IProperty property)
+        {
+            yield return property;
+
+            foreach (var found in FindPrincipals(property, new List<IProperty> { property }))
+            {
+                yield return found;
+            }
+        }
+
+        private static IEnumerable<IProperty> FindPrincipals(
+            IProperty property, IList<IProperty> visited)
+        {
+            var concreteProperty = property.AsProperty();
+
+            if (concreteProperty.ForeignKeys != null)
+            {
+                foreach (var foreignKey in concreteProperty.ForeignKeys)
+                {
+                    for (var propertyIndex = 0; propertyIndex < foreignKey.Properties.Count; propertyIndex++)
+                    {
+                        if (property == foreignKey.Properties[propertyIndex])
+                        {
+                            var principal = foreignKey.PrincipalKey.Properties[propertyIndex];
+                            if (!visited.Contains(principal))
+                            {
+                                yield return principal;
+
+                                visited.Add(principal);
+
+                                foreach (var found in FindPrincipals(principal, visited))
+                                {
+                                    yield return found;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static string ToDebugString([NotNull] this IProperty property, bool singleLine = true, [NotNull] string indent = "")
         {
             var builder = new StringBuilder();
@@ -184,7 +232,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             {
                 builder.Append("no field, ");
             }
-            else if (!field.EndsWith(">k__BackingField"))
+            else if (!field.EndsWith(">k__BackingField", StringComparison.Ordinal))
             {
                 builder.Append(field).Append(", ");
             }

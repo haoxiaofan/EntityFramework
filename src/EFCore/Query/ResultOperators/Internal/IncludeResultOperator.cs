@@ -9,11 +9,8 @@ using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal;
 using Remotion.Linq;
 using Remotion.Linq.Clauses;
-using Remotion.Linq.Clauses.Expressions;
 using Remotion.Linq.Clauses.ResultOperators;
 using Remotion.Linq.Clauses.StreamedData;
 
@@ -25,19 +22,24 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
     /// </summary>
     public class IncludeResultOperator : SequenceTypePreservingResultOperatorBase, IQueryAnnotation
     {
+        private readonly List<INavigation[]> _navigationPaths;
+
         private List<string> _navigationPropertyPaths;
-        private INavigation[] _navigationPath;
         private IQuerySource _querySource;
+        private Expression _pathFromQuerySource;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public IncludeResultOperator(
-            [NotNull] INavigation[] navigationPath, [NotNull] Expression pathFromQuerySource)
-            : this(navigationPath.Select(n => n.Name), pathFromQuerySource)
+            [NotNull] INavigation[] navigationPath, [NotNull] Expression pathFromQuerySource, bool implicitLoad = false)
         {
-            _navigationPath = navigationPath;
+            _navigationPaths = new List<INavigation[]> { navigationPath };
+            _navigationPropertyPaths = new List<string>();
+            _pathFromQuerySource = pathFromQuerySource;
+
+            IsImplicitLoad = implicitLoad;
         }
 
         /// <summary>
@@ -45,10 +47,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public IncludeResultOperator(
-            [NotNull] IEnumerable<string> navigationPropertyPaths, [NotNull] Expression pathFromQuerySource)
+            [NotNull] IEnumerable<string> navigationPropertyPaths,
+            [NotNull] Expression pathFromQuerySource)
         {
             _navigationPropertyPaths = new List<string>(navigationPropertyPaths);
-            PathFromQuerySource = pathFromQuerySource;
+            _pathFromQuerySource = pathFromQuerySource;
         }
 
         /// <summary>
@@ -71,6 +74,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual bool IsImplicitLoad { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual QueryModel QueryModel { get; set; }
 
         /// <summary>
@@ -83,7 +92,17 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual Expression PathFromQuerySource { get; [param: NotNull] set; }
+        public virtual IReadOnlyList<INavigation[]> NavigationPaths => _navigationPaths;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual Expression PathFromQuerySource
+        {
+            get { return _pathFromQuerySource; }
+            [param: NotNull] set { _pathFromQuerySource = value; }
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -97,62 +116,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ResultOperators.Internal
             }
 
             _navigationPropertyPaths.AddRange(propertyInfos.Select(pi => pi.Name));
-        }
-
-        /// <summary>
-        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
-        ///     directly from your code. This API may change or be removed in future releases.
-        /// </summary>
-        public virtual INavigation[] GetNavigationPath([NotNull] QueryCompilationContext queryCompilationContext)
-        {
-            if (_navigationPath == null)
-            {
-                IEntityType entityType = null;
-                if (PathFromQuerySource is QuerySourceReferenceExpression qsre)
-                {
-                    entityType = queryCompilationContext.FindEntityType(qsre.ReferencedQuerySource);
-                }
-                if (entityType == null)
-                {
-                    entityType = queryCompilationContext.Model.FindEntityType(PathFromQuerySource.Type);
-
-                    if (entityType == null)
-                    {
-                        var pathFromSource = MemberAccessBindingExpressionVisitor.GetPropertyPath(
-                            PathFromQuerySource, queryCompilationContext, out qsre);
-                        if (pathFromSource.Count > 0
-                            && pathFromSource[pathFromSource.Count - 1] is INavigation navigation)
-                        {
-                            entityType = navigation.GetTargetType();
-                        }
-                    }
-                }
-
-                if (entityType == null)
-                {
-                    throw new NotSupportedException(
-                        CoreStrings.IncludeNotSpecifiedDirectlyOnEntityType(
-                            ToString(),
-                            NavigationPropertyPaths.FirstOrDefault()));
-                }
-
-                _navigationPath = new INavigation[NavigationPropertyPaths.Count];
-
-                for (var i = 0; i < NavigationPropertyPaths.Count; i++)
-                {
-                    _navigationPath[i] = entityType.FindNavigation(NavigationPropertyPaths[i]);
-
-                    if (_navigationPath[i] == null)
-                    {
-                        throw new InvalidOperationException(
-                            CoreStrings.IncludeBadNavigation(NavigationPropertyPaths[i], entityType.DisplayName()));
-                    }
-
-                    entityType = _navigationPath[i].GetTargetType();
-                }
-            }
-
-            return _navigationPath;
         }
 
         /// <summary>

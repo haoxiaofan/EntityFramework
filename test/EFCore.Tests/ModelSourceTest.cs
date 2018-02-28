@@ -1,30 +1,25 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
-using System.Diagnostics;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestUtilities;
-using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+// ReSharper disable UnusedMember.Local
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public class ModelSourceTest
     {
-        private readonly ModelValidator _coreModelValidator
-            = new ModelValidator(
-                new ModelValidatorDependencies(
-                    new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
-                        new LoggerFactory(),
-                        new LoggingOptions(),
-                        new DiagnosticListener("Fake"))));
+        private readonly IModelValidator _coreModelValidator
+            = InMemoryTestHelpers.Instance.CreateContextServices().GetRequiredService<IModelValidator>();
 
         private readonly NullConventionSetBuilder _nullConventionSetBuilder
             = new NullConventionSetBuilder();
@@ -110,9 +105,9 @@ namespace Microsoft.EntityFrameworkCore
             public ConcreteModelSource(IDbSetFinder setFinder)
                 : base(
                     new ModelSourceDependencies(
-                        new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))),
+                        InMemoryTestHelpers.Instance.CreateContextServices().GetRequiredService<ICoreConventionSetBuilder>(),
                         new ModelCustomizer(new ModelCustomizerDependencies(setFinder)),
-                        new ModelCacheKeyFactory(new ModelCacheKeyFactoryDependencies())))
+                        InMemoryTestHelpers.Instance.CreateContextServices().GetRequiredService<IModelCacheKeyFactory>()))
             {
             }
         }

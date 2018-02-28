@@ -732,6 +732,26 @@ FROM [Order Details] AS [od]
 WHERE ([od].[OrderID] = 11077) AND (SIGN([od].[Discount]) > 0)");
         }
 
+        public override void Where_math_min()
+        {
+            base.Where_math_min();
+
+            AssertSql(
+                @"SELECT [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice]
+FROM [Order Details] AS [od]
+WHERE [od].[OrderID] = 11077");
+        }
+
+        public override void Where_math_max()
+        {
+            base.Where_math_max();
+
+            AssertSql(
+                @"SELECT [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice]
+FROM [Order Details] AS [od]
+WHERE [od].[OrderID] = 11077");
+        }
+
         public override void Where_guid_newguid()
         {
             base.Where_guid_newguid();
@@ -1038,14 +1058,57 @@ FROM [Orders] AS [o]
 WHERE ([o].[CustomerID] = N'ALFKI') AND (CONVERT(nvarchar(max), CONVERT(nvarchar(max), [o].[OrderID] % 1)) <> N'10')");
         }
 
+        public override void Indexof_with_emptystring()
+        {
+            base.Indexof_with_emptystring();
+
+            AssertSql(
+                @"SELECT CASE
+    WHEN N'' = N''
+    THEN 0 ELSE CHARINDEX(N'', [c].[ContactName]) - 1
+END
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'");
+        }
+
+        public override void Replace_with_emptystring()
+        {
+            base.Replace_with_emptystring();
+
+            AssertSql(
+                @"SELECT REPLACE([c].[ContactName], N'ari', N'')
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'");
+        }
+
+        public override void Substring_with_zero_startindex()
+        {
+            base.Substring_with_zero_startindex();
+
+            AssertSql(
+                @"SELECT SUBSTRING([c].[ContactName], 1, 3)
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'");
+        }
+
+        public override void Substring_with_zero_length()
+        {
+            base.Substring_with_zero_length();
+
+            AssertSql(
+                @"SELECT SUBSTRING([c].[ContactName], 3, 0)
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'");
+        }
+
         public override void Substring_with_constant()
         {
             base.Substring_with_constant();
 
             AssertSql(
-                @"SELECT TOP(1) SUBSTRING([c].[ContactName], 2, 3)
+                @"SELECT SUBSTRING([c].[ContactName], 2, 3)
 FROM [Customers] AS [c]
-ORDER BY [c].[CustomerID]");
+WHERE [c].[CustomerID] = N'ALFKI'");
         }
 
         public override void Substring_with_closure()
@@ -1055,9 +1118,9 @@ ORDER BY [c].[CustomerID]");
             AssertSql(
                 @"@__start_0='2'
 
-SELECT TOP(1) SUBSTRING([c].[ContactName], @__start_0 + 1, 3)
+SELECT SUBSTRING([c].[ContactName], @__start_0 + 1, 3)
 FROM [Customers] AS [c]
-ORDER BY [c].[CustomerID]");
+WHERE [c].[CustomerID] = N'ALFKI'");
         }
 
         public override void Substring_with_client_eval()
@@ -1065,9 +1128,9 @@ ORDER BY [c].[CustomerID]");
             base.Substring_with_client_eval();
 
             AssertSql(
-                @"SELECT TOP(1) [c].[ContactName]
+                @"SELECT [c].[ContactName]
 FROM [Customers] AS [c]
-ORDER BY [c].[CustomerID]");
+WHERE [c].[CustomerID] = N'ALFKI'");
         }
 
         public override void IsNullOrEmpty_in_predicate()
@@ -1196,6 +1259,48 @@ FROM [Customers] AS [c]");
             AssertSql(
                 @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
 FROM [Customers] AS [c]");
+        }
+
+        public override void Order_by_length_twice()
+        {
+            base.Order_by_length_twice();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+ORDER BY CAST(LEN([c].[CustomerID]) AS int), [c].[CustomerID]");
+        }
+
+        public override void Static_string_equals_in_predicate()
+        {
+            base.Static_string_equals_in_predicate();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ANATR'");
+        }
+
+        public override void Static_equals_nullable_datetime_compared_to_non_nullable()
+        {
+            base.Static_equals_nullable_datetime_compared_to_non_nullable();
+
+            AssertSql(
+                @"@__arg_0='1996-07-04T00:00:00'
+
+SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[OrderDate] = @__arg_0");
+        }
+
+        public override void Static_equals_int_compared_to_long()
+        {
+            base.Static_equals_int_compared_to_long();
+
+            AssertSql(
+                @"SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE 0 = 1");
         }
     }
 }

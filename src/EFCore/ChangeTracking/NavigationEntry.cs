@@ -55,7 +55,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                     throw new InvalidOperationException(
                         CoreStrings.NavigationIsProperty(
                             name, internalEntry.EntityType.DisplayName(),
-                            nameof(EntityEntry.Reference), nameof(EntityEntry.Collection), nameof(EntityEntry.Property)));
+                            nameof(ChangeTracking.EntityEntry.Reference), nameof(ChangeTracking.EntityEntry.Collection), nameof(ChangeTracking.EntityEntry.Property)));
                 }
                 throw new InvalidOperationException(CoreStrings.PropertyNotFound(name, internalEntry.EntityType.DisplayName()));
             }
@@ -66,7 +66,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                 throw new InvalidOperationException(
                     CoreStrings.CollectionIsReference(
                         name, internalEntry.EntityType.DisplayName(),
-                        nameof(EntityEntry.Collection), nameof(EntityEntry.Reference)));
+                        nameof(ChangeTracking.EntityEntry.Collection), nameof(ChangeTracking.EntityEntry.Reference)));
             }
 
             if (!collection
@@ -75,7 +75,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                 throw new InvalidOperationException(
                     CoreStrings.ReferenceIsCollection(
                         name, internalEntry.EntityType.DisplayName(),
-                        nameof(EntityEntry.Reference), nameof(EntityEntry.Collection)));
+                        nameof(ChangeTracking.EntityEntry.Reference), nameof(ChangeTracking.EntityEntry.Collection)));
             }
 
             return navigation;
@@ -115,9 +115,9 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     A <see cref="CancellationToken" /> to observe while waiting for the task to complete.
         /// </param>
         /// <returns>
-        ///     A task that represents the asynchronous save operation.
+        ///     A task that represents the asynchronous operation.
         /// </returns>
-        public virtual Task LoadAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task LoadAsync(CancellationToken cancellationToken = default)
             => IsLoaded
                 ? Task.FromResult(0)
                 : TargetFinder.LoadAsync(Metadata, InternalEntry, cancellationToken);
@@ -146,7 +146,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///         <see cref="EntityFrameworkQueryableExtensions.Include{TEntity,TProperty}" /> or
         ///         <see
         ///             cref="EntityFrameworkQueryableExtensions.ThenInclude{TEntity,TPreviousProperty,TProperty}(EntityFrameworkCore.Query.IIncludableQueryable{TEntity,IEnumerable{TPreviousProperty}},System.Linq.Expressions.Expression{System.Func{TPreviousProperty,TProperty}})" />
-        ///         , <see cref="Load" />, or <see cref="LoadAsync" /> will set this flag. Subseqent calls to <see cref="Load" />
+        ///         , <see cref="Load" />, or <see cref="LoadAsync" /> will set this flag. Subsequent calls to <see cref="Load" />
         ///         or <see cref="LoadAsync" /> will then be a no-op.
         ///     </para>
         ///     <para>
@@ -161,8 +161,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </value>
         public virtual bool IsLoaded
         {
-            get { return InternalEntry.IsLoaded(Metadata); }
-            set { InternalEntry.SetIsLoaded(Metadata, value); }
+            get => InternalEntry.IsLoaded(Metadata);
+            set => InternalEntry.SetIsLoaded(Metadata, value);
         }
 
         /// <summary>
@@ -170,8 +170,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         private IEntityFinder TargetFinder
-            => InternalEntry.StateManager.Context.GetDependencies().EntityFinderSource
-                .Create(InternalEntry.StateManager.Context, Metadata.GetTargetType());
+            => InternalEntry.StateManager.CreateEntityFinder(Metadata.GetTargetType());
 
         /// <summary>
         ///     Gets or sets a value indicating whether any of foreign key property values associated

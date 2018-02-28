@@ -38,6 +38,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
         public abstract string FileExtension { get; }
 
         /// <summary>
+        ///     Gets the programming language supported by this service.
+        /// </summary>
+        /// <value> The language. </value>
+        public virtual string Language => null;
+
+        /// <summary>
         ///     Parameter object containing dependencies for this service.
         /// </summary>
         protected virtual MigrationsCodeGeneratorDependencies Dependencies { get; }
@@ -126,7 +132,10 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                         yield return column;
                     }
 
-                    yield return createTableOperation.PrimaryKey;
+                    if (createTableOperation.PrimaryKey != null)
+                    {
+                        yield return createTableOperation.PrimaryKey;
+                    }
 
                     foreach (var uniqueConstraint in createTableOperation.UniqueConstraints)
                     {
@@ -147,7 +156,9 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
         /// <param name="model"> The model. </param>
         /// <returns> The namespaces. </returns>
         protected virtual IEnumerable<string> GetNamespaces([NotNull] IModel model)
-            => model.GetEntityTypes().SelectMany(e => e.GetDeclaredProperties().SelectMany(p => p.ClrType.GetNamespaces()))
+            => model.GetEntityTypes().SelectMany(
+                    e => e.GetDeclaredProperties()
+                        .SelectMany(p => (p.FindMapping()?.Converter?.ProviderClrType ?? p.ClrType).GetNamespaces()))
                 .Concat(GetAnnotationNamespaces(GetAnnotatables(model)));
 
         private static IEnumerable<IAnnotatable> GetAnnotatables(IModel model)

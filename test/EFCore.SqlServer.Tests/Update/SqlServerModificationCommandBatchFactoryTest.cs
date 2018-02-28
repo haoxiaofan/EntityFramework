@@ -7,6 +7,7 @@ using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Update
 {
     public class SqlServerModificationCommandBatchFactoryTest
@@ -17,21 +18,24 @@ namespace Microsoft.EntityFrameworkCore.Update
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseSqlServer("Database=Crunchie", b => b.MaxBatchSize(1));
 
+            var typeMapper = new SqlServerTypeMappingSource(
+                TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>());
+
             var factory = new SqlServerModificationCommandBatchFactory(
                 new RelationalCommandBuilderFactory(
                     new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies())),
+                    typeMapper),
                 new SqlServerSqlGenerationHelper(
                     new RelationalSqlGenerationHelperDependencies()),
                 new SqlServerUpdateSqlGenerator(
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
-                            new RelationalSqlGenerationHelperDependencies())),
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies())),
-                new UntypedRelationalValueBufferFactoryFactory(
-                    new RelationalValueBufferFactoryDependencies()),
+                            new RelationalSqlGenerationHelperDependencies()),
+                        typeMapper)),
+                new TypedRelationalValueBufferFactoryFactory(
+                    new RelationalValueBufferFactoryDependencies(
+                        typeMapper)),
                 optionsBuilder.Options);
 
             var batch = factory.Create();
@@ -46,20 +50,25 @@ namespace Microsoft.EntityFrameworkCore.Update
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseSqlServer("Database=Crunchie");
 
+            var typeMapper = new SqlServerTypeMappingSource(
+                TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>());
+
+
             var factory = new SqlServerModificationCommandBatchFactory(
                 new RelationalCommandBuilderFactory(
                     new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                    new SqlServerTypeMapper(
-                        new RelationalTypeMapperDependencies())),
+                    typeMapper),
                 new SqlServerSqlGenerationHelper(
                     new RelationalSqlGenerationHelperDependencies()),
                 new SqlServerUpdateSqlGenerator(
                     new UpdateSqlGeneratorDependencies(
                         new SqlServerSqlGenerationHelper(
-                            new RelationalSqlGenerationHelperDependencies())),
-                    new SqlServerTypeMapper(new RelationalTypeMapperDependencies())),
-                new UntypedRelationalValueBufferFactoryFactory(
-                    new RelationalValueBufferFactoryDependencies()),
+                            new RelationalSqlGenerationHelperDependencies()),
+                        typeMapper)),
+                new TypedRelationalValueBufferFactoryFactory(
+                    new RelationalValueBufferFactoryDependencies(
+                        typeMapper)),
                 optionsBuilder.Options);
 
             var batch = factory.Create();

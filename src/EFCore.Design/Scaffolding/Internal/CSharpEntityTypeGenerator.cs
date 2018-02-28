@@ -7,6 +7,7 @@ using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
 using System.Linq;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Design.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
@@ -62,7 +63,8 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             foreach (var ns in entityType.GetProperties()
                 .SelectMany(p => p.ClrType.GetNamespaces())
                 .Where(ns => ns != "System" && ns != "System.Collections.Generic")
-                .Distinct())
+                .Distinct()
+                .OrderBy(x => x, new NamespaceComparer()))
             {
                 _sb.AppendLine($"using {ns};");
             }
@@ -81,8 +83,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             return _sb.ToString();
         }
 
-        private void GenerateClass(IEntityType entityType)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void GenerateClass(
+            [NotNull] IEntityType entityType)
         {
+            Check.NotNull(entityType, nameof(entityType));
+
             if (_useDataAnnotations)
             {
                 GenerateEntityTypeDataAnnotations(entityType);
@@ -102,8 +111,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             _sb.AppendLine("}");
         }
 
-        private void GenerateEntityTypeDataAnnotations(IEntityType entityType)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void GenerateEntityTypeDataAnnotations(
+            [NotNull] IEntityType entityType)
         {
+            Check.NotNull(entityType, nameof(entityType));
+
             GenerateTableAttribute(entityType);
         }
 
@@ -131,8 +147,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             }
         }
 
-        private void GenerateConstructor(IEntityType entityType)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void GenerateConstructor(
+            [NotNull] IEntityType entityType)
         {
+            Check.NotNull(entityType, nameof(entityType));
+
             var collectionNavigations = entityType.GetNavigations().Where(n => n.IsCollection()).ToList();
 
             if (collectionNavigations.Count > 0)
@@ -153,8 +176,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             }
         }
 
-        private void GenerateProperties(IEntityType entityType)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void GenerateProperties(
+            [NotNull] IEntityType entityType)
         {
+            Check.NotNull(entityType, nameof(entityType));
+
             foreach (var property in entityType.GetProperties().OrderBy(p => p.Scaffolding().ColumnOrdinal))
             {
                 if (_useDataAnnotations)
@@ -166,8 +196,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             }
         }
 
-        private void GeneratePropertyDataAnnotations(IProperty property)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void GeneratePropertyDataAnnotations(
+            [NotNull] IProperty property)
         {
+            Check.NotNull(property, nameof(property));
+
             GenerateKeyAttribute(property);
             GenerateRequiredAttribute(property);
             GenerateColumnAttribute(property);
@@ -181,7 +218,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             if (key?.Properties.Count == 1)
             {
                 if (key is Key concreteKey
-                    && key.Properties.SequenceEqual(new KeyDiscoveryConvention().DiscoverKeyProperties(concreteKey.DeclaringEntityType, concreteKey.DeclaringEntityType.GetProperties().ToList())))
+                    && key.Properties.SequenceEqual(new KeyDiscoveryConvention(null).DiscoverKeyProperties(concreteKey.DeclaringEntityType, concreteKey.DeclaringEntityType.GetProperties().ToList())))
                 {
                     return;
                 }
@@ -198,7 +235,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         private void GenerateColumnAttribute(IProperty property)
         {
             var columnName = property.Relational().ColumnName;
-            var columnType = property.Relational().ColumnType;
+            var columnType = property.GetConfiguredColumnType();
 
             var delimitedColumnName = columnName != null && columnName != property.Name ? CSharpUtilities.DelimitString(columnName) : null;
             var delimitedColumnType = columnType != null ? CSharpUtilities.DelimitString(columnType) : null;
@@ -248,8 +285,15 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             }
         }
 
-        private void GenerateNavigationProperties(IEntityType entityType)
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void GenerateNavigationProperties(
+            [NotNull] IEntityType entityType)
         {
+            Check.NotNull(entityType, nameof(entityType));
+
             var sortedNavigations = entityType.GetNavigations()
                 .OrderBy(n => n.IsDependentToPrincipal() ? 0 : 1)
                 .ThenBy(n => n.IsCollection() ? 1 : 0);

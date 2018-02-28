@@ -9,8 +9,10 @@ using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Query.Sql;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
 
@@ -35,6 +37,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         private readonly List<Ordering> _orderBy = new List<Ordering>();
         private readonly Dictionary<MemberInfo, Expression> _memberInfoProjectionMapping = new Dictionary<MemberInfo, Expression>();
         private readonly List<Expression> _starProjection = new List<Expression>();
+        private readonly List<Expression> _groupBy = new List<Expression>();
 
         private Expression _limit;
         private Expression _offset;
@@ -100,8 +103,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// </value>
         public virtual TableExpressionBase ProjectStarTable
         {
-            get { return _projectStarTable ?? (_tables.Count == 1 ? _tables.Single() : null); }
-            [param: CanBeNull] set { _projectStarTable = value; }
+            get => _projectStarTable ?? (_tables.Count == 1 ? _tables.Single() : null);
+            [param: CanBeNull]
+            set => _projectStarTable = value;
         }
 
         /// <summary>
@@ -158,7 +162,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
                     PushDownSubquery();
                 }
 
-                if (value && _orderBy.Any(o => !_projection.Contains(o.Expression, _expressionEqualityComparer)))
+                if (value && _orderBy.Any(o => !_projection.Any(p => OrderingExpressionComparison(o, p))))
                 {
                     ClearOrderBy();
                 }
@@ -219,6 +223,11 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         public virtual IReadOnlyList<Expression> Projection => _projection;
 
         /// <summary>
+        ///     The SQL GROUP BY of this SelectExpression.
+        /// </summary>
+        public virtual IReadOnlyList<Expression> GroupBy => _groupBy;
+
+        /// <summary>
         ///     The SQL ORDER BY of this SelectExpression.
         /// </summary>
         public virtual IReadOnlyList<Ordering> OrderBy => _orderBy;
@@ -248,9 +257,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
                 selectExpression.Alias = _queryCompilationContext.CreateUniqueTableAlias(alias);
             }
 
+            foreach (var kvp in _memberInfoProjectionMapping)
+            {
+                selectExpression._memberInfoProjectionMapping[kvp.Key] = kvp.Value;
+            }
+
             selectExpression._tables.AddRange(_tables);
             selectExpression._projection.AddRange(_projection);
             selectExpression._orderBy.AddRange(_orderBy);
+            selectExpression._groupBy.AddRange(_groupBy);
 
             return selectExpression;
         }
@@ -264,6 +279,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             _projection.Clear();
             _starProjection.Clear();
             _orderBy.Clear();
+            _groupBy.Clear();
             _limit = null;
             _offset = null;
             _isDistinct = false;
@@ -287,6 +303,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
                && Offset == null
                && Projection.Count == 0
                && OrderBy.Count == 0
+               && GroupBy.Count == 0
                && Tables.Count == 1;
 
         /// <summary>
@@ -337,10 +354,16 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
 
             var projectionsToAdd = IsProjectStar ? _starProjection : _projection;
             var outerProjections = new List<Expression>();
+            var aliasExpressionMap = new Dictionary<AliasExpression, Expression>();
 
             foreach (var expression in projectionsToAdd)
             {
                 var expressionToAdd = subquery.CreateUniqueProjection(expression);
+
+                if (expression is AliasExpression aliasExpression)
+                {
+                    aliasExpressionMap.Add(aliasExpression, expressionToAdd);
+                }
 
                 if (IsProjectStar)
                 {
@@ -366,8 +389,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             }
 
             subquery._tables.AddRange(_tables);
-            subquery._orderBy.AddRange(_orderBy);
 
+            foreach (var ordering in _orderBy)
+            {
+                subquery.AddToOrderBy(
+                    ordering.Expression is AliasExpression aliasExpression &&
+                    aliasExpressionMap.TryGetValue(aliasExpression, out var newExpression)
+                        ? new Ordering(newExpression, ordering.OrderingDirection)
+                        : ordering);
+            }
             subquery.Predicate = Predicate;
 
             subquery._limit = _limit;
@@ -413,11 +443,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
                         expression = nullableExpression.Operand;
                     }
 
-                    var expressionToAdd
-                        = expression.LiftExpressionFromSubquery(subquery)
-                          ?? subquery.Projection[subquery.AddToProjection(expression, resetProjectStar: false)].LiftExpressionFromSubquery(subquery);
+                    if (!(expression is ColumnExpression
+                        || expression is ColumnReferenceExpression
+                        || expression is AliasExpression))
+                    {
+                        expression = subquery.Projection[subquery.AddToProjection(expression, resetProjectStar: false)];
+                    }
 
-                    _orderBy.Add(new Ordering(expressionToAdd, ordering.OrderingDirection));
+                    _orderBy.Add(new Ordering(expression.LiftExpressionFromSubquery(subquery), ordering.OrderingDirection));
                 }
 
                 if (subquery.Limit == null
@@ -589,20 +622,57 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// <returns>
         ///     The types of the expressions in <see cref="Projection" />.
         /// </returns>
+        [Obsolete("Use GetMappedProjectionTypes().")]
         public virtual IEnumerable<Type> GetProjectionTypes()
+            => GetMappedProjectionTypes().Select(t => t.ProviderClrType);
+
+        /// <summary>
+        ///     Gets the types of the expressions in <see cref="Projection" />.
+        /// </summary>
+        /// <returns>
+        ///     The types of the expressions in <see cref="Projection" />.
+        /// </returns>
+        public virtual IEnumerable<TypeMaterializationInfo> GetMappedProjectionTypes()
         {
-            if (_projection.Any()
-                || !IsProjectStar)
+            if (IsProjectStar)
             {
-                return _projection.Select(
-                    e =>
-                        e.NodeType == ExpressionType.Convert
-                        && e.Type == typeof(object)
-                            ? ((UnaryExpression)e).Operand.Type
-                            : e.Type);
+                switch (ProjectStarTable)
+                {
+                    case SelectExpression selectExpression:
+                        foreach (var typeMaterializationInfo in selectExpression.GetMappedProjectionTypes())
+                        {
+                            yield return typeMaterializationInfo;
+                        }
+                        break;
+                    case JoinExpressionBase joinExpression
+                    when joinExpression.TableExpression is SelectExpression selectExpression2:
+                        foreach (var typeMaterializationInfo in selectExpression2.GetMappedProjectionTypes())
+                        {
+                            yield return typeMaterializationInfo;
+                        }
+                        break;
+                }
             }
 
-            return _tables.OfType<SelectExpression>().SelectMany(e => e.GetProjectionTypes());
+            if (_projection.Any())
+            {
+                foreach (var typeMaterializationInfo in _projection.Select(
+                    e =>
+                        {
+                            var queryType = e.NodeType == ExpressionType.Convert
+                                            && e.Type == typeof(object)
+                                ? ((UnaryExpression)e).Operand.Type
+                                : e.Type;
+
+                            return new TypeMaterializationInfo(
+                                queryType,
+                                e.FindProperty(queryType),
+                                Dependencies.TypeMappingSource);
+                        }))
+                {
+                    yield return typeMaterializationInfo;
+                }
+            }
         }
 
         /// <summary>
@@ -636,10 +706,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
                 uniqueAlias = uniqueAliasBase + counter++;
             }
 
-            var updatedExpression
-                = !string.Equals(currentAlias, uniqueAlias, StringComparison.OrdinalIgnoreCase)
-                    ? new AliasExpression(uniqueAlias, (expression as AliasExpression)?.Expression ?? expression)
-                    : expression;
+            var updatedExpression = expression;
+
+            if (!(expression is ColumnReferenceExpression
+                || expression is ColumnExpression
+                || expression is AliasExpression)
+                || !string.Equals(currentAlias, uniqueAlias, StringComparison.OrdinalIgnoreCase))
+            {
+                updatedExpression = new AliasExpression(uniqueAlias, (expression as AliasExpression)?.Expression ?? expression);
+            }
 
             var currentOrderingIndex = _orderBy.FindIndex(e => e.Expression.Equals(expression));
 
@@ -800,6 +875,17 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         }
 
         /// <summary>
+        ///     Adds list of expressions to the GROUP BY clause of this SelectExpression
+        /// </summary>
+        /// <param name="groupingExpressions"> The grouping expressions </param>
+        public virtual void AddToGroupBy([NotNull] Expression[] groupingExpressions)
+        {
+            Check.NotNull(groupingExpressions, nameof(groupingExpressions));
+
+            _groupBy.AddRange(groupingExpressions);
+        }
+
+        /// <summary>
         ///     Adds a single <see cref="Ordering" /> to the order by.
         /// </summary>
         /// <param name="ordering"> The ordering. </param>
@@ -811,26 +897,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             Check.NotNull(ordering, nameof(ordering));
 
             var existingOrdering
-                = _orderBy.Find(
-                    o =>
-                        {
-                            if (_expressionEqualityComparer.Equals(o.Expression, ordering.Expression))
-                            {
-                                return true;
-                            }
-
-                            if (o.Expression is NullableExpression nullableExpression1
-                                && _expressionEqualityComparer
-                                    .Equals(nullableExpression1.Operand.RemoveConvert(), ordering.Expression))
-                            {
-                                return true;
-                            }
-
-                            return ordering.Expression is NullableExpression nullableExpression2
-                                   && _expressionEqualityComparer
-                                       .Equals(nullableExpression2.Operand.RemoveConvert(), o.Expression);
-                        }
-                );
+                = _orderBy.Find(o => OrderingExpressionComparison(o, ordering.Expression));
 
             if (existingOrdering != null)
             {
@@ -840,6 +907,29 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
             _orderBy.Add(ordering);
 
             return ordering;
+        }
+
+        private bool OrderingExpressionComparison(Ordering ordering, Expression expressionToMatch)
+        {
+            var unwrappedOrderingExpression = UnwrapNullableExpression(ordering.Expression.RemoveConvert()).RemoveConvert();
+            var unwrappedExpressionToMatch = UnwrapNullableExpression(expressionToMatch.RemoveConvert()).RemoveConvert();
+
+            return _expressionEqualityComparer.Equals(unwrappedOrderingExpression, unwrappedExpressionToMatch);
+        }
+
+        private Expression UnwrapNullableExpression(Expression expression)
+        {
+            if (expression is NullableExpression nullableExpression)
+            {
+                return nullableExpression.Operand;
+            }
+
+            if (expression is NullConditionalExpression nullConditionalExpression)
+            {
+                return nullConditionalExpression.AccessOperation;
+            }
+
+            return expression;
         }
 
         /// <summary>
@@ -1036,15 +1126,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         {
             Check.NotNull(visitor, nameof(visitor));
 
-            var specificVisitor = visitor as ISqlExpressionVisitor;
-
-            return specificVisitor != null
+            return visitor is ISqlExpressionVisitor specificVisitor
                 ? specificVisitor.VisitSelect(this)
                 : base.Accept(visitor);
         }
 
         /// <summary>
-        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(System.Linq.Expressions.Expression)" /> method passing the
+        ///     Reduces the node and then calls the <see cref="ExpressionVisitor.Visit(Expression)" /> method passing the
         ///     reduced expression.
         ///     Throws an exception if the node isn't reducible.
         /// </summary>

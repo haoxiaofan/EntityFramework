@@ -10,13 +10,12 @@ namespace Microsoft.EntityFrameworkCore.TestModels.TransportationModel
         public Vehicle Vehicle { get; set; }
 
         public override bool Equals(object obj)
-        {
-            var other = obj as Operator;
-            return other != null
-                   && VehicleName == other.VehicleName
-                   && Name == other.Name;
-        }
+            => obj is Operator other
+               && VehicleName == other.VehicleName
+               && Name == other.Name;
 
-        public override int GetHashCode() => VehicleName.GetHashCode();
+        public override int GetHashCode()
+            => VehicleName.GetHashCode() * 397
+               ^ Name.GetHashCode();
     }
 }

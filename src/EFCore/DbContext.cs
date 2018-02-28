@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq;
 using System.Reflection;
@@ -49,6 +50,7 @@ namespace Microsoft.EntityFrameworkCore
         IInfrastructure<IServiceProvider>,
         IDbContextDependencies,
         IDbSetCache,
+        IDbQueryCache,
         IDbContextPoolable
     {
         private readonly IDictionary<Type, object> _sets = new Dictionary<Type, object>();
@@ -143,7 +145,13 @@ namespace Microsoft.EntityFrameworkCore
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        IEntityFinderSource IDbContextDependencies.EntityFinderSource => DbContextDependencies.EntityFinderSource;
+        IDbQuerySource IDbContextDependencies.QuerySource => DbContextDependencies.QuerySource;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        IEntityFinderFactory IDbContextDependencies.EntityFinderFactory => DbContextDependencies.EntityFinderFactory;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -199,6 +207,23 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        object IDbQueryCache.GetOrAddQuery(IDbQuerySource source, Type type)
+        {
+            CheckDisposed();
+
+            if (!_sets.TryGetValue(type, out var set))
+            {
+                set = source.CreateQuery(this, type);
+                _sets[type] = set;
+            }
+
+            return set;
+        }
+
+        /// <summary>
         ///     Creates a <see cref="DbSet{TEntity}" /> that can be used to query and save instances of <typeparamref name="TEntity" />.
         /// </summary>
         /// <typeparam name="TEntity"> The type of entity for which a set should be returned. </typeparam>
@@ -207,15 +232,33 @@ namespace Microsoft.EntityFrameworkCore
             where TEntity : class
             => (DbSet<TEntity>)((IDbSetCache)this).GetOrAddSet(DbContextDependencies.SetSource, typeof(TEntity));
 
+        /// <summary>
+        ///     Creates a <see cref="DbQuery{TQuery}" /> that can be used to query instances of <typeparamref name="TQuery" />.
+        /// </summary>
+        /// <typeparam name="TQuery"> The type of query for which a DbQuery should be returned. </typeparam>
+        /// <returns> A DbQuery for the given query type. </returns>
+        public virtual DbQuery<TQuery> Query<TQuery>()
+            where TQuery : class
+            => (DbQuery<TQuery>)((IDbQueryCache)this).GetOrAddQuery(DbContextDependencies.QuerySource, typeof(TQuery));
+
         private IEntityFinder Finder(Type type)
         {
             var entityType = Model.FindEntityType(type);
             if (entityType == null)
             {
+                if (Model.HasEntityTypeWithDefiningNavigation(type))
+                {
+                    throw new InvalidOperationException(CoreStrings.InvalidSetTypeWeak(type.ShortDisplayName()));
+                }
                 throw new InvalidOperationException(CoreStrings.InvalidSetType(type.ShortDisplayName()));
             }
 
-            return DbContextDependencies.EntityFinderSource.Create(this, entityType);
+            if (entityType.IsQueryType)
+            {
+                throw new InvalidOperationException(CoreStrings.InvalidSetTypeQuery(type.ShortDisplayName()));
+            }
+
+            return DbContextDependencies.EntityFinderFactory.Create(entityType);
         }
 
         private IServiceProvider InternalServiceProvider
@@ -274,9 +317,17 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         private IDbContextDependencies DbContextDependencies
-            => _dbContextDependencies ?? (_dbContextDependencies = InternalServiceProvider.GetRequiredService<IDbContextDependencies>());
+        {
+            get
+            {
+                CheckDisposed();
 
-        internal void CheckDisposed()
+                return _dbContextDependencies ?? (_dbContextDependencies = InternalServiceProvider.GetRequiredService<IDbContextDependencies>());
+            }
+        }
+
+        [DebuggerStepThrough]
+        private void CheckDisposed()
         {
             if (_disposed)
             {
@@ -288,6 +339,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     <para>
         ///         Override this method to configure the database (and other options) to be used for this context.
         ///         This method is called for each instance of the context that is created.
+        ///         The base implementation does nothing.
         ///     </para>
         ///     <para>
         ///         In situations where an instance of <see cref="DbContextOptions" /> may or may not have been passed
@@ -372,11 +424,17 @@ namespace Microsoft.EntityFrameworkCore
         {
             CheckDisposed();
 
+            DbContextDependencies.UpdateLogger.SaveChangesStarting(this);
+
             TryDetectChanges();
 
             try
             {
-                return DbContextDependencies.StateManager.SaveChanges(acceptAllChangesOnSuccess);
+                var entitiesSaved = DbContextDependencies.StateManager.SaveChanges(acceptAllChangesOnSuccess);
+
+                DbContextDependencies.UpdateLogger.SaveChangesCompleted(this, entitiesSaved);
+
+                return entitiesSaved;
             }
             catch (Exception exception)
             {
@@ -421,7 +479,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     A concurrency violation occurs when an unexpected number of rows are affected during save.
         ///     This is usually because the data in the database has been modified since it was loaded into memory.
         /// </exception>
-        public virtual Task<int> SaveChangesAsync(CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<int> SaveChangesAsync(CancellationToken cancellationToken = default)
             => SaveChangesAsync(acceptAllChangesOnSuccess: true, cancellationToken: cancellationToken);
 
         /// <summary>
@@ -457,15 +515,21 @@ namespace Microsoft.EntityFrameworkCore
         /// </exception>
         public virtual async Task<int> SaveChangesAsync(
             bool acceptAllChangesOnSuccess,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             CheckDisposed();
+
+            DbContextDependencies.UpdateLogger.SaveChangesStarting(this);
 
             TryDetectChanges();
 
             try
             {
-                return await DbContextDependencies.StateManager.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+                var entitiesSaved = await DbContextDependencies.StateManager.SaveChangesAsync(acceptAllChangesOnSuccess, cancellationToken);
+
+                DbContextDependencies.UpdateLogger.SaveChangesCompleted(this, entitiesSaved);
+
+                return entitiesSaved;
             }
             catch (Exception exception)
             {
@@ -477,8 +541,6 @@ namespace Microsoft.EntityFrameworkCore
 
         void IDbContextPoolable.SetPool(IDbContextPool contextPool)
         {
-            Check.NotNull(contextPool, nameof(contextPool));
-
             _dbContextPool = contextPool;
         }
 
@@ -510,7 +572,10 @@ namespace Microsoft.EntityFrameworkCore
 
         void IDbContextPoolable.ResetState()
         {
-            var resettableServices = _contextServices?.InternalServiceProvider?.GetService<IEnumerable<IResettableService>>()?.ToList();
+            var resettableServices
+                = _contextServices?.InternalServiceProvider?
+                    .GetService<IEnumerable<IResettableService>>()?.ToList();
+
             if (resettableServices != null)
             {
                 foreach (var service in resettableServices)
@@ -528,20 +593,19 @@ namespace Microsoft.EntityFrameworkCore
         public virtual void Dispose()
         {
             if (_dbContextPool == null
-                || !_dbContextPool.Return(this))
+                && !_disposed)
             {
-                if (!_disposed)
-                {
-                    _disposed = true;
+                _dbContextDependencies?.InfrastructureLogger.ContextDisposed(this);
 
-                    _dbContextDependencies?.StateManager.Unsubscribe();
+                _disposed = true;
 
-                    _serviceScope?.Dispose();
-                    _dbContextDependencies = null;
-                    _changeTracker = null;
-                    _database = null;
-                    _dbContextPool = null;
-                }
+                _dbContextDependencies?.StateManager.Unsubscribe();
+
+                _serviceScope?.Dispose();
+                _dbContextDependencies = null;
+                _changeTracker = null;
+                _database = null;
+
             }
         }
 
@@ -672,7 +736,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public virtual async Task<EntityEntry<TEntity>> AddAsync<TEntity>(
             [NotNull] TEntity entity,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             where TEntity : class
         {
             CheckDisposed();
@@ -844,7 +908,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public virtual async Task<EntityEntry> AddAsync(
             [NotNull] object entity,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             CheckDisposed();
 
@@ -1120,7 +1184,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public virtual async Task AddRangeAsync(
             [NotNull] IEnumerable<object> entities,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             CheckDisposed();
 
@@ -1347,5 +1411,31 @@ namespace Microsoft.EntityFrameworkCore
         ///     </para>
         /// </summary>
         IServiceProvider IInfrastructure<IServiceProvider>.Instance => InternalServiceProvider;
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

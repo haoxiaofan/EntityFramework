@@ -4,7 +4,6 @@
 using System;
 using System.Collections;
 using System.Collections.Generic;
-using System.IO;
 using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
@@ -53,6 +52,10 @@ namespace Microsoft.EntityFrameworkCore.Design
             var startupTargetName = (string)args["startupTargetName"];
             _projectDir = (string)args["projectDir"];
             var rootNamespace = (string)args["rootNamespace"];
+            var language = (string)args["language"];
+
+            // TODO: Flow in from tools (issue #8332)
+            var designArgs = Array.Empty<string>();
 
             // NOTE: LazyRef is used so any exceptions get passed to the resultHandler
             var startupAssembly = new LazyRef<Assembly>(
@@ -75,20 +78,25 @@ namespace Microsoft.EntityFrameworkCore.Design
                 () => new DbContextOperations(
                     reporter,
                     assembly.Value,
-                    startupAssembly.Value));
+                    startupAssembly.Value,
+                    designArgs));
             _databaseOperations = new LazyRef<DatabaseOperations>(
                 () => new DatabaseOperations(
                     reporter,
                     startupAssembly.Value,
                     _projectDir,
-                    rootNamespace));
+                    rootNamespace,
+                    language,
+                    designArgs));
             _migrationsOperations = new LazyRef<MigrationsOperations>(
                 () => new MigrationsOperations(
                     reporter,
                     assembly.Value,
                     startupAssembly.Value,
                     _projectDir,
-                    rootNamespace));
+                    rootNamespace,
+                    language,
+                    designArgs));
         }
 
         /// <summary>
@@ -132,13 +140,6 @@ namespace Microsoft.EntityFrameworkCore.Design
             [CanBeNull] string contextType)
         {
             Check.NotEmpty(name, nameof(name));
-
-            // In package manager console, relative outputDir is relative to project directory
-            if (!string.IsNullOrWhiteSpace(outputDir)
-                && !Path.IsPathRooted(outputDir))
-            {
-                outputDir = Path.GetFullPath(Path.Combine(_projectDir, outputDir));
-            }
 
             var files = _migrationsOperations.Value.AddMigration(
                 name,
@@ -403,7 +404,8 @@ namespace Microsoft.EntityFrameworkCore.Design
             ///     <para>The arguments supported by <paramref name="args" /> are:</para>
             ///     <para><c>connectionString</c>--The connection string to the database.</para>
             ///     <para><c>provider</c>--The provider to use.</para>
-            ///     <para><c>outputDir</c>--The directory to put files in. Paths are relaive to the project directory.</para>
+            ///     <para><c>outputDir</c>--The directory to put files in. Paths are relative to the project directory.</para>
+            ///     <para><c>outputDbContextDir</c>--The directory to put DbContext file in. Paths are relative to the project directory.</para>
             ///     <para><c>dbContextClassName</c>--The name of the DbContext to generate.</para>
             ///     <para><c>schemaFilters</c>--The schemas of tables to generate entity types for.</para>
             ///     <para><c>tableFilters</c>--The tables to generate entity types for.</para>
@@ -423,6 +425,7 @@ namespace Microsoft.EntityFrameworkCore.Design
                 var connectionString = (string)args["connectionString"];
                 var provider = (string)args["provider"];
                 var outputDir = (string)args["outputDir"];
+                var outputDbContextDir = (string)args["outputDbContextDir"];
                 var dbContextClassName = (string)args["dbContextClassName"];
                 var schemaFilters = (IEnumerable<string>)args["schemaFilters"];
                 var tableFilters = (IEnumerable<string>)args["tableFilters"];
@@ -432,8 +435,7 @@ namespace Microsoft.EntityFrameworkCore.Design
 
                 Execute(
                     () => executor.ScaffoldContextImpl(
-                        provider,
-                        connectionString, outputDir, dbContextClassName,
+                        provider, connectionString, outputDir, outputDbContextDir, dbContextClassName,
                         schemaFilters, tableFilters, useDataAnnotations, overwriteFiles, useDatabaseNames));
             }
         }
@@ -442,6 +444,7 @@ namespace Microsoft.EntityFrameworkCore.Design
             [NotNull] string provider,
             [NotNull] string connectionString,
             [CanBeNull] string outputDir,
+            [CanBeNull] string outputDbContextDir,
             [CanBeNull] string dbContextClassName,
             [NotNull] IEnumerable<string> schemaFilters,
             [NotNull] IEnumerable<string> tableFilters,
@@ -455,13 +458,13 @@ namespace Microsoft.EntityFrameworkCore.Design
             Check.NotNull(tableFilters, nameof(tableFilters));
 
             var files = _databaseOperations.Value.ScaffoldContext(
-                provider, connectionString, outputDir, dbContextClassName,
+                provider, connectionString, outputDir, outputDbContextDir, dbContextClassName,
                 schemaFilters, tableFilters, useDataAnnotations, overwriteFiles, useDatabaseNames);
 
             return new Hashtable
             {
                 ["ContextFile"] = files.ContextFile,
-                ["EntityTypeFiles"] = files.EntityTypeFiles.ToArray()
+                ["EntityTypeFiles"] = files.AdditionalFiles.ToArray()
             };
         }
 

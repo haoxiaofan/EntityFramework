@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections.Generic;
 using System.Data.Common;
 using System.Diagnostics;
 using JetBrains.Annotations;
@@ -12,6 +13,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    [Obsolete("Use TypedRelationalValueBufferFactory instead.")]
     public class UntypedRelationalValueBufferFactory : IRelationalValueBufferFactory
     {
         private readonly Action<object[]> _processValuesAction;
@@ -22,6 +24,7 @@ namespace Microsoft.EntityFrameworkCore.Storage.Internal
         /// </summary>
         public UntypedRelationalValueBufferFactory(
             [NotNull] RelationalValueBufferFactoryDependencies dependencies,
+            [NotNull] IReadOnlyList<TypeMaterializationInfo> mappingInfo,
             [CanBeNull] Action<object[]> processValuesAction)
         {
             _processValuesAction = processValuesAction;

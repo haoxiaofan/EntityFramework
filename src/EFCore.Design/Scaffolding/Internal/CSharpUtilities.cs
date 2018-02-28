@@ -6,8 +6,11 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Text.RegularExpressions;
+using Microsoft.EntityFrameworkCore.Design;
 using Microsoft.EntityFrameworkCore.Utilities;
+using JetBrains.Annotations;
 
 namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
 {
@@ -101,7 +104,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         private static readonly Regex _invalidCharsRegex
             = new Regex(
                 @"[^\p{Ll}\p{Lu}\p{Lt}\p{Lo}\p{Nd}\p{Nl}\p{Mn}\p{Mc}\p{Cf}\p{Pc}\p{Lm}]",
-                default(RegexOptions),
+                default,
                 TimeSpan.FromMilliseconds(1000.0));
 
         /// <summary>
@@ -264,6 +267,13 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual string GenerateLiteral([NotNull] NestedClosureCodeFragment value)
+            => value.Parameter + " => " + value.Parameter + Generate(value.MethodCall);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual bool IsCSharpKeyword(string identifier)
             => _cSharpKeywords.Contains(identifier);
 
@@ -388,8 +398,7 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
                 return $"{genericTypeDefName}<{genericTypeArguments}>";
             }
 
-            string typeName;
-            return _primitiveTypeNames.TryGetValue(type, out typeName)
+            return _primitiveTypeNames.TryGetValue(type, out var typeName)
                 ? typeName
                 : type.Name;
         }
@@ -420,6 +429,40 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding.Internal
             }
 
             return true;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual string Generate(MethodCallCodeFragment methodCallCodeFragment)
+        {
+            var builder = new StringBuilder();
+
+            var current = methodCallCodeFragment;
+            while (current != null)
+            {
+                builder
+                    .Append(".")
+                    .Append(current.Method)
+                    .Append("(");
+
+                for (var i = 0; i < current.Arguments.Count; i++)
+                {
+                    if (i != 0)
+                    {
+                        builder.Append(", ");
+                    }
+
+                    builder.Append(GenerateLiteral((dynamic)current.Arguments[i]));
+                }
+
+                builder.Append(")");
+
+                current = current.ChainedCall;
+            }
+
+            return builder.ToString();
         }
 
         private static bool IsIdentifierStartCharacter(char ch)

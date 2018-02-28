@@ -27,15 +27,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected override Expression VisitBinary(BinaryExpression node)
+        protected override Expression VisitBinary(BinaryExpression binaryExpression)
         {
-            var currentExpression = node;
+            var currentExpression = binaryExpression;
             if (currentExpression.NodeType == ExpressionType.Equal
                 || currentExpression.NodeType == ExpressionType.NotEqual)
             {
-                var leftUnary = currentExpression.Left as UnaryExpression;
-                if (leftUnary != null
-                    && leftUnary.NodeType == ExpressionType.Not)
+                if (currentExpression.Left is UnaryExpression leftUnary && leftUnary.NodeType == ExpressionType.Not)
                 {
                     var leftNullable = BuildIsNullExpression(leftUnary.Operand) != null;
                     var rightNullable = BuildIsNullExpression(currentExpression.Right) != null;
@@ -52,9 +50,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     }
                 }
 
-                var rightUnary = currentExpression.Right as UnaryExpression;
-                if (rightUnary != null
-                    && rightUnary.NodeType == ExpressionType.Not)
+                if (currentExpression.Right is UnaryExpression rightUnary && rightUnary.NodeType == ExpressionType.Not)
                 {
                     var leftNullable = BuildIsNullExpression(currentExpression.Left) != null;
                     var rightNullable = BuildIsNullExpression(rightUnary) != null;
@@ -87,21 +83,26 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        protected override Expression VisitUnary(UnaryExpression node)
+        protected override Expression VisitUnary(UnaryExpression unaryExpression)
         {
-            if (node.NodeType == ExpressionType.Not)
+            if (unaryExpression.NodeType == ExpressionType.Not)
             {
-                var innerUnary = node.Operand as UnaryExpression;
-                if (innerUnary != null
-                    && innerUnary.NodeType == ExpressionType.Not)
+                if (unaryExpression.Operand is ConstantExpression constantExpression
+                    && constantExpression.Type == typeof(bool))
                 {
-                    // !(!(a)) => a
+                    // !(false) -> true
+                    // !(true) -> false
+                    return Expression.Constant((bool)constantExpression.Value ? false : true);
+                }
+
+                if (unaryExpression.Operand is UnaryExpression innerUnary && innerUnary.NodeType == ExpressionType.Not)
+                {
+                    // !(!(a)) -> a
                     return Visit(innerUnary.Operand);
                 }
 
-                var nullCompensatedExpression = node.Operand as NullCompensatedExpression;
-                var innerBinary = (nullCompensatedExpression?.Operand ?? node.Operand) as BinaryExpression;
-                if (innerBinary != null)
+                var nullCompensatedExpression = unaryExpression.Operand as NullCompensatedExpression;
+                if ((nullCompensatedExpression?.Operand ?? unaryExpression.Operand) is BinaryExpression innerBinary)
                 {
                     Expression result = null;
                     if (innerBinary.NodeType == ExpressionType.Equal
@@ -155,7 +156,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 }
             }
 
-            return base.VisitUnary(node);
+            return base.VisitUnary(unaryExpression);
         }
     }
 }

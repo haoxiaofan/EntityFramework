@@ -3,6 +3,7 @@
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Query.Sql;
+using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.Query.Expressions
@@ -40,11 +41,16 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         ///     </para>
         /// </summary>
         /// <param name="querySqlGeneratorFactory"> The query SQL generator factory. </param>
-        public SelectExpressionDependencies([NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory)
+        /// <param name="typeMappingSource"> The type mapper. </param>
+        public SelectExpressionDependencies(
+            [NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory,
+            [NotNull] IRelationalTypeMappingSource typeMappingSource)
         {
             Check.NotNull(querySqlGeneratorFactory, nameof(querySqlGeneratorFactory));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
 
             QuerySqlGeneratorFactory = querySqlGeneratorFactory;
+            TypeMappingSource = typeMappingSource;
         }
 
         /// <summary>
@@ -53,11 +59,24 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         public IQuerySqlGeneratorFactory QuerySqlGeneratorFactory { get; }
 
         /// <summary>
+        ///     Gets the type mapper.
+        /// </summary>
+        public IRelationalTypeMappingSource TypeMappingSource { get; }
+
+        /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="querySqlGeneratorFactory"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
         public SelectExpressionDependencies With([NotNull] IQuerySqlGeneratorFactory querySqlGeneratorFactory)
-            => new SelectExpressionDependencies(Check.NotNull(querySqlGeneratorFactory, nameof(querySqlGeneratorFactory)));
+            => new SelectExpressionDependencies(querySqlGeneratorFactory, TypeMappingSource);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="typeMappingSource"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public SelectExpressionDependencies With([NotNull] IRelationalTypeMappingSource typeMappingSource)
+            => new SelectExpressionDependencies(QuerySqlGeneratorFactory, typeMappingSource);
     }
 }

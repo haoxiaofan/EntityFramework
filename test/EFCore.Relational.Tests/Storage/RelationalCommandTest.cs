@@ -540,7 +540,9 @@ namespace Microsoft.EntityFrameworkCore.Storage
         {
             var fakeConnection = CreateConnection();
 
-            var typeMapper = new FakeRelationalTypeMapper(new RelationalTypeMapperDependencies());
+            var typeMapper = (IRelationalTypeMappingSource)new TestRelationalTypeMappingSource(
+                TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>());
 
             var dbParameter = new FakeDbParameter { ParameterName = "FirstParameter", Value = 17, DbType = DbType.Int32 };
 
@@ -577,7 +579,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Assert.Equal(parameter, fakeConnection.DbConnections[0].DbCommands[0].Parameters[0]);
 
             parameter = fakeConnection.DbConnections[0].DbCommands[0].Parameters[1];
-            var mapping = typeMapper.GetMapping(18L.GetType());
+            var mapping = typeMapper.FindMapping(18L.GetType());
 
             Assert.Equal("SecondParameter", parameter.ParameterName);
             Assert.Equal(18L, parameter.Value);
@@ -929,12 +931,12 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Assert.Equal(LogLevel.Debug, log[0].Level);
             Assert.Equal(LogLevel.Information, log[1].Level);
 
-            foreach (var item in log)
+            foreach (var (Level, Id, Message) in log)
             {
                 Assert.EndsWith(
-                    @"[Parameters=[FirstParameter='?'], CommandType='0', CommandTimeout='30']" + EOL +
+                    @"[Parameters=[FirstParameter='?' (DbType = Int32)], CommandType='0', CommandTimeout='30']" + EOL +
                     @"Logged Command",
-                    item.Message);
+                    Message);
             }
         }
 
@@ -985,12 +987,12 @@ namespace Microsoft.EntityFrameworkCore.Storage
             Assert.Equal(LogLevel.Debug, log[1].Level);
             Assert.Equal(LogLevel.Information, log[2].Level);
 
-            foreach (var item in log.Skip(1))
+            foreach (var (Level, Id, Message) in log.Skip(1))
             {
                 Assert.EndsWith(
                     @"[Parameters=[FirstParameter='17'], CommandType='0', CommandTimeout='30']" + EOL +
                     @"Logged Command",
-                    item.Message);
+                    Message);
             }
         }
 

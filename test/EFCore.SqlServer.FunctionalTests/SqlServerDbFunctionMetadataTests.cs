@@ -1,15 +1,17 @@
-﻿using System;
-using System.Linq.Expressions;
+﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
+
+using System;
 using System.Reflection;
-using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
-using Microsoft.EntityFrameworkCore.Metadata.Internal ;
+using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore
 {
-    public class SqlServerDbFunctionMetadataTests    
+#if !Test20
+    public class SqlServerDbFunctionMetadataTests
     {
         public class TestMethods
         {
@@ -64,10 +66,11 @@ namespace Microsoft.EntityFrameworkCore
         private ModelBuilder GetModelBuilder()
         {
             var conventionset = new ConventionSet();
-            
+
             conventionset.ModelAnnotationChangedConventions.Add(new SqlServerDbFunctionConvention());
 
             return new ModelBuilder(conventionset);
         }
     }
+#endif
 }

@@ -450,7 +450,7 @@ namespace Microsoft.EntityFrameworkCore
         [Theory]
         [InlineData(false)]
         [InlineData(true)]
-        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_view(
+        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_query_type_has_no_effect_on_local_view(
             bool toObservableCollection)
         {
             using (var context = CreateF1Context())
@@ -769,7 +769,7 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         [Fact]
-        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_view_type_has_no_effect_on_local_binding_list()
+        public virtual void Adding_entity_to_state_manager_of_different_type_than_local_query_type_has_no_effect_on_local_binding_list()
         {
             using (var context = CreateF1Context())
             {
@@ -862,7 +862,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateF1Context())
             {
-                var ferrari = context.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.Ferrari);
+                var ferrari = context.Teams.Single(t => t.Id == Team.Ferrari);
                 var navBindingList = ((IListSource)ferrari.Drivers).GetList();
 
                 var larry = new Driver
@@ -882,7 +882,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateF1Context())
             {
-                var ferrari = context.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.Ferrari);
+                var ferrari = context.Teams.Single(t => t.Id == Team.Ferrari);
                 var navBindingList = ((IListSource)ferrari.Drivers).GetList();
                 var localDrivers = context.Drivers.Local;
 
@@ -909,7 +909,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             using (var context = CreateF1Context())
             {
-                var ferrari = context.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.Ferrari);
+                var ferrari = context.Teams.Single(t => t.Id == Team.Ferrari);
                 var navBindingList = ((IListSource)ferrari.Drivers).GetList();
                 var localDrivers = context.Drivers.Local;
 

@@ -14,8 +14,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         public IncludeSqlServerTest(IncludeSqlServerFixture fixture, ITestOutputHelper testOutputHelper)
             : base(fixture)
         {
-            fixture.TestSqlLoggerFactory.Clear();
-            //fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
+            Fixture.TestSqlLoggerFactory.Clear();
+            //Fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
         }
 
         public override void Include_list(bool useString)
@@ -922,32 +922,32 @@ ORDER BY [t].[City], [t].[CustomerID]");
                 @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
 FROM [Customers] AS [c]
 WHERE [c].[CustomerID] = N'ALFKI'
-ORDER BY [c].[City], [c].[CustomerID]",
+ORDER BY [c].[CustomerID]",
                 //
                 @"SELECT [c.Orders].[OrderID], [c.Orders].[CustomerID], [c.Orders].[EmployeeID], [c.Orders].[OrderDate]
 FROM [Orders] AS [c.Orders]
 INNER JOIN (
-    SELECT TOP(1) [c0].[CustomerID], [c0].[City]
+    SELECT TOP(1) [c0].[CustomerID]
     FROM [Customers] AS [c0]
     WHERE [c0].[CustomerID] = N'ALFKI'
-    ORDER BY [c0].[City], [c0].[CustomerID]
+    ORDER BY [c0].[CustomerID]
 ) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
-ORDER BY [t].[City], [t].[CustomerID], [c.Orders].[OrderID]",
+ORDER BY [t].[CustomerID], [c.Orders].[OrderID]",
                 //
                 @"SELECT [c.Orders.OrderDetails].[OrderID], [c.Orders.OrderDetails].[ProductID], [c.Orders.OrderDetails].[Discount], [c.Orders.OrderDetails].[Quantity], [c.Orders.OrderDetails].[UnitPrice], [o.Product].[ProductID], [o.Product].[Discontinued], [o.Product].[ProductName], [o.Product].[SupplierID], [o.Product].[UnitPrice], [o.Product].[UnitsInStock]
 FROM [Order Details] AS [c.Orders.OrderDetails]
 INNER JOIN [Products] AS [o.Product] ON [c.Orders.OrderDetails].[ProductID] = [o.Product].[ProductID]
 INNER JOIN (
-    SELECT DISTINCT [c.Orders0].[OrderID], [t0].[City], [t0].[CustomerID]
+    SELECT DISTINCT [c.Orders0].[OrderID], [t0].[CustomerID]
     FROM [Orders] AS [c.Orders0]
     INNER JOIN (
-        SELECT TOP(1) [c1].[CustomerID], [c1].[City]
+        SELECT TOP(1) [c1].[CustomerID]
         FROM [Customers] AS [c1]
         WHERE [c1].[CustomerID] = N'ALFKI'
-        ORDER BY [c1].[City], [c1].[CustomerID]
+        ORDER BY [c1].[CustomerID]
     ) AS [t0] ON [c.Orders0].[CustomerID] = [t0].[CustomerID]
 ) AS [t1] ON [c.Orders.OrderDetails].[OrderID] = [t1].[OrderID]
-ORDER BY [t1].[City], [t1].[CustomerID], [t1].[OrderID]");
+ORDER BY [t1].[CustomerID], [t1].[OrderID]");
         }
 
         public override void Include_collection_on_additional_from_clause2(bool useString)
@@ -1420,6 +1420,177 @@ INNER JOIN (
         THEN 1 ELSE 2
     END AS [c]
     FROM [Customers] AS [c0]
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[c], [t].[CustomerID]");
+        }
+
+        public override void Include_reference_distinct_is_server_evaluated(bool useString)
+        {
+            base.Include_reference_distinct_is_server_evaluated(useString);
+
+            AssertSql(
+                @"SELECT DISTINCT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate], [o.Customer].[CustomerID], [o.Customer].[Address], [o.Customer].[City], [o.Customer].[CompanyName], [o.Customer].[ContactName], [o.Customer].[ContactTitle], [o.Customer].[Country], [o.Customer].[Fax], [o.Customer].[Phone], [o.Customer].[PostalCode], [o.Customer].[Region]
+FROM [Orders] AS [o]
+LEFT JOIN [Customers] AS [o.Customer] ON [o].[CustomerID] = [o.Customer].[CustomerID]
+WHERE [o].[OrderID] < 10250");
+        }
+
+        public override void Include_collection_distinct_is_server_evaluated(bool useString)
+        {
+            base.Include_collection_distinct_is_server_evaluated(useString);
+
+            AssertSql(
+                @"SELECT DISTINCT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')
+ORDER BY [c].[CustomerID]",
+                //
+                @"SELECT [c.Orders].[OrderID], [c.Orders].[CustomerID], [c.Orders].[EmployeeID], [c.Orders].[OrderDate]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT DISTINCT [c0].[CustomerID]
+    FROM [Customers] AS [c0]
+    WHERE [c0].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c0].[CustomerID], LEN(N'A')) = N'A')
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[CustomerID]");
+        }
+
+        public override void Include_collection_OrderBy_object(bool useString)
+        {
+            base.Include_collection_OrderBy_object(useString);
+
+            AssertSql(
+                @"SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[OrderID] < 10250
+ORDER BY [o].[OrderID]",
+                //
+                @"SELECT [o.OrderDetails].[OrderID], [o.OrderDetails].[ProductID], [o.OrderDetails].[Discount], [o.OrderDetails].[Quantity], [o.OrderDetails].[UnitPrice]
+FROM [Order Details] AS [o.OrderDetails]
+INNER JOIN (
+    SELECT [o0].[OrderID]
+    FROM [Orders] AS [o0]
+    WHERE [o0].[OrderID] < 10250
+) AS [t] ON [o.OrderDetails].[OrderID] = [t].[OrderID]
+ORDER BY [t].[OrderID]");
+        }
+
+        public override void Include_collection_OrderBy_empty_list_contains(bool useString)
+        {
+            base.Include_collection_OrderBy_empty_list_contains(useString);
+
+            AssertSql(
+    @"@__p_1='1'
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')
+ORDER BY (SELECT 1), [c].[CustomerID]
+OFFSET @__p_1 ROWS",
+    //
+    @"@__p_1='1'
+
+SELECT [c.Orders].[OrderID], [c.Orders].[CustomerID], [c.Orders].[EmployeeID], [c.Orders].[OrderDate]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT [c0].[CustomerID], 0 AS [c]
+    FROM [Customers] AS [c0]
+    WHERE [c0].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c0].[CustomerID], LEN(N'A')) = N'A')
+    ORDER BY [c], [c0].[CustomerID]
+    OFFSET @__p_1 ROWS
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[c], [t].[CustomerID]");
+        }
+
+        public override void Include_collection_OrderBy_empty_list_does_not_contains(bool useString)
+        {
+            base.Include_collection_OrderBy_empty_list_does_not_contains(useString);
+
+            AssertSql(
+    @"@__p_1='1'
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')
+ORDER BY (SELECT 1), [c].[CustomerID]
+OFFSET @__p_1 ROWS",
+    //
+    @"@__p_1='1'
+
+SELECT [c.Orders].[OrderID], [c.Orders].[CustomerID], [c.Orders].[EmployeeID], [c.Orders].[OrderDate]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT [c0].[CustomerID], 1 AS [c]
+    FROM [Customers] AS [c0]
+    WHERE [c0].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c0].[CustomerID], LEN(N'A')) = N'A')
+    ORDER BY [c], [c0].[CustomerID]
+    OFFSET @__p_1 ROWS
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[c], [t].[CustomerID]");
+        }
+
+        public override void Include_collection_OrderBy_list_contains(bool useString)
+        {
+            base.Include_collection_OrderBy_list_contains(useString);
+
+            AssertSql(
+    @"@__p_1='1'
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')
+ORDER BY CASE
+    WHEN [c].[CustomerID] IN (N'ALFKI')
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END, [c].[CustomerID]
+OFFSET @__p_1 ROWS",
+    //
+    @"@__p_1='1'
+
+SELECT [c.Orders].[OrderID], [c.Orders].[CustomerID], [c.Orders].[EmployeeID], [c.Orders].[OrderDate]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT [c0].[CustomerID], CASE
+        WHEN [c0].[CustomerID] IN (N'ALFKI')
+        THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+    END AS [c]
+    FROM [Customers] AS [c0]
+    WHERE [c0].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c0].[CustomerID], LEN(N'A')) = N'A')
+    ORDER BY [c], [c0].[CustomerID]
+    OFFSET @__p_1 ROWS
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[c], [t].[CustomerID]");
+        }
+
+        public override void Include_collection_OrderBy_list_does_not_contains(bool useString)
+        {
+            base.Include_collection_OrderBy_list_does_not_contains(useString);
+
+            AssertSql(
+    @"@__p_1='1'
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c].[CustomerID], LEN(N'A')) = N'A')
+ORDER BY CASE
+    WHEN [c].[CustomerID] NOT IN (N'ALFKI')
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END, [c].[CustomerID]
+OFFSET @__p_1 ROWS",
+    //
+    @"@__p_1='1'
+
+SELECT [c.Orders].[OrderID], [c.Orders].[CustomerID], [c.Orders].[EmployeeID], [c.Orders].[OrderDate]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT [c0].[CustomerID], CASE
+        WHEN [c0].[CustomerID] NOT IN (N'ALFKI')
+        THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+    END AS [c]
+    FROM [Customers] AS [c0]
+    WHERE [c0].[CustomerID] LIKE N'A' + N'%' AND (LEFT([c0].[CustomerID], LEN(N'A')) = N'A')
+    ORDER BY [c], [c0].[CustomerID]
+    OFFSET @__p_1 ROWS
 ) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
 ORDER BY [t].[c], [t].[CustomerID]");
         }

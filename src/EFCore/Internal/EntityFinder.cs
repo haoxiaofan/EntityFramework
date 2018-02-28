@@ -5,11 +5,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
+using System.Reflection;
 using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -24,19 +24,27 @@ namespace Microsoft.EntityFrameworkCore.Internal
     public class EntityFinder<TEntity> : IEntityFinder<TEntity>
         where TEntity : class
     {
-        private readonly IModel _model;
         private readonly IStateManager _stateManager;
+        private readonly IDbSetSource _setSource;
+        private readonly IDbSetCache _setCache;
+        private readonly IModel _model;
         private readonly IQueryable<TEntity> _queryRoot;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public EntityFinder([NotNull] DbContext context, [NotNull] IEntityType entityType)
+        public EntityFinder(
+            [NotNull] IStateManager stateManager,
+            [NotNull] IDbSetSource setSource,
+            [NotNull] IDbSetCache setCache,
+            [NotNull] IEntityType entityType)
         {
-            _model = context.Model;
-            _stateManager = context.GetDependencies().StateManager;
-            _queryRoot = (IQueryable<TEntity>)BuildQueryRoot(context, entityType);
+            _stateManager = stateManager;
+            _setSource = setSource;
+            _setCache = setCache;
+            _model = entityType.Model;
+            _queryRoot = (IQueryable<TEntity>)BuildQueryRoot(entityType);
         }
 
         /// <summary>
@@ -62,7 +70,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual Task<TEntity> FindAsync(object[] keyValues, CancellationToken cancellationToken = default(CancellationToken))
+        public virtual Task<TEntity> FindAsync(object[] keyValues, CancellationToken cancellationToken = default)
         {
             Check.NotNull(keyValues, nameof(keyValues));
 
@@ -115,7 +123,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         public virtual async Task LoadAsync(
             INavigation navigation,
             InternalEntityEntry entry,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             if (entry.EntityState == EntityState.Detached)
             {
@@ -167,7 +175,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual Task<object[]> GetDatabaseValuesAsync(
-            InternalEntityEntry entry, CancellationToken cancellationToken = default(CancellationToken))
+            InternalEntityEntry entry, CancellationToken cancellationToken = default)
             => GetDatabaseValuesQuery(entry)?.FirstOrDefaultAsync(cancellationToken);
 
         private IQueryable<object[]> GetDatabaseValuesQuery(InternalEntityEntry entry)
@@ -277,16 +285,38 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 BuildPredicate(keyProperties, keyValues, entityParameter), entityParameter);
         }
 
-        private static IQueryable BuildQueryRoot(DbContext context, IEntityType entityType)
+        private IQueryable BuildQueryRoot(IEntityType entityType)
         {
             var definingEntityType = entityType.DefiningEntityType;
             if (definingEntityType == null)
             {
-                return (IQueryable)((IDbSetCache)context).GetOrAddSet(context.GetDependencies().SetSource, entityType.ClrType);
+                return (IQueryable)_setCache.GetOrAddSet(_setSource, entityType.ClrType);
             }
 
-            return BuildQueryRoot(context, definingEntityType)
-                .Select(entityType.DefiningNavigationName, definingEntityType.ClrType, entityType.ClrType);
+            return BuildQueryRoot(definingEntityType, entityType);
+        }
+
+        private IQueryable BuildQueryRoot(IEntityType definingEntityType, IEntityType entityType)
+        {
+            var queryRoot = BuildQueryRoot(definingEntityType);
+
+            return (IQueryable)_selectMethod.MakeGenericMethod(definingEntityType.ClrType, entityType.ClrType)
+                .Invoke(null, new object[] { queryRoot, entityType.DefiningNavigationName });
+        }
+
+        private static readonly MethodInfo _selectMethod
+            = typeof(EntityFinder<TEntity>).GetTypeInfo().GetDeclaredMethods(nameof(Select)).Single(mi => mi.IsGenericMethodDefinition);
+
+        private static IQueryable<TResult> Select<TSource, TResult>(
+            [NotNull] IQueryable<TSource> source, [NotNull] string propertyName)
+            where TResult : class
+            where TSource : class
+        {
+            var parameter = Expression.Parameter(typeof(TSource), "e");
+            return source.Select(
+                Expression.Lambda<Func<TSource, TResult>>(
+                    Expression.MakeMemberAccess(parameter, typeof(TSource).GetAnyProperty(propertyName)),
+                    parameter));
         }
 
         private static BinaryExpression BuildPredicate(

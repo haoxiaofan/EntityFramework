@@ -8,6 +8,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore
 {
     public class DatabaseInMemoryTest
@@ -74,15 +75,6 @@ namespace Microsoft.EntityFrameworkCore
             }
         }
 
-        [Fact]
-        public void Any_returns_false_for_empty_sets()
-        {
-            using (var db = new SimpleContext())
-            {
-                db.Artists.Any();
-            }
-        }
-
         private class Customer
         {
             // ReSharper disable once UnusedMember.Local
@@ -125,6 +117,7 @@ namespace Microsoft.EntityFrameworkCore
 
         private class SimpleContext : DbContext
         {
+            // ReSharper disable once UnusedAutoPropertyAccessor.Local
             public DbSet<Artist> Artists { get; set; }
 
             protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)

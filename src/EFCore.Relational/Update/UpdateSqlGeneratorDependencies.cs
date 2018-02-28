@@ -44,11 +44,16 @@ namespace Microsoft.EntityFrameworkCore.Update
         ///     </para>
         /// </summary>
         /// <param name="sqlGenerationHelper"> Helpers for generating update SQL. </param>
-        public UpdateSqlGeneratorDependencies([NotNull] ISqlGenerationHelper sqlGenerationHelper)
+        /// <param name="typeMappingSource"> The type mapping source. </param>
+        public UpdateSqlGeneratorDependencies(
+            [NotNull] ISqlGenerationHelper sqlGenerationHelper,
+            [NotNull] IRelationalTypeMappingSource typeMappingSource)
         {
             Check.NotNull(sqlGenerationHelper, nameof(sqlGenerationHelper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
 
             SqlGenerationHelper = sqlGenerationHelper;
+            TypeMappingSource = typeMappingSource;
         }
 
         /// <summary>
@@ -57,11 +62,28 @@ namespace Microsoft.EntityFrameworkCore.Update
         public ISqlGenerationHelper SqlGenerationHelper { get; }
 
         /// <summary>
+        ///     The type mapping source.
+        /// </summary>
+        public IRelationalTypeMappingSource TypeMappingSource { get; }
+
+        /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="sqlGenerationHelper"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
         public UpdateSqlGeneratorDependencies With([NotNull] ISqlGenerationHelper sqlGenerationHelper)
-            => new UpdateSqlGeneratorDependencies(sqlGenerationHelper);
+            => new UpdateSqlGeneratorDependencies(
+                sqlGenerationHelper,
+                TypeMappingSource);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="typeMappingSource"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public UpdateSqlGeneratorDependencies With([NotNull] IRelationalTypeMappingSource typeMappingSource)
+            => new UpdateSqlGeneratorDependencies(
+                SqlGenerationHelper,
+                typeMappingSource);
     }
 }

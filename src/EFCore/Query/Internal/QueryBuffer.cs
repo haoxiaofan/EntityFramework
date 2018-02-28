@@ -32,15 +32,15 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         private readonly Dictionary<int, IDisposable> _includedCollections
             = new Dictionary<int, IDisposable>(); // IDisposable as IEnumerable/IAsyncEnumerable
 
+        private Dictionary<int, (IDisposable Enumerator, MaterializedAnonymousObject PreviousOriginKey)> _correlatedCollectionMetadata
+            = new Dictionary<int, (IDisposable, MaterializedAnonymousObject)>();
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public QueryBuffer(
-            [NotNull] QueryContextDependencies dependencies)
-        {
-            _dependencies = dependencies;
-        }
+        public QueryBuffer([NotNull] QueryContextDependencies dependencies)
+            => _dependencies = dependencies;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -151,7 +151,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void IncludeCollection(
+        public virtual void IncludeCollection<TEntity, TRelated, TElement>(
             int includeId,
             INavigation navigation,
             INavigation inverseNavigation,
@@ -159,11 +159,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             IClrCollectionAccessor clrCollectionAccessor,
             IClrPropertySetter inverseClrPropertySetter,
             bool tracking,
-            object entity,
-            Func<IEnumerable<object>> relatedEntitiesFactory)
+            TEntity entity,
+            Func<IEnumerable<TRelated>> relatedEntitiesFactory,
+            Func<TEntity, TRelated, bool> joinPredicate)
+            where TRelated : TElement
         {
             IDisposable untypedEnumerator = null;
-            IEnumerator<object> enumerator = null;
+            IEnumerator<TRelated> enumerator = null;
 
             if (includeId == -1
                 || !_includedCollections.TryGetValue(includeId, out untypedEnumerator))
@@ -182,47 +184,58 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 }
             }
 
+            var collection = (ICollection<TElement>)clrCollectionAccessor.GetOrCreate(entity);
+
             if (enumerator == null)
             {
                 if (untypedEnumerator == null)
                 {
-                    clrCollectionAccessor.GetOrCreate(entity);
-
                     return;
                 }
 
-                enumerator = (IEnumerator<object>)untypedEnumerator;
+                enumerator = (IEnumerator<TRelated>)untypedEnumerator;
             }
 
-            var relatedEntities = new List<object>();
+            IIncludeKeyComparer keyComparer = null;
 
-            // TODO: This should be done at query compile time and not require a VB unless there are shadow props
-            var keyComparer = CreateIncludeKeyComparer(entity, navigation);
+            if (joinPredicate == null)
+            {
+                keyComparer = CreateIncludeKeyComparer(entity, navigation);
+            }
 
             while (true)
             {
                 bool shouldInclude;
 
-                if (_valueBuffers.TryGetValue(enumerator.Current, out var relatedValueBuffer))
+                if (joinPredicate == null)
                 {
-                    shouldInclude = keyComparer.ShouldInclude((ValueBuffer)relatedValueBuffer);
+                    if (_valueBuffers.TryGetValue(enumerator.Current, out var relatedValueBuffer))
+                    {
+                        shouldInclude = keyComparer.ShouldInclude((ValueBuffer)relatedValueBuffer);
+                    }
+                    else
+                    {
+                        var entry = _dependencies.StateManager.TryGetEntry(enumerator.Current);
+
+                        Debug.Assert(entry != null);
+
+                        shouldInclude = keyComparer.ShouldInclude(entry);
+                    }
                 }
                 else
                 {
-                    var entry = _dependencies.StateManager.TryGetEntry(enumerator.Current);
-
-                    Debug.Assert(entry != null);
-
-                    shouldInclude = keyComparer.ShouldInclude(entry);
+                    shouldInclude = joinPredicate(entity, enumerator.Current);
                 }
 
                 if (shouldInclude)
                 {
-                    relatedEntities.Add(enumerator.Current);
-
                     if (tracking)
                     {
                         StartTracking(enumerator.Current, targetEntityType);
+                    }
+                    else if (!collection.Contains(enumerator.Current))
+                    {
+                        collection.Add(enumerator.Current);
                     }
 
                     if (inverseNavigation != null)
@@ -259,15 +272,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 }
             }
 
-            clrCollectionAccessor.AddRange(entity, relatedEntities);
-
             if (tracking)
             {
                 var internalEntityEntry = _dependencies.StateManager.TryGetEntry(entity);
 
                 Debug.Assert(internalEntityEntry != null);
 
-                internalEntityEntry.AddRangeToCollectionSnapshot(navigation, relatedEntities);
+                internalEntityEntry.AddRangeToCollectionSnapshot(navigation, (IEnumerable<object>)collection);
                 internalEntityEntry.SetIsLoaded(navigation);
             }
         }
@@ -276,7 +287,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual async Task IncludeCollectionAsync(
+        public virtual async Task IncludeCollectionAsync<TEntity, TRelated, TElement>(
             int includeId,
             INavigation navigation,
             INavigation inverseNavigation,
@@ -284,12 +295,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             IClrCollectionAccessor clrCollectionAccessor,
             IClrPropertySetter inverseClrPropertySetter,
             bool tracking,
-            object entity,
-            Func<IAsyncEnumerable<object>> relatedEntitiesFactory,
+            TEntity entity,
+            Func<IAsyncEnumerable<TRelated>> relatedEntitiesFactory,
+            Func<TEntity, TRelated, bool> joinPredicate,
             CancellationToken cancellationToken)
+            where TRelated : TElement
         {
             IDisposable untypedAsyncEnumerator = null;
-            IAsyncEnumerator<object> asyncEnumerator = null;
+            IAsyncEnumerator<TRelated> asyncEnumerator = null;
 
             if (includeId == -1
                 || !_includedCollections.TryGetValue(includeId, out untypedAsyncEnumerator))
@@ -308,47 +321,58 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 }
             }
 
+            var collection = (ICollection<TElement>)clrCollectionAccessor.GetOrCreate(entity);
+
             if (asyncEnumerator == null)
             {
                 if (untypedAsyncEnumerator == null)
                 {
-                    clrCollectionAccessor.GetOrCreate(entity);
-
                     return;
                 }
 
-                asyncEnumerator = (IAsyncEnumerator<object>)untypedAsyncEnumerator;
+                asyncEnumerator = (IAsyncEnumerator<TRelated>)untypedAsyncEnumerator;
             }
 
-            var relatedEntities = new List<object>();
+            IIncludeKeyComparer keyComparer = null;
 
-            // TODO: This should be done at query compile time and not require a VB unless there are shadow props
-            var keyComparer = CreateIncludeKeyComparer(entity, navigation);
+            if (joinPredicate == null)
+            {
+                keyComparer = CreateIncludeKeyComparer(entity, navigation);
+            }
 
             while (true)
             {
                 bool shouldInclude;
 
-                if (_valueBuffers.TryGetValue(asyncEnumerator.Current, out var relatedValueBuffer))
+                if (joinPredicate == null)
                 {
-                    shouldInclude = keyComparer.ShouldInclude((ValueBuffer)relatedValueBuffer);
+                    if (_valueBuffers.TryGetValue(asyncEnumerator.Current, out var relatedValueBuffer))
+                    {
+                        shouldInclude = keyComparer.ShouldInclude((ValueBuffer)relatedValueBuffer);
+                    }
+                    else
+                    {
+                        var entry = _dependencies.StateManager.TryGetEntry(asyncEnumerator.Current);
+
+                        Debug.Assert(entry != null);
+
+                        shouldInclude = keyComparer.ShouldInclude(entry);
+                    }
                 }
                 else
                 {
-                    var entry = _dependencies.StateManager.TryGetEntry(asyncEnumerator.Current);
-
-                    Debug.Assert(entry != null);
-
-                    shouldInclude = keyComparer.ShouldInclude(entry);
+                    shouldInclude = joinPredicate(entity, asyncEnumerator.Current);
                 }
 
                 if (shouldInclude)
                 {
-                    relatedEntities.Add(asyncEnumerator.Current);
-
                     if (tracking)
                     {
                         StartTracking(asyncEnumerator.Current, targetEntityType);
+                    }
+                    else if (!collection.Contains(asyncEnumerator.Current))
+                    {
+                        collection.Add(asyncEnumerator.Current);
                     }
 
                     if (inverseNavigation != null)
@@ -382,15 +406,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 }
             }
 
-            clrCollectionAccessor.AddRange(entity, relatedEntities);
-
             if (tracking)
             {
                 var internalEntityEntry = _dependencies.StateManager.TryGetEntry(entity);
 
                 Debug.Assert(internalEntityEntry != null);
 
-                internalEntityEntry.AddRangeToCollectionSnapshot(navigation, relatedEntities);
+                internalEntityEntry.AddRangeToCollectionSnapshot(navigation, (IEnumerable<object>)collection);
                 internalEntityEntry.SetIsLoaded(navigation);
             }
         }
@@ -454,11 +476,209 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             return identityMap;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual TCollection CorrelateSubquery<TInner, TCollection>(
+            int correlatedCollectionId,
+            INavigation navigation,
+            Func<INavigation, TCollection> resultCollectionFactory,
+            MaterializedAnonymousObject outerKey,
+            bool tracking,
+            Func<IEnumerable<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>>> correlatedCollectionFactory,
+            Func<MaterializedAnonymousObject, MaterializedAnonymousObject, bool> correlationPredicate) where TCollection : ICollection<TInner>
+        {
+            IDisposable untypedEnumerator = null;
+            IEnumerator<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>> enumerator = null;
+
+            if (!_correlatedCollectionMetadata.TryGetValue(correlatedCollectionId, out var correlatedCollectionMetadataElement))
+            {
+                enumerator = correlatedCollectionFactory().GetEnumerator();
+
+                if (!enumerator.MoveNext())
+                {
+                    enumerator.Dispose();
+                    enumerator = null;
+                }
+
+                correlatedCollectionMetadataElement = (enumerator, default);
+                _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+            }
+            else
+            {
+                untypedEnumerator = correlatedCollectionMetadataElement.Enumerator;
+            }
+
+            var resultCollection = resultCollectionFactory(navigation);
+
+            if (enumerator == null)
+            {
+                if (untypedEnumerator == null)
+                {
+                    return resultCollection;
+                }
+
+                enumerator = (IEnumerator<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>>)untypedEnumerator;
+            }
+
+            while (true)
+            {
+                if (enumerator == null)
+                {
+                    return resultCollection;
+                }
+
+                var shouldCorrelate = correlationPredicate(outerKey, enumerator.Current.Item2);
+                if (shouldCorrelate)
+                {
+                    // if origin key changed, we got all child elements for a given parent, even if the correlation predicate matches 
+                    // e.g. orders.Select(o => o.Customer.Addresses) - if there are 10 orders but only 5 customers, we still need 10 collections of addresses, even though some of the addresses belong to same customer
+                    if (!correlatedCollectionMetadataElement.PreviousOriginKey.IsDefault()
+                        && !enumerator.Current.Item3.Equals(correlatedCollectionMetadataElement.PreviousOriginKey))
+                    {
+                        correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                        _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                        return resultCollection;
+                    }
+
+                    var result = enumerator.Current.Item1;
+
+                    correlatedCollectionMetadataElement.PreviousOriginKey = enumerator.Current.Item3;
+                    _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                    if (!enumerator.MoveNext())
+                    {
+                        enumerator.Dispose();
+                        enumerator = null;
+                        _correlatedCollectionMetadata[correlatedCollectionId] = default;
+                    }
+
+                    resultCollection.Add(result);
+
+                    if (tracking)
+                    {
+                        StartTracking(result, navigation.ForeignKey.DeclaringEntityType);
+                    }
+                }
+                else
+                {
+                    correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                    _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                    return resultCollection;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public async virtual Task<TCollection> CorrelateSubqueryAsync<TInner, TCollection>(
+            int correlatedCollectionId,
+            INavigation navigation,
+            Func<INavigation, TCollection> resultCollectionFactory,
+            MaterializedAnonymousObject outerKey,
+            bool tracking,
+            Func<IAsyncEnumerable<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>>> correlatedCollectionFactory,
+            Func<MaterializedAnonymousObject, MaterializedAnonymousObject, bool> correlationPredicate,
+            CancellationToken cancellationToken) where TCollection : ICollection<TInner>
+        {
+            IDisposable untypedEnumerator = null;
+            IAsyncEnumerator<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>> enumerator = null;
+
+            if (!_correlatedCollectionMetadata.TryGetValue(correlatedCollectionId, out var correlatedCollectionMetadataElement))
+            {
+                enumerator = correlatedCollectionFactory().GetEnumerator();
+
+                if (!await enumerator.MoveNext(cancellationToken))
+                {
+                    enumerator.Dispose();
+                    enumerator = null;
+                }
+
+                correlatedCollectionMetadataElement = (enumerator, default);
+                _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+            }
+            else
+            {
+                untypedEnumerator = correlatedCollectionMetadataElement.Enumerator;
+            }
+
+            var resultCollection = resultCollectionFactory(navigation);
+
+            if (enumerator == null)
+            {
+                if (untypedEnumerator == null)
+                {
+                    return resultCollection;
+                }
+
+                enumerator = (IAsyncEnumerator<Tuple<TInner, MaterializedAnonymousObject, MaterializedAnonymousObject>>)untypedEnumerator;
+            }
+
+            while (true)
+            {
+                if (enumerator == null)
+                {
+                    return resultCollection;
+                }
+
+                var shouldCorrelate = correlationPredicate(outerKey, enumerator.Current.Item2);
+                if (shouldCorrelate)
+                {
+                    // if origin key changed, we got all child elements for a given parent, even if the correlation predicate matches 
+                    // e.g. orders.Select(o => o.Customer.Addresses) - if there are 10 orders but only 5 customers, we still need 10 collections of addresses, even though some of the addresses belong to same customer
+                    if (!correlatedCollectionMetadataElement.PreviousOriginKey.IsDefault()
+                        && !enumerator.Current.Item3.Equals(correlatedCollectionMetadataElement.PreviousOriginKey))
+                    {
+                        correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                        _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                        return resultCollection;
+                    }
+
+                    var result = enumerator.Current.Item1;
+
+                    correlatedCollectionMetadataElement.PreviousOriginKey = enumerator.Current.Item3;
+                    _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                    if (!await enumerator.MoveNext(cancellationToken))
+                    {
+                        enumerator.Dispose();
+                        enumerator = null;
+                        _correlatedCollectionMetadata[correlatedCollectionId] = default;
+                    }
+
+                    resultCollection.Add(result);
+
+                    if (tracking)
+                    {
+                        StartTracking(result, navigation.ForeignKey.DeclaringEntityType);
+                    }
+                }
+                else
+                {
+                    correlatedCollectionMetadataElement.PreviousOriginKey = default;
+                    _correlatedCollectionMetadata[correlatedCollectionId] = correlatedCollectionMetadataElement;
+
+                    return resultCollection;
+                }
+            }
+        }
+
         void IDisposable.Dispose()
         {
             foreach (var kv in _includedCollections)
             {
                 kv.Value?.Dispose();
+            }
+
+            foreach (var kv in _correlatedCollectionMetadata)
+            {
+                kv.Value.Enumerator?.Dispose();
             }
         }
     }

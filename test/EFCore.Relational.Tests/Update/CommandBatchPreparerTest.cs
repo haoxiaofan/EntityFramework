@@ -13,6 +13,8 @@ using Microsoft.EntityFrameworkCore.Update.Internal;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+// ReSharper disable RedundantArgumentDefaultValue
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Update
 {
     public class CommandBatchPreparerTest
@@ -131,13 +133,13 @@ namespace Microsoft.EntityFrameworkCore.Update
             var entry = stateManager.GetOrCreateEntry(new FakeEntity { Id = 42, Value = "Test" });
             entry.SetEntityState(EntityState.Added);
 
-            var relatedentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
-            relatedentry.SetEntityState(EntityState.Added);
+            var relatedEntry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
+            relatedEntry.SetEntityState(EntityState.Added);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, entry }).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedEntry, entry }).ToArray();
 
             Assert.Equal(
-                new[] { entry, relatedentry },
+                new[] { entry, relatedEntry },
                 commandBatches.Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()));
         }
 
@@ -150,14 +152,14 @@ namespace Microsoft.EntityFrameworkCore.Update
             var entry = stateManager.GetOrCreateEntry(new FakeEntity { Id = 42, Value = "Test" });
             entry.SetEntityState(EntityState.Added);
 
-            var relatedentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
-            relatedentry.SetEntityState(EntityState.Modified);
-            relatedentry.SetPropertyModified(relatedentry.EntityType.FindProperty(nameof(RelatedFakeEntity.RelatedId)));
+            var relatedEntry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
+            relatedEntry.SetEntityState(EntityState.Modified);
+            relatedEntry.SetPropertyModified(relatedEntry.EntityType.FindProperty(nameof(RelatedFakeEntity.RelatedId)));
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedentry, entry }).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { relatedEntry, entry }).ToArray();
 
             Assert.Equal(
-                new[] { entry, relatedentry },
+                new[] { entry, relatedEntry },
                 commandBatches.Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()));
         }
 
@@ -167,16 +169,16 @@ namespace Microsoft.EntityFrameworkCore.Update
             var configuration = CreateContextServices(CreateSimpleFKModel());
             var stateManager = configuration.GetRequiredService<IStateManager>();
 
-            var firstentry = stateManager.GetOrCreateEntry(new FakeEntity { Id = 42, Value = "Test" });
-            firstentry.SetEntityState(EntityState.Added);
+            var firstEntry = stateManager.GetOrCreateEntry(new FakeEntity { Id = 42, Value = "Test" });
+            firstEntry.SetEntityState(EntityState.Added);
 
-            var secondentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 1 });
-            secondentry.SetEntityState(EntityState.Added);
+            var secondEntry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 1 });
+            secondEntry.SetEntityState(EntityState.Added);
 
-            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { secondentry, firstentry }).ToArray();
+            var commandBatches = CreateCommandBatchPreparer().BatchCommands(new[] { secondEntry, firstEntry }).ToArray();
 
             Assert.Equal(
-                new[] { firstentry, secondentry },
+                new[] { firstEntry, secondEntry },
                 commandBatches.Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()));
         }
 
@@ -252,7 +254,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                 .Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()).ToArray();
 
             Assert.Equal(
-                new[] { oldChildEntity, oldEntity, newEntity, newChildEntity },
+                new IUpdateEntry[] { oldChildEntity, oldEntity, newEntity, newChildEntity },
                 sortedEntities);
         }
 
@@ -269,21 +271,23 @@ namespace Microsoft.EntityFrameworkCore.Update
             var entry = stateManager.GetOrCreateEntry(fakeEntity);
             entry.SetEntityState(EntityState.Added);
 
-            var relatedentry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
-            relatedentry.SetEntityState(EntityState.Added);
+            var relatedEntry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 42 });
+            relatedEntry.SetEntityState(EntityState.Added);
 
             var factory = (TestModificationCommandBatchFactory)configuration.GetService<IModificationCommandBatchFactory>();
 
-            var commandBatches = CreateCommandBatchPreparer(factory).BatchCommands(new[] { relatedentry, entry });
+            var commandBatches = CreateCommandBatchPreparer(factory).BatchCommands(new[] { relatedEntry, entry });
 
-            var commandBatchesEnumerator = commandBatches.GetEnumerator();
-            commandBatchesEnumerator.MoveNext();
+            using (var commandBatchesEnumerator = commandBatches.GetEnumerator())
+            {
+                commandBatchesEnumerator.MoveNext();
 
-            Assert.Equal(1, factory.CreateCount);
+                Assert.Equal(1, factory.CreateCount);
 
-            commandBatchesEnumerator.MoveNext();
+                commandBatchesEnumerator.MoveNext();
 
-            Assert.Equal(2, factory.CreateCount);
+                Assert.Equal(2, factory.CreateCount);
+            }
         }
 
         [Fact]
@@ -309,7 +313,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                 .Select(cb => cb.ModificationCommands.Single()).Select(mc => mc.Entries.Single()).ToArray();
 
             Assert.Equal(
-                new[] { fakeEntry, relatedFakeEntry, fakeEntry2 },
+                new IUpdateEntry[] { fakeEntry, relatedFakeEntry, fakeEntry2 },
                 sortedEntities);
         }
 
@@ -328,8 +332,10 @@ namespace Microsoft.EntityFrameworkCore.Update
                 Assert.Throws<InvalidOperationException>(() => CreateCommandBatchPreparer().BatchCommands(new[] { entry }).ToList()).Message);
         }
 
-        [Fact]
-        public void Batch_command_throws_on_commands_with_circular_dependencies()
+        [InlineData(true)]
+        [InlineData(false)]
+        [Theory]
+        public void Batch_command_throws_on_commands_with_circular_dependencies(bool sensitiveLogging)
         {
             var model = CreateCyclicFKModel();
             var configuration = CreateContextServices(model);
@@ -341,18 +347,21 @@ namespace Microsoft.EntityFrameworkCore.Update
             var relatedFakeEntry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 1, RelatedId = 42 });
             relatedFakeEntry.SetEntityState(EntityState.Added);
 
+            var expectedCycle = sensitiveLogging
+                ? "FakeEntity { 'Id': 42 } [Added] <- ForeignKey { 'RelatedId': 42 } RelatedFakeEntity { 'Id': 1 } [Added] <- ForeignKey { 'RelatedId': 1 } FakeEntity { 'Id': 42 } [Added]"
+                : "FakeEntity [Added] <- ForeignKey { 'RelatedId' } RelatedFakeEntity [Added] <- ForeignKey { 'RelatedId' } FakeEntity [Added]";
+
             Assert.Equal(
-                CoreStrings.CircularDependency(
-                    string.Join(
-                        ", ",
-                        model.FindEntityType(typeof(RelatedFakeEntity)).GetForeignKeys().First(),
-                        model.FindEntityType(typeof(FakeEntity)).GetForeignKeys().First())),
+                CoreStrings.CircularDependency(expectedCycle),
                 Assert.Throws<InvalidOperationException>(
-                    () => CreateCommandBatchPreparer().BatchCommands(new[] { fakeEntry, relatedFakeEntry }).ToArray()).Message);
+                    () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: sensitiveLogging)
+                        .BatchCommands(new[] { fakeEntry, relatedFakeEntry }).ToArray()).Message);
         }
 
-        [Fact]
-        public void Batch_command_throws_on_commands_with_circular_dependencies_including_indexes()
+        [InlineData(true)]
+        [InlineData(false)]
+        [Theory]
+        public void Batch_command_throws_on_commands_with_circular_dependencies_including_indexes(bool sensitiveLogging)
         {
             var model = CreateCyclicFKModel();
             var configuration = CreateContextServices(model);
@@ -369,41 +378,43 @@ namespace Microsoft.EntityFrameworkCore.Update
             fakeEntry2.SetOriginalValue(fakeEntry2.EntityType.FindProperty(nameof(FakeEntity.UniqueValue)), "Test");
             fakeEntry2.SetPropertyModified(fakeEntry2.EntityType.FindPrimaryKey().Properties.Single(), isModified: false);
 
+            var expectedCycle = sensitiveLogging
+                ? "FakeEntity { 'Id': 42 } [Added] <- ForeignKey { 'RelatedId': 42 } RelatedFakeEntity { 'Id': 1 } [Added] <- ForeignKey { 'RelatedId': 1 } FakeEntity { 'Id': 2 } [Modified] <- Index { 'UniqueValue': Test } FakeEntity { 'Id': 42 } [Added]"
+                : "FakeEntity [Added] <- ForeignKey { 'RelatedId' } RelatedFakeEntity [Added] <- ForeignKey { 'RelatedId' } FakeEntity [Modified] <- Index { 'UniqueValue' } FakeEntity [Added]";
+
             Assert.Equal(
-                CoreStrings.CircularDependency(
-                    string.Join(
-                        ", ",
-                        model.FindEntityType(typeof(RelatedFakeEntity)).GetForeignKeys().Single(),
-                        model.FindEntityType(typeof(FakeEntity)).GetForeignKeys().Single(),
-                        model.FindEntityType(typeof(FakeEntity)).GetIndexes().Single(i => i.Properties.Any(p => p.Name == nameof(FakeEntity.UniqueValue))))),
+                CoreStrings.CircularDependency(expectedCycle),
                 Assert.Throws<InvalidOperationException>(
-                    () => CreateCommandBatchPreparer().BatchCommands(new[] { fakeEntry, relatedFakeEntry, fakeEntry2 }).ToArray()).Message);
+                    () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: sensitiveLogging)
+                        .BatchCommands(new[] { fakeEntry, relatedFakeEntry, fakeEntry2 }).ToArray()).Message);
         }
 
-        [Fact]
-        public void Batch_command_shows_correct_cycle_when_circular_dependencies()
+        [InlineData(true)]
+        [InlineData(false)]
+        [Theory]
+        public void Batch_command_throws_on_delete_commands_with_circular_dependencies(bool sensitiveLogging)
         {
             var model = CreateCyclicFkWithTailModel();
             var configuration = CreateContextServices(model);
             var stateManager = configuration.GetRequiredService<IStateManager>();
 
             var fakeEntry = stateManager.GetOrCreateEntry(new FakeEntity { Id = 1, RelatedId = 2 });
-            fakeEntry.SetEntityState(EntityState.Added);
+            fakeEntry.SetEntityState(EntityState.Deleted);
 
             var relatedFakeEntry = stateManager.GetOrCreateEntry(new RelatedFakeEntity { Id = 2, RelatedId = 1 });
-            relatedFakeEntry.SetEntityState(EntityState.Added);
+            relatedFakeEntry.SetEntityState(EntityState.Deleted);
 
             var anotherFakeEntry = stateManager.GetOrCreateEntry(new AnotherFakeEntity { Id = 3, AnotherId = 2 });
-            anotherFakeEntry.SetEntityState(EntityState.Added);
+            anotherFakeEntry.SetEntityState(EntityState.Deleted);
+
+            var expectedCycle = sensitiveLogging
+                ? "FakeEntity { 'Id': 1 } [Deleted] ForeignKey { 'RelatedId': 2 } <- RelatedFakeEntity { 'Id': 2 } [Deleted] ForeignKey { 'RelatedId': 1 } <- FakeEntity { 'Id': 1 } [Deleted]"
+                : "FakeEntity [Deleted] ForeignKey { 'RelatedId' } <- RelatedFakeEntity [Deleted] ForeignKey { 'RelatedId' } <- FakeEntity [Deleted]";
 
             Assert.Equal(
-                CoreStrings.CircularDependency(
-                    string.Join(
-                        ", ",
-                        model.FindEntityType(typeof(FakeEntity)).GetForeignKeys().First(),
-                        model.FindEntityType(typeof(RelatedFakeEntity)).GetForeignKeys().First())),
+                CoreStrings.CircularDependency(expectedCycle),
                 Assert.Throws<InvalidOperationException>(
-                    () => CreateCommandBatchPreparer().BatchCommands(
+                    () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: sensitiveLogging).BatchCommands(
                         // Order is important for this test. Entry which is not part of cycle but tail should come first.
                         new[] { anotherFakeEntry, fakeEntry, relatedFakeEntry }).ToArray()).Message);
         }
@@ -421,7 +432,7 @@ namespace Microsoft.EntityFrameworkCore.Update
             var secondEntry = stateManager.GetOrCreateEntry(second);
             secondEntry.SetEntityState(EntityState.Added);
 
-            var commandBatches = CreateCommandBatchPreparer(currentDbContext: currentDbContext).BatchCommands(new[] { firstEntry, secondEntry }).ToArray();
+            var commandBatches = CreateCommandBatchPreparer(stateManager: stateManager).BatchCommands(new[] { firstEntry, secondEntry }).ToArray();
             Assert.Equal(1, commandBatches.Length);
             Assert.Equal(1, commandBatches.First().ModificationCommands.Count);
 
@@ -472,7 +483,7 @@ namespace Microsoft.EntityFrameworkCore.Update
             entry.SetEntityState(EntityState.Modified);
             entry.SetPropertyModified(entry.EntityType.FindPrimaryKey().Properties.Single(), isModified: false);
 
-            var commandBatches = CreateCommandBatchPreparer(currentDbContext: currentDbContext).BatchCommands(new[] { entry }).ToArray();
+            var commandBatches = CreateCommandBatchPreparer(stateManager: stateManager).BatchCommands(new[] { entry }).ToArray();
             Assert.Equal(1, commandBatches.Length);
             Assert.Equal(1, commandBatches.First().ModificationCommands.Count);
 
@@ -524,7 +535,7 @@ namespace Microsoft.EntityFrameworkCore.Update
             var secondEntry = stateManager.GetOrCreateEntry(second);
             secondEntry.SetEntityState(EntityState.Deleted);
 
-            var commandBatches = CreateCommandBatchPreparer(currentDbContext: currentDbContext)
+            var commandBatches = CreateCommandBatchPreparer(stateManager: stateManager)
                 .BatchCommands(new[] { firstEntry, secondEntry }).ToArray();
 
             Assert.Equal(1, commandBatches.Length);
@@ -574,10 +585,10 @@ namespace Microsoft.EntityFrameworkCore.Update
             {
                 Assert.Equal(
                     RelationalStrings.ConflictingRowUpdateTypesSensitive(
-                        nameof(RelatedFakeEntity), "Id:42", EntityState.Deleted,
-                        nameof(FakeEntity), "Id:42", EntityState.Added),
+                        nameof(RelatedFakeEntity), "{Id: 42}", EntityState.Deleted,
+                        nameof(FakeEntity), "{Id: 42}", EntityState.Added),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                        () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: true)
                             .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
             }
             else
@@ -587,7 +598,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                         nameof(RelatedFakeEntity), EntityState.Deleted,
                         nameof(FakeEntity), EntityState.Added),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                        () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: false)
                             .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
             }
         }
@@ -628,10 +639,10 @@ namespace Microsoft.EntityFrameworkCore.Update
                 {
                     Assert.Equal(
                         RelationalStrings.ConflictingRowValuesSensitive(
-                            nameof(RelatedFakeEntity), nameof(FakeEntity), "Id:42",
-                            "RelatedId:2", "RelatedId:1", "{'RelatedId'}"),
+                            nameof(RelatedFakeEntity), nameof(FakeEntity), "{Id: 42}",
+                            "{RelatedId: 2}", "{RelatedId: 1}", "{'RelatedId'}"),
                         Assert.Throws<InvalidOperationException>(
-                            () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                            () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: true)
                                 .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
                 }
                 else
@@ -641,7 +652,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                             nameof(RelatedFakeEntity), nameof(FakeEntity),
                             "{'RelatedId'}", "{'RelatedId'}", "{'RelatedId'}"),
                         Assert.Throws<InvalidOperationException>(
-                            () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                            () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: false)
                                 .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
                 }
             }
@@ -651,10 +662,10 @@ namespace Microsoft.EntityFrameworkCore.Update
                 {
                     Assert.Equal(
                         RelationalStrings.ConflictingOriginalRowValuesSensitive(
-                            nameof(RelatedFakeEntity), nameof(FakeEntity), "Id:42",
-                            "RelatedId:2", "RelatedId:1", "{'RelatedId'}"),
+                            nameof(RelatedFakeEntity), nameof(FakeEntity), "{Id: 42}",
+                            "{RelatedId: 2}", "{RelatedId: 1}", "{'RelatedId'}"),
                         Assert.Throws<InvalidOperationException>(
-                            () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                            () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: true)
                                 .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
                 }
                 else
@@ -664,7 +675,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                             nameof(RelatedFakeEntity), nameof(FakeEntity),
                             "{'RelatedId'}", "{'RelatedId'}", "{'RelatedId'}"),
                         Assert.Throws<InvalidOperationException>(
-                            () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                            () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: false)
                                 .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
                 }
             }
@@ -680,7 +691,7 @@ namespace Microsoft.EntityFrameworkCore.Update
             var currentDbContext = CreateContextServices(CreateSharedTableModel()).GetRequiredService<ICurrentDbContext>();
             var stateManager = currentDbContext.GetDependencies().StateManager;
 
-            var first = new RelatedFakeEntity { Id = 42 };
+            var first = new DerivedRelatedFakeEntity { Id = 42 };
             var firstEntry = stateManager.GetOrCreateEntry(first);
             firstEntry.SetEntityState(state);
 
@@ -692,18 +703,18 @@ namespace Microsoft.EntityFrameworkCore.Update
             {
                 Assert.Equal(
                     RelationalStrings.SharedRowEntryCountMismatchSensitive(
-                        nameof(RelatedFakeEntity), nameof(FakeEntity), nameof(FakeEntity), "Id:42", state),
+                        nameof(DerivedRelatedFakeEntity), nameof(FakeEntity), nameof(FakeEntity), "{Id: 42}", state),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                        () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: true)
                             .BatchCommands(new[] { firstEntry }).ToArray()).Message);
             }
             else
             {
                 Assert.Equal(
                     RelationalStrings.SharedRowEntryCountMismatch(
-                        nameof(RelatedFakeEntity), nameof(FakeEntity), nameof(FakeEntity), state),
+                        nameof(DerivedRelatedFakeEntity), nameof(FakeEntity), nameof(FakeEntity), state),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                        () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: false)
                             .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
             }
         }
@@ -730,9 +741,9 @@ namespace Microsoft.EntityFrameworkCore.Update
             {
                 Assert.Equal(
                     RelationalStrings.SharedRowEntryCountMismatchSensitive(
-                        nameof(DerivedRelatedFakeEntity), nameof(FakeEntity), nameof(AnotherFakeEntity), "Id:42", state),
+                        nameof(DerivedRelatedFakeEntity), nameof(FakeEntity), nameof(AnotherFakeEntity), "{Id: 42}", state),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                        () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: true)
                             .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
             }
             else
@@ -741,7 +752,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                     RelationalStrings.SharedRowEntryCountMismatch(
                         nameof(DerivedRelatedFakeEntity), nameof(FakeEntity), nameof(AnotherFakeEntity), state),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
+                        () => CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: false)
                             .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
             }
         }
@@ -768,36 +779,38 @@ namespace Microsoft.EntityFrameworkCore.Update
             {
                 Assert.Equal(
                     RelationalStrings.SharedRowEntryCountMismatchSensitive(
-                        nameof(FakeEntity), nameof(FakeEntity), nameof(DerivedRelatedFakeEntity), "Id:42", state),
+                        nameof(FakeEntity), nameof(FakeEntity), nameof(RelatedFakeEntity), "{Id: 42}", state),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
-                            .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
+                        () =>
+                            CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: true)
+                                .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
             }
             else
             {
                 Assert.Equal(
                     RelationalStrings.SharedRowEntryCountMismatch(
-                        nameof(FakeEntity), nameof(FakeEntity), nameof(DerivedRelatedFakeEntity), state),
+                        nameof(FakeEntity), nameof(FakeEntity), nameof(RelatedFakeEntity), state),
                     Assert.Throws<InvalidOperationException>(
-                        () => CreateCommandBatchPreparer(currentDbContext: currentDbContext, sensitiveLogging: sensitiveLogging)
-                            .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
+                        () =>
+                            CreateCommandBatchPreparer(stateManager: stateManager, sensitiveLogging: false)
+                                .BatchCommands(new[] { firstEntry, secondEntry }).ToArray()).Message);
             }
         }
 
         private static IServiceProvider CreateContextServices(IModel model)
             => RelationalTestHelpers.Instance.CreateContextServices(model);
 
-        private static ICommandBatchPreparer CreateCommandBatchPreparer(
+        public ICommandBatchPreparer CreateCommandBatchPreparer(
             IModificationCommandBatchFactory modificationCommandBatchFactory = null,
-            ICurrentDbContext currentDbContext = null,
+            IStateManager stateManager = null,
             bool sensitiveLogging = false)
         {
             modificationCommandBatchFactory =
                 modificationCommandBatchFactory
                 ?? RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<IModificationCommandBatchFactory>();
 
-            currentDbContext = currentDbContext
-                               ?? RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<ICurrentDbContext>();
+            stateManager = stateManager
+                           ?? RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<IStateManager>();
 
             var loggingOptions = new LoggingOptions();
             if (sensitiveLogging)
@@ -806,12 +819,15 @@ namespace Microsoft.EntityFrameworkCore.Update
             }
 
             return new CommandBatchPreparer(
-                modificationCommandBatchFactory,
-                new ParameterNameGeneratorFactory(new ParameterNameGeneratorDependencies()),
-                new ModificationCommandComparer(),
-                new KeyValueIndexFactorySource(),
-                currentDbContext,
-                loggingOptions);
+                new CommandBatchPreparerDependencies(
+                    modificationCommandBatchFactory,
+                    new ParameterNameGeneratorFactory(new ParameterNameGeneratorDependencies()),
+                    new ModificationCommandComparer(),
+                    new KeyValueIndexFactorySource(),
+                    () => stateManager,
+                    loggingOptions,
+                    new FakeDiagnosticsLogger<DbLoggerCategory.Update>(),
+                    new DbContextOptionsBuilder().Options));
         }
 
         private static IModel CreateSimpleFKModel()
@@ -982,39 +998,6 @@ namespace Microsoft.EntityFrameworkCore.Update
         {
             public int Id { get; set; }
             public int? AnotherId { get; set; }
-        }
-
-        private class TestModificationCommandBatchFactory : IModificationCommandBatchFactory
-        {
-            private readonly IRelationalCommandBuilderFactory _commandBuilderFactory;
-            private readonly ISqlGenerationHelper _sqlGenerationHelper;
-            private readonly IUpdateSqlGenerator _updateSqlGenerator;
-            private readonly IRelationalValueBufferFactoryFactory _valueBufferFactoryFactory;
-
-            public TestModificationCommandBatchFactory(
-                IRelationalCommandBuilderFactory commandBuilderfactory,
-                ISqlGenerationHelper sqlGenerationHelper,
-                IUpdateSqlGenerator updateSqlGenerator,
-                IRelationalValueBufferFactoryFactory valueBufferFactoryFactory)
-            {
-                _commandBuilderFactory = commandBuilderfactory;
-                _sqlGenerationHelper = sqlGenerationHelper;
-                _updateSqlGenerator = updateSqlGenerator;
-                _valueBufferFactoryFactory = valueBufferFactoryFactory;
-            }
-
-            public int CreateCount { get; set; }
-
-            public ModificationCommandBatch Create()
-            {
-                CreateCount++;
-
-                return new SingularModificationCommandBatch(
-                    _commandBuilderFactory,
-                    _sqlGenerationHelper,
-                    _updateSqlGenerator,
-                    _valueBufferFactoryFactory);
-            }
         }
     }
 }

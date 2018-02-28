@@ -1,18 +1,26 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
-using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 {
+    /// <summary>
+    ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+    ///     directly from your code. This API may change or be removed in future releases.
+    /// </summary>
     public class SqlServerConventionSetBuilder : RelationalConventionSetBuilder
     {
         private readonly ISqlGenerationHelper _sqlGenerationHelper;
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqlServerConventionSetBuilder(
             [NotNull] RelationalConventionSetBuilderDependencies dependencies,
             [NotNull] ISqlGenerationHelper sqlGenerationHelper)
@@ -21,6 +29,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
             _sqlGenerationHelper = sqlGenerationHelper;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public override ConventionSet AddConventions(ConventionSet conventionSet)
         {
             Check.NotNull(conventionSet, nameof(conventionSet));
@@ -29,6 +41,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
 
             var valueGenerationStrategyConvention = new SqlServerValueGenerationStrategyConvention();
             conventionSet.ModelInitializedConventions.Add(valueGenerationStrategyConvention);
+            conventionSet.ModelInitializedConventions.Add(new RelationalMaxIdentifierLengthConvention(128));
 
             ValueGeneratorConvention valueGeneratorConvention = new SqlServerValueGeneratorConvention();
             ReplaceConvention(conventionSet.BaseEntityTypeChangedConventions, valueGeneratorConvention);
@@ -45,6 +58,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
             ReplaceConvention(conventionSet.ForeignKeyRemovedConventions, valueGeneratorConvention);
 
             var sqlServerIndexConvention = new SqlServerIndexConvention(_sqlGenerationHelper);
+
+            conventionSet.BaseEntityTypeChangedConventions.Add(sqlServerIndexConvention);
+
             conventionSet.IndexAddedConventions.Add(sqlServerInMemoryTablesConvention);
             conventionSet.IndexAddedConventions.Add(sqlServerIndexConvention);
 
@@ -62,17 +78,24 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions
             return conventionSet;
         }
 
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static ConventionSet Build()
         {
-            var sqlServerTypeMapper = new SqlServerTypeMapper(new RelationalTypeMapperDependencies());
+            var serviceProvider = new ServiceCollection()
+                .AddEntityFrameworkSqlServer()
+                .AddDbContext<DbContext>(o => o.UseSqlServer("Server=."))
+                .BuildServiceProvider();
 
-            return new SqlServerConventionSetBuilder(
-                    new RelationalConventionSetBuilderDependencies(sqlServerTypeMapper, null, null),
-                    new SqlServerSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()))
-                .AddConventions(
-                    new CoreConventionSetBuilder(
-                            new CoreConventionSetBuilderDependencies(sqlServerTypeMapper))
-                        .CreateConventionSet());
+            using (var serviceScope = serviceProvider.GetRequiredService<IServiceScopeFactory>().CreateScope())
+            {
+                using (var context = serviceScope.ServiceProvider.GetService<DbContext>())
+                {
+                    return ConventionSet.CreateConventionSet(context);
+                }
+            }
         }
     }
 }

@@ -110,7 +110,26 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             var entityType = new EntityType(type, this, configurationSource);
 
             _clrTypeMap[type] = entityType;
+
             return AddEntityType(entityType);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual EntityType AddQueryType([NotNull] Type type)
+        {
+            Check.NotNull(type, nameof(type));
+
+            var queryType = new EntityType(type, this, ConfigurationSource.Explicit)
+            {
+                IsQueryType = true
+            };
+
+            _clrTypeMap[type] = queryType;
+
+            return AddEntityType(queryType);
         }
 
         private EntityType AddEntityType(EntityType entityType)
@@ -120,7 +139,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             {
                 if (_entityTypes.ContainsKey(entityTypeName))
                 {
-                    throw new InvalidOperationException(CoreStrings.ClashingNonDependentEntityType(entityType.DisplayName()));
+                    throw new InvalidOperationException(CoreStrings.ClashingNonWeakEntityType(entityType.DisplayName()));
                 }
 
                 if (!_entityTypesWithDefiningNavigation.TryGetValue(entityTypeName, out var entityTypesWithSameType))
@@ -136,7 +155,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             {
                 if (_entityTypesWithDefiningNavigation.ContainsKey(entityTypeName))
                 {
-                    throw new InvalidOperationException(CoreStrings.ClashingDependentEntityType(entityType.DisplayName()));
+                    throw new InvalidOperationException(CoreStrings.ClashingWeakEntityType(entityType.DisplayName()));
                 }
 
                 var previousLength = _entityTypes.Count;
@@ -269,7 +288,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 }
             }
 
-            entityType.Builder = null;
+            entityType.OnTypeRemoved();
+
             return entityType;
         }
 
@@ -330,6 +350,25 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             [NotNull] string definingNavigationName,
             [NotNull] EntityType definingEntityType)
             => FindEntityType(type.DisplayName(), definingNavigationName, definingEntityType);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual EntityType FindEntityType(
+            [NotNull] string name,
+            [NotNull] string definingNavigationName,
+            [NotNull] string definingEntityTypeName)
+        {
+            if (!_entityTypesWithDefiningNavigation.TryGetValue(name, out var entityTypesWithSameType))
+            {
+                return null;
+            }
+
+            return entityTypesWithSameType
+                .FirstOrDefault(e => e.DefiningNavigationName == definingNavigationName
+                                     && e.DefiningEntityType.Name == definingEntityTypeName);
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -488,6 +527,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         IMutableEntityType IMutableModel.FindEntityType(string name) => FindEntityType(name);
         IMutableEntityType IMutableModel.AddEntityType(string name) => AddEntityType(name);
         IMutableEntityType IMutableModel.AddEntityType(Type type) => AddEntityType(type);
+        IMutableEntityType IMutableModel.AddQueryType(Type type) => AddQueryType(type);
         IMutableEntityType IMutableModel.RemoveEntityType(string name) => RemoveEntityType(name);
 
         IEntityType IModel.FindEntityType(string name, string definingNavigationName, IEntityType definingEntityType)

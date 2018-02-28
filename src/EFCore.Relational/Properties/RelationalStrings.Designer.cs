@@ -81,7 +81,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => GetString("RelationalNotInUse");
 
         /// <summary>
-        ///     The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used when the property value is 'null'.
+        ///     The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'.
         /// </summary>
         public static readonly EventDefinition<string, string> LogBoolWithDefaultWarning
             = new EventDefinition<string, string>(
@@ -319,7 +319,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 property, entityType);
 
         /// <summary>
-        ///     An ambient transaction has been detected. Entity Framework Core does not support ambient transactions. See http://go.microsoft.com/fwlink/?LinkId=800142
+        ///     An ambient transaction has been detected. The current provider does not support ambient transactions. See http://go.microsoft.com/fwlink/?LinkId=800142
         /// </summary>
         public static readonly EventDefinition LogAmbientTransaction
             = new EventDefinition(
@@ -461,20 +461,12 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 table, entityType, otherEntityType, keyName, primaryKey, otherName, otherPrimaryKey);
 
         /// <summary>
-        ///     Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between the primary key {primaryKey} and the primary key {otherPrimaryKey}.
+        ///     Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between their primary keys.
         /// </summary>
-        public static string IncompatibleTableNoRelationship([CanBeNull] object table, [CanBeNull] object entityType, [CanBeNull] object otherEntityType, [CanBeNull] object primaryKey, [CanBeNull] object otherPrimaryKey)
+        public static string IncompatibleTableNoRelationship([CanBeNull] object table, [CanBeNull] object entityType, [CanBeNull] object otherEntityType)
             => string.Format(
-                GetString("IncompatibleTableNoRelationship", nameof(table), nameof(entityType), nameof(otherEntityType), nameof(primaryKey), nameof(otherPrimaryKey)),
-                table, entityType, otherEntityType, primaryKey, otherPrimaryKey);
-
-        /// <summary>
-        ///     Cannot use table '{table}' for entity type '{dependentType}' since it has a relationship to a derived entity type '{principalType}'. Either point the relationship to the base type '{rootType}' or map '{dependentType}' to a different table.
-        /// </summary>
-        public static string IncompatibleTableDerivedPrincipal([CanBeNull] object table, [CanBeNull] object dependentType, [CanBeNull] object principalType, [CanBeNull] object rootType)
-            => string.Format(
-                GetString("IncompatibleTableDerivedPrincipal", nameof(table), nameof(dependentType), nameof(principalType), nameof(rootType)),
-                table, dependentType, principalType, rootType);
+                GetString("IncompatibleTableNoRelationship", nameof(table), nameof(entityType), nameof(otherEntityType)),
+                table, entityType, otherEntityType);
 
         /// <summary>
         ///     Property '{property}' on entity type '{entityType}' is part of a primary or alternate key but has a constant default value set. Constant default values are not useful for primary or alternate keys since these properties must always have non-null unqiue values.
@@ -655,7 +647,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 firstEntityType, secondEntityType, keyValue, firstConflictingValues, secondConflictingValues, columns);
 
         /// <summary>
-        ///     The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.
+        ///     The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.
         /// </summary>
         public static string SharedRowEntryCountMismatch([CanBeNull] object entityType, [CanBeNull] object tableName, [CanBeNull] object missingEntityType, [CanBeNull] object state)
             => string.Format(
@@ -663,7 +655,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 entityType, tableName, missingEntityType, state);
 
         /// <summary>
-        ///     The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.
+        ///     The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.
         /// </summary>
         public static string SharedRowEntryCountMismatchSensitive([CanBeNull] object entityType, [CanBeNull] object tableName, [CanBeNull] object missingEntityType, [CanBeNull] object keyValue, [CanBeNull] object state)
             => string.Format(
@@ -849,14 +841,6 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 parameter, function, type);
 
         /// <summary>
-        ///     The DbFunction '{function}' must be a static method. Non-static methods are not supported.
-        /// </summary>
-        public static string DbFunctionMethodMustBeStatic([CanBeNull] object function)
-            => string.Format(
-                GetString("DbFunctionMethodMustBeStatic", nameof(function)),
-                function);
-
-        /// <summary>
         ///     The DbFunction '{function}' is generic. Generic methods are not supported.
         /// </summary>
         public static string DbFunctionGenericMethodNotSupported([CanBeNull] object function)
@@ -871,6 +855,100 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => string.Format(
                 GetString("DbFunctionExpressionIsNotMethodCall", nameof(expression)),
                 expression);
+
+        /// <summary>
+        ///     The DbFunction '{function}' defined on type '{type}' must be either a static method or an instance method defined on a DbContext subclass. Instance methods on other types are not supported.
+        /// </summary>
+        public static string DbFunctionInvalidInstanceType([CanBeNull] object function, [CanBeNull] object type)
+            => string.Format(
+                GetString("DbFunctionInvalidInstanceType", nameof(function), nameof(type)),
+                function, type);
+
+        /// <summary>
+        ///     An ambient transaction has been detected. The ambient transaction needs to be completed before beginning a transaction on this connection.
+        /// </summary>
+        public static string ConflictingAmbientTransaction
+            => GetString("ConflictingAmbientTransaction");
+
+        /// <summary>
+        ///     The connection is currently enlisted in a transaction. The enlisted transaction needs to be completed before starting a transaction.
+        /// </summary>
+        public static string ConflictingEnlistedTransaction
+            => GetString("ConflictingEnlistedTransaction");
+
+        /// <summary>
+        ///     The specified MinBatchSize value is not valid. It must be a positive number.
+        /// </summary>
+        public static string InvalidMinBatchSize
+            => GetString("InvalidMinBatchSize");
+
+        /// <summary>
+        ///     Expected a non-null value for query parameter '{parameter}'.
+        /// </summary>
+        public static string ExpectedNonNullParameter([CanBeNull] object parameter)
+            => string.Format(
+                GetString("ExpectedNonNullParameter", nameof(parameter)),
+                parameter);
+
+        /// <summary>
+        ///     Enlisted in an ambient transaction with isolation level '{isolationLevel}'.
+        /// </summary>
+        public static readonly EventDefinition<string> LogAmbientTransactionEnlisted
+            = new EventDefinition<string>(
+                RelationalEventId.AmbientTransactionEnlisted,
+                LogLevel.Debug,
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    RelationalEventId.AmbientTransactionEnlisted,
+                    _resourceManager.GetString("LogAmbientTransactionEnlisted")));
+
+        /// <summary>
+        ///     Enlisted in an explicit transaction with isolation level '{isolationLevel}'.
+        /// </summary>
+        public static readonly EventDefinition<string> LogExplicitTransactionEnlisted
+            = new EventDefinition<string>(
+                RelationalEventId.ExplicitTransactionEnlisted,
+                LogLevel.Debug,
+                LoggerMessage.Define<string>(
+                    LogLevel.Debug,
+                    RelationalEventId.ExplicitTransactionEnlisted,
+                    _resourceManager.GetString("LogExplicitTransactionEnlisted")));
+
+        /// <summary>
+        ///     Executing update commands individually as the number of batchable commands ({batchableCommandsCount}) is smaller than the minimum batch size ({minBatchSize}).
+        /// </summary>
+        public static readonly EventDefinition<int, int> LogBatchSmallerThanMinBatchSize
+            = new EventDefinition<int, int>(
+                RelationalEventId.BatchSmallerThanMinBatchSize,
+                LogLevel.Debug,
+                LoggerMessage.Define<int, int>(
+                    LogLevel.Debug,
+                    RelationalEventId.BatchSmallerThanMinBatchSize,
+                    _resourceManager.GetString("LogBatchSmallerThanMinBatchSize")));
+
+        /// <summary>
+        ///     Executing {batchCommandsCount} update commands as a batch.
+        /// </summary>
+        public static readonly EventDefinition<int> LogBatchReadyForExecution
+            = new EventDefinition<int>(
+                RelationalEventId.BatchReadyForExecution,
+                LogLevel.Debug,
+                LoggerMessage.Define<int>(
+                    LogLevel.Debug,
+                    RelationalEventId.BatchReadyForExecution,
+                    _resourceManager.GetString("LogBatchReadyForExecution")));
+
+        /// <summary>
+        ///     A MigrationAttribute isn't specified on the '{class}' class.
+        /// </summary>
+        public static readonly EventDefinition<string> LogMigrationAttributeMissingWarning
+            = new EventDefinition<string>(
+                RelationalEventId.MigrationAttributeMissingWarning,
+                LogLevel.Warning,
+                LoggerMessage.Define<string>(
+                    LogLevel.Warning,
+                    RelationalEventId.MigrationAttributeMissingWarning,
+                    _resourceManager.GetString("LogMigrationAttributeMissingWarning")));
 
         private static string GetString(string name, params string[] formatterNames)
         {

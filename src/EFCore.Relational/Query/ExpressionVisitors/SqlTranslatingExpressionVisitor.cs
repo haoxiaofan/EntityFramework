@@ -45,7 +45,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         private readonly ICompositeMethodCallTranslator _methodCallTranslator;
         private readonly IMemberTranslator _memberTranslator;
         private readonly RelationalQueryModelVisitor _queryModelVisitor;
-        private readonly IRelationalTypeMapper _relationalTypeMapper;
+        private readonly IRelationalTypeMappingSource _typeMappingSource;
         private readonly SelectExpression _targetSelectExpression;
         private readonly Expression _topLevelPredicate;
 
@@ -75,7 +75,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
             _compositeExpressionFragmentTranslator = dependencies.CompositeExpressionFragmentTranslator;
             _methodCallTranslator = dependencies.MethodCallTranslator;
             _memberTranslator = dependencies.MemberTranslator;
-            _relationalTypeMapper = dependencies.RelationalTypeMapper;
+            _typeMappingSource = dependencies.TypeMappingSource;
             _queryModelVisitor = queryModelVisitor;
             _targetSelectExpression = targetSelectExpression;
             _topLevelPredicate = topLevelPredicate;
@@ -110,6 +110,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                 return Visit(translatedExpression);
             }
 
+            // ReSharper disable once ConditionIsAlwaysTrueOrFalse
             if (expression != null
                 && (expression.NodeType == ExpressionType.Convert
                     || expression.NodeType == ExpressionType.Negate
@@ -324,9 +325,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
             private bool? _canRemoveNullCheck;
 
             public NullCheckRemovalTestingVisitor(RelationalQueryModelVisitor queryModelVisitor)
-            {
-                _queryModelVisitor = queryModelVisitor;
-            }
+                => _queryModelVisitor = queryModelVisitor;
 
             public bool CanRemoveNullCheck(
                 Expression testExpression,
@@ -482,7 +481,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         {
             var binaryExpression = expression as BinaryExpression;
             var leftConstantExpression = binaryExpression?.Left as ConstantExpression;
+#pragma warning disable IDE0019 // Use pattern matching
             var leftExpressions = leftConstantExpression?.Value as Expression[];
+#pragma warning restore IDE0019 // Use pattern matching
             var rightConstantExpression = binaryExpression?.Right as ConstantExpression;
             var rightExpressions = rightConstantExpression?.Value as Expression[];
 
@@ -613,7 +614,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         {
             Check.NotNull(methodCallExpression, nameof(methodCallExpression));
 
-            var operand = Visit(methodCallExpression.Object);
+            var operand = _queryModelVisitor.QueryCompilationContext.Model.Relational().FindDbFunction(methodCallExpression.Method) != null
+                ? methodCallExpression.Object
+                : Visit(methodCallExpression.Object);
 
             if (operand != null
                 || methodCallExpression.Object == null)
@@ -646,7 +649,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                 }
             }
 
-            if (AnonymousObject.IsGetValueExpression(methodCallExpression, out var querySourceReferenceExpression))
+            if (AnonymousObject.IsGetValueExpression(methodCallExpression, out var querySourceReferenceExpression)
+                || MaterializedAnonymousObject.IsGetValueExpression(methodCallExpression, out querySourceReferenceExpression))
             {
                 var selectExpression
                     = _queryModelVisitor.TryGetQuery(querySourceReferenceExpression.ReferencedQuerySource);
@@ -860,7 +864,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                     return Expression.Constant(memberBindings);
                 }
             }
-            else if (expression.Type == typeof(AnonymousObject))
+            else if (expression.Type == typeof(AnonymousObject)
+                || expression.Type == typeof(MaterializedAnonymousObject))
             {
                 var propertyCallExpressions
                     = ((NewArrayExpression)expression.Arguments.Single()).Expressions;
@@ -906,8 +911,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                     || fromExpression.NodeType == ExpressionType.ListInit
                     || fromExpression.NodeType == ExpressionType.NewArrayInit)
                 {
-                    var containsItem = Visit(contains.Item)?.RemoveConvert();
-                    if (containsItem != null)
+                    var containsItem = Visit(contains.Item);
+                    if (containsItem != null
+                        && containsItem.Type == contains.Item.Type)
                     {
                         return new InExpression(containsItem, new[] { fromExpression });
                     }
@@ -940,6 +946,13 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                     var queryModelMapping = new Dictionary<QueryModel, QueryModel>();
                     subQueryModel.PopulateQueryModelMapping(queryModelMapping);
 
+                    var groupByTranslation = expression.QueryModel.MainFromClause.FromExpression.Type.IsGrouping();
+                    if (groupByTranslation)
+                    {
+                        var outerSelectExpression = _targetSelectExpression.Clone();
+                        subQueryModelVisitor.AddQuery(subQueryModel.MainFromClause, outerSelectExpression);
+                    }
+
                     subQueryModelVisitor.VisitSubQueryModel(subQueryModel);
 
                     if (subQueryModelVisitor.IsLiftable)
@@ -955,6 +968,12 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
 
                         _queryModelVisitor.LiftInjectedParameters(subQueryModelVisitor);
 
+                        if (groupByTranslation
+                            && selectExpression.Projection.Count == 1)
+                        {
+                            return selectExpression.Projection.Single();
+                        }
+
                         return selectExpression;
                     }
 
@@ -967,10 +986,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
 
         private bool IsStreamedSingleValueSupportedType(IStreamedDataInfo outputDataInfo)
             => outputDataInfo is StreamedSingleValueInfo streamedSingleValueInfo
-               && _relationalTypeMapper.FindMapping(
-                   streamedSingleValueInfo.DataType
-                       .UnwrapNullableType()
-                       .UnwrapEnumType()) != null;
+               && _typeMappingSource.FindMapping(streamedSingleValueInfo.DataType) != null;
 
         /// <summary>
         ///     Visits a constant expression.
@@ -988,14 +1004,11 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                 return expression;
             }
 
-            var underlyingType = expression.Type.UnwrapNullableType().UnwrapEnumType();
+            var type = expression.Type == typeof(Enum)
+                ? expression.Value.GetType()
+                : expression.Type;
 
-            if (underlyingType == typeof(Enum))
-            {
-                underlyingType = expression.Value.GetType();
-            }
-
-            return _relationalTypeMapper.FindMapping(underlyingType) != null
+            return _typeMappingSource.FindMapping(type) != null
                 ? expression
                 : null;
         }
@@ -1011,9 +1024,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         {
             Check.NotNull(expression, nameof(expression));
 
-            var underlyingType = expression.Type.UnwrapNullableType().UnwrapEnumType();
-
-            return _relationalTypeMapper.FindMapping(underlyingType) != null
+            return _typeMappingSource.FindMapping(expression.Type) != null
                 ? expression
                 : null;
         }
@@ -1093,6 +1104,10 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                         ? new NullCompensatedExpression(newOperand)
                         : nullCompensatedExpression;
                 }
+                case DiscriminatorPredicateExpression discriminatorPredicateExpression:
+                    return new DiscriminatorPredicateExpression(
+                        base.VisitExtension(expression), discriminatorPredicateExpression.QuerySource);
+
                 default:
                     return base.VisitExtension(expression);
             }
@@ -1129,9 +1144,9 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
                 }
             }
 
-            var type = expression.ReferencedQuerySource.ItemType.UnwrapNullableType().UnwrapEnumType();
+            var type = expression.ReferencedQuerySource.ItemType;
 
-            if (_relationalTypeMapper.FindMapping(type) != null)
+            if (_typeMappingSource.FindMapping(type) != null)
             {
                 var selectExpression = _queryModelVisitor.TryGetQuery(expression.ReferencedQuerySource);
 
@@ -1170,7 +1185,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors
         /// <returns>An object to replace <paramref name="unhandledItem" /> in the expression tree. Alternatively, the method can throw any exception.</returns>
         protected override TResult VisitUnhandledItem<TItem, TResult>(
             TItem unhandledItem, string visitMethod, Func<TItem, TResult> baseBehavior)
-            => default(TResult);
+            => default;
 
         /// <summary>
         ///     Creates an unhandled item exception.

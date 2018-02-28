@@ -4,6 +4,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.TestModels.GearsOfWarModel;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
@@ -447,11 +448,12 @@ namespace Microsoft.EntityFrameworkCore.Query
                 ws => ws
                     .Include(w => w.Owner)
                     .Where(w => w.Owner.Nickname != "Paduk")
-                    .OrderBy(e => e.Owner.CityOfBirth.Name),
+                    .OrderBy(e => e.Owner.CityOfBirth.Name).ThenBy(e => e.Id),
                 ws => ws
                     .Include(w => w.Owner)
                     .Where(w => Maybe(w.Owner, () => w.Owner.Nickname) != "Paduk")
-                    .OrderBy(e => Maybe(e.Owner, () => Maybe(e.Owner.CityOfBirth, () => e.Owner.CityOfBirth.Name))),
+                    .OrderBy(e => Maybe(e.Owner, () => Maybe(e.Owner.CityOfBirth, () => e.Owner.CityOfBirth.Name)))
+                    .ThenBy(e => e.Id),
                 expectedIncludes,
                 assertOrder: true);
         }
@@ -922,7 +924,9 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             AssertQuery<CogTag>(
                 ts => from t in ts
+#pragma warning disable IDE0031 // Use null propagation
                       select t.Gear != null ? t.Gear.Nickname : null,
+#pragma warning restore IDE0031 // Use null propagation
                 ts => from t in ts
                       select t.Gear != null ? Maybe(t.Gear, () => t.Gear.Nickname) : null);
         }
@@ -988,9 +992,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             AssertQuery<Gear>(
                 gs => from g in gs
-                      // ReSharper disable once ConstantNullCoalescingCondition
-                      // ReSharper disable once ConstantNullCoalescingCondition
-                      // ReSharper disable once ConstantNullCoalescingCondition
+                          // ReSharper disable once ConstantNullCoalescingCondition
                       where (new { Name = g.LeaderNickname } ?? new { Name = g.FullName }) != null
                       select g.Nickname);
         }
@@ -1024,7 +1026,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             AssertQuery<Gear>(
                 gs => from g in gs
-                      // ReSharper disable once EqualExpressionComparison
+                          // ReSharper disable once EqualExpressionComparison
                       where new { Five = 5 } == new { Five = 5 }
                       select g.Nickname);
         }
@@ -1558,8 +1560,10 @@ namespace Microsoft.EntityFrameworkCore.Query
                       join g2 in gs.Include(g => g.Weapons)
                           on g1.LeaderNickname equals g2.Nickname into grouping
                       from g2 in grouping.DefaultIfEmpty()
-                      // ReSharper disable once MergeConditionalExpression
+                          // ReSharper disable once MergeConditionalExpression
+#pragma warning disable IDE0029 // Use coalesce expression
                       select g2 != null ? g2 : g1,
+#pragma warning restore IDE0029 // Use coalesce expression
                 expectedIncludes);
         }
 
@@ -1577,8 +1581,10 @@ namespace Microsoft.EntityFrameworkCore.Query
                       join g2 in gs.Include(g => g.Weapons)
                           on g1.LeaderNickname equals g2.Nickname into grouping
                       from g2 in grouping.DefaultIfEmpty()
-                      // ReSharper disable once MergeConditionalExpression
+                          // ReSharper disable once MergeConditionalExpression
+#pragma warning disable IDE0029 // Use coalesce expression
                       select new { g1, g2, coalesce = g2 ?? g1, conditional = g2 != null ? g2 : g1 },
+#pragma warning restore IDE0029 // Use coalesce expression
                 expectedIncludes,
                 elementSorter: e => e.g1.Nickname + " " + e.g2?.Nickname,
                 clientProjections: new List<Func<dynamic, object>> { e => e.g1, e => e.g2, e => e.coalesce, e => e.conditional });
@@ -1754,7 +1760,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 gs => gs
                     .Where(g => g.CityOfBirth.Name == "Ephyra" || g.CityOfBirth.Name == "Hanover")
                     .OrderBy(g => g.Nickname)
-                    .Select(g => g.Weapons.Where(w => w.Name != "Lancer")),
+                    .Select(g => g.Weapons.Where(w => w.Name != "Lancer").ToList()),
                 assertOrder: true,
                 elementAsserter: CollectionAsserter<Weapon>(e => e.Id, (e, a) => Assert.Equal(e.Id, a.Id)));
         }
@@ -1763,7 +1769,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual void Select_correlated_filtered_collection_with_composite_key()
         {
             AssertQuery<Gear>(
-                gs => gs.OfType<Officer>().OrderBy(g => g.Nickname).Select(g => g.Reports.Where(r => r.Nickname != "Dom")),
+                gs => gs.OfType<Officer>().OrderBy(g => g.Nickname).Select(g => g.Reports.Where(r => r.Nickname != "Dom").ToList()),
                 assertOrder: true,
                 elementAsserter: CollectionAsserter<Gear>(e => e.Nickname, (e, a) => Assert.Equal(e.Nickname, a.Nickname)));
         }
@@ -1850,7 +1856,25 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
-        public virtual void DateTimeOffset_Date_works()
+        public virtual void Where_datetimeoffset_now()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline != DateTimeOffset.Now
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_utcnow()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline != DateTimeOffset.UtcNow
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_date_component()
         {
             AssertQuery<Mission>(
                 ms => from m in ms
@@ -1859,11 +1883,74 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
-        public virtual void DateTimeOffset_Datepart_works()
+        public virtual void Where_datetimeoffset_year_component()
         {
             AssertQuery<Mission>(
                 ms => from m in ms
-                      where m.Timeline.Month == 5
+                      where m.Timeline.Year == 2
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_month_component()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline.Month == 1
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_dayofyear_component()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline.DayOfYear == 2
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_day_component()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline.Day == 2
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_hour_component()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline.Hour == 10
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_minute_component()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline.Minute == 0
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_second_component()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline.Second == 0
+                      select m);
+        }
+
+        [ConditionalFact]
+        public virtual void Where_datetimeoffset_millisecond_component()
+        {
+            AssertQuery<Mission>(
+                ms => from m in ms
+                      where m.Timeline.Millisecond == 0
                       select m);
         }
 
@@ -1931,7 +2018,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from t in ts
                     join g in gs on t.GearNickName equals g.Nickname into grouping
                     from g in ClientDefaultIfEmpty(grouping)
+#pragma warning disable IDE0031 // Use null propagation
                     select new { t.Note, Nickname = g != null ? g.Nickname : null },
+#pragma warning restore IDE0031 // Use null propagation
                 elementSorter: e => e.Note);
         }
 
@@ -2058,7 +2147,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Client_side_equality_with_parameter_works_with_optional_navigations()
         {
-            var prm = "Marcus's Tag";
+            var prm = "Marcus' Tag";
 
             AssertQuery<Gear>(
                 gs => gs.Where(g => ClientEquals(g.Tag.Note, prm)),
@@ -2066,7 +2155,9 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         private static bool ClientEquals(string first, string second)
-            => first == second;
+        {
+            return first == second;
+        }
 
         [ConditionalFact]
         public virtual void Contains_with_local_nullable_guid_list_closure()
@@ -2411,7 +2502,9 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         private static Weapon FavoriteWeapon(IEnumerable<Weapon> weapons)
-            => weapons.OrderBy(w => w.Id).FirstOrDefault();
+        {
+            return weapons.OrderBy(w => w.Id).FirstOrDefault();
+        }
 
         private static IEnumerable<Gear> Veterans(IEnumerable<Gear> gears)
         {
@@ -2746,7 +2839,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             {
                 var query = from g1 in ctx.Gears
                             from g2 in ctx.Gears
-                            // ReSharper disable once PossibleUnintendedReferenceComparison
+                                // ReSharper disable once PossibleUnintendedReferenceComparison
                             where g1.Weapons == g2.Weapons
                             orderby g1.Nickname
                             select new { Nickname1 = g1.Nickname, Nickname2 = g2.Nickname };
@@ -2817,7 +2910,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var result = query.ToList();
 
                 Assert.Equal(1, result.Count);
-                Assert.Equal("Marcus's Tag", result[0].Note);
+                Assert.Equal("Marcus' Tag", result[0].Note);
             }
         }
 
@@ -2912,6 +3005,1258 @@ namespace Microsoft.EntityFrameworkCore.Query
                 Assert.Equal(1, result.Count(r => r.Id == 1 && r.Gears.Count == 3));
                 Assert.Equal(1, result.Count(r => r.Id == 2 && r.Gears.Count == 0));
             }
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_on_derived_type_using_string()
+        {
+            AssertIncludeQuery<LocustLeader>(
+                lls => lls.Include("DefeatedBy"),
+                new List<IExpectedInclude> { new ExpectedInclude<LocustCommander>(lc => lc.DefeatedBy, "DefeatedBy") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_on_derived_type_using_string_nested1()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<LocustCommander>(lc => lc.DefeatedBy, "DefeatedBy"),
+                new ExpectedInclude<Gear>(g => g.Squad, "Squad", "DefeatedBy"),
+            };
+
+            AssertIncludeQuery<LocustLeader>(
+                lls => lls.Include("DefeatedBy.Squad"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_on_derived_type_using_string_nested2()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<LocustCommander>(lc => lc.DefeatedBy, "DefeatedBy"),
+                new ExpectedInclude<Officer>(o => o.Reports, "Reports", "DefeatedBy"),
+                new ExpectedInclude<Gear>(g => g.CityOfBirth, "CityOfBirth", "DefeatedBy.Reports"),
+            };
+
+            AssertIncludeQuery<LocustLeader>(
+                lls => lls.Include("DefeatedBy.Reports.CityOfBirth"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_on_derived_type_using_lambda()
+        {
+            AssertIncludeQuery<LocustLeader>(
+                lls => lls.Include(ll => ((LocustCommander)ll).DefeatedBy),
+                new List<IExpectedInclude> { new ExpectedInclude<LocustCommander>(lc => lc.DefeatedBy, "DefeatedBy") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_on_derived_type_using_lambda_with_soft_cast()
+        {
+            AssertIncludeQuery<LocustLeader>(
+                lls => lls.Include(ll => (ll as LocustCommander).DefeatedBy),
+                new List<IExpectedInclude> { new ExpectedInclude<LocustCommander>(lc => lc.DefeatedBy, "DefeatedBy") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_on_derived_type_using_lambda_with_tracking()
+        {
+            AssertIncludeQuery<LocustLeader>(
+                lls => lls.AsTracking().Include(ll => ((LocustCommander)ll).DefeatedBy),
+                new List<IExpectedInclude> { new ExpectedInclude<LocustCommander>(lc => lc.DefeatedBy, "DefeatedBy") },
+                entryCount: 7);
+        }
+
+        [ConditionalFact]
+        public virtual void Include_collection_on_derived_type_using_string()
+        {
+            AssertIncludeQuery<Gear>(
+                gs => gs.Include("Reports"),
+                new List<IExpectedInclude> { new ExpectedInclude<Officer>(o => o.Reports, "Reports") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_collection_on_derived_type_using_lambda()
+        {
+            AssertIncludeQuery<Gear>(
+                gs => gs.Include(g => ((Officer)g).Reports),
+                new List<IExpectedInclude> { new ExpectedInclude<Officer>(o => o.Reports, "Reports") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_collection_on_derived_type_using_lambda_with_soft_cast()
+        {
+            AssertIncludeQuery<Gear>(
+                gs => gs.Include(g => (g as Officer).Reports),
+                new List<IExpectedInclude> { new ExpectedInclude<Officer>(o => o.Reports, "Reports") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_base_navigation_on_derived_entity()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<Officer>(e => e.Tag, "Tag"),
+                new ExpectedInclude<Officer>(e => e.Weapons, "Weapons")
+            };
+
+            AssertIncludeQuery<Gear>(
+                gs => gs.Include(g => ((Officer)g).Tag).Include(g => ((Officer)g).Weapons),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void ThenInclude_collection_on_derived_after_base_reference()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<CogTag>(e => e.Gear, "Gear"),
+                new ExpectedInclude<Officer>(e => e.Weapons, "Weapons", "Gear")
+            };
+
+            AssertIncludeQuery<CogTag>(
+                ts => ts.Include(t => t.Gear).ThenInclude(g => (g as Officer).Weapons),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void ThenInclude_collection_on_derived_after_derived_reference()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<LocustHorde>(e => e.Commander, "Commander"),
+                new ExpectedInclude<LocustCommander>(e => e.DefeatedBy, "DefeatedBy", "Commander"),
+                new ExpectedInclude<Officer>(e => e.Reports, "Reports", "Commander.DefeatedBy"),
+            };
+
+            AssertIncludeQuery<Faction>(
+                fs => fs.Include(f => (f as LocustHorde).Commander).ThenInclude(c => (c.DefeatedBy as Officer).Reports),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void ThenInclude_collection_on_derived_after_derived_collection()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<Officer>(e => e.Reports, "Reports"),
+                new ExpectedInclude<Officer>(e => e.Reports, "Reports", "Reports"),
+            };
+
+            AssertIncludeQuery<Gear>(
+                gs => gs.Include(g => ((Officer)g).Reports).ThenInclude(g => ((Officer)g).Reports),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void ThenInclude_reference_on_derived_after_derived_collection()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<LocustHorde>(e => e.Leaders, "Leaders"),
+                new ExpectedInclude<LocustCommander>(e => e.DefeatedBy, "DefeatedBy", "Leaders")
+            };
+
+            AssertIncludeQuery<Faction>(
+                fs => fs.Include(f => ((LocustHorde)f).Leaders).ThenInclude(l => ((LocustCommander)l).DefeatedBy),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void Multiple_derived_included_on_one_method()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<LocustHorde>(e => e.Commander, "Commander"),
+                new ExpectedInclude<LocustCommander>(e => e.DefeatedBy, "DefeatedBy", "Commander"),
+                new ExpectedInclude<Officer>(e => e.Reports, "Reports", "Commander.DefeatedBy" )
+            };
+
+            AssertIncludeQuery<Faction>(
+                fs => fs.Include(f => (((LocustHorde)f).Commander.DefeatedBy as Officer).Reports),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void Include_on_derived_multi_level()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<Officer>(e => e.Reports, "Reports"),
+                new ExpectedInclude<Gear>(e => e.Squad, "Squad", "Reports"),
+                new ExpectedInclude<Squad>(e => e.Missions, "Missions", "Reports.Squad")
+            };
+
+            AssertIncludeQuery<Gear>(
+                gs => gs.Include(g => ((Officer)g).Reports).ThenInclude(g => g.Squad.Missions),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void Include_collection_and_invalid_navigation_using_string_throws()
+        {
+            Assert.Equal(
+                CoreStrings.IncludeBadNavigation("Foo", "Gear"),
+                Assert.Throws<InvalidOperationException>(
+                    () =>
+                        {
+                            using (var context = CreateContext())
+                            {
+                                var query = context.Gears
+                                    .Include("Reports.Foo")
+                                    .ToList();
+                            }
+                        }).Message);
+        }
+
+        [ConditionalFact]
+        public virtual void Projecting_nullable_bool_in_conditional_works()
+        {
+            AssertQuery<CogTag>(
+                cgs =>
+                    cgs.Select(
+                        cg =>
+                            new
+                            {
+                                Prop = cg.Gear != null ? cg.Gear.HasSoulPatch : false
+                            }),
+                e => e.Prop);
+        }
+
+        [ConditionalFact]
+        public virtual void Enum_ToString_is_client_eval()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    gs.OrderBy(g => g.SquadId)
+                        .ThenBy(g => g.Nickname)
+                        .Select(g => g.Rank.ToString()));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_naked_navigation_with_ToList()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select g.Weapons.ToList(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<Weapon>(e => e.Id, (e, a) => Assert.Equal(e.Id, a.Id)));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_naked_navigation_with_ToArray()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select g.Weapons.ToArray(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<Weapon>(e => e.Id, (e, a) => Assert.Equal(e.Id, a.Id)));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_basic_projection()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select (from w in g.Weapons
+                              where w.IsAutomatic || w.Name != "foo"
+                              select w).ToList(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<Weapon>(e => e.Id, (e, a) => Assert.Equal(e.Id, a.Id)));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_basic_projection_explicit_to_list()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select (from w in g.Weapons
+                              where w.IsAutomatic || w.Name != "foo"
+                              select w).ToList(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<Weapon>(e => e.Id, (e, a) => Assert.Equal(e.Id, a.Id)));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_basic_projection_explicit_to_array()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select (from w in g.Weapons
+                              where w.IsAutomatic || w.Name != "foo"
+                              select w).ToArray(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<Weapon>(e => e.Id, (e, a) => Assert.Equal(e.Id, a.Id)));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_basic_projection_ordered()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select (from w in g.Weapons
+                              where w.IsAutomatic || w.Name != "foo"
+                              orderby w.Name descending
+                              select w).ToList(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<Weapon>(elementAsserter: (e, a) => Assert.Equal(e.Id, a.Id)));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_basic_projection_composite_key()
+        {
+            AssertQuery<Gear>(gs =>
+                from o in gs.OfType<Officer>()
+                where o.Nickname != "Foo"
+                select new
+                {
+                    o.Nickname,
+                    Collection = (from r in o.Reports
+                                  where !r.HasSoulPatch
+                                  select new { r.Nickname, r.FullName }).ToArray()
+                },
+                elementSorter: e => e.Nickname,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.Nickname, a.Nickname);
+                    CollectionAsserter<dynamic>(elementSorter: ee => ee.FullName)(e.Collection, a.Collection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_basic_projecting_single_property()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select (from w in g.Weapons
+                              where w.IsAutomatic || w.Name != "foo"
+                              select w.Name).ToList(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<string>(e => e));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_basic_projecting_constant()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      where g.Nickname != "Marcus"
+                      orderby g.Nickname
+                      select (from w in g.Weapons
+                              where w.IsAutomatic || w.Name != "foo"
+                              select "BFG").ToList(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<string>());
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_projection_of_collection_thru_navigation()
+        {
+            AssertQuery<Gear>(
+                gs => from g in gs
+                      orderby g.FullName
+                      where g.Nickname != "Marcus"
+                      select g.Squad.Missions.Where(m => m.MissionId != 17).ToList(),
+                assertOrder: true,
+                elementAsserter: CollectionAsserter<SquadMission>(
+                    e => e.MissionId + " " + e.SquadId,
+                    (e, a) =>
+                    {
+                        Assert.Equal(e.MissionId, a.MissionId);
+                        Assert.Equal(e.SquadId, a.SquadId);
+                    }));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_project_anonymous_collection_result()
+        {
+            AssertQuery<Squad>(
+                ss => from s in ss
+                      where s.Id < 20
+                      select new
+                      {
+                          s.Name,
+                          Collection = (from m in s.Members
+                                        select new { m.FullName, m.Rank }).ToList()
+                      },
+                elementSorter: e => e.Name,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.Name, a.Name);
+                    CollectionAsserter<dynamic>(ee => ee.FullName + " " + ee.Rank)(e.Collection, a.Collection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_nested()
+        {
+            AssertQuery<Squad>(
+                ss => from s in ss
+                      select (from m in s.Missions
+                              where m.MissionId < 42
+                              select (from ps in m.Mission.ParticipatingSquads
+                                      where ps.SquadId < 7
+                                      select ps).ToList()).ToList(),
+                elementSorter: CollectionSorter<object>(),
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter(
+                        CollectionSorter<SquadMission>(),
+                        CollectionAsserter<SquadMission>(
+                            ee => ee.SquadId + " " + ee.MissionId,
+                            (ee, aa) =>
+                            {
+                                Assert.Equal(ee.SquadId, aa.SquadId);
+                                Assert.Equal(ee.MissionId, aa.MissionId);
+                            }))(e, a);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_nested_mixed_streaming_with_buffer1()
+        {
+            AssertQuery<Squad>(
+                ss => from s in ss
+                      select (from m in s.Missions
+                              where m.MissionId < 3
+                              select (from ps in m.Mission.ParticipatingSquads
+                                      where ps.SquadId < 2
+                                      select ps).ToList()),
+                elementSorter: CollectionSorter<object>(),
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter(
+                        CollectionSorter<SquadMission>(),
+                        CollectionAsserter<SquadMission>(
+                            ee => ee.SquadId + " " + ee.MissionId,
+                            (ee, aa) =>
+                            {
+                                Assert.Equal(ee.SquadId, aa.SquadId);
+                                Assert.Equal(ee.MissionId, aa.MissionId);
+                            }))(e, a);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_nested_mixed_streaming_with_buffer2()
+        {
+            AssertQuery<Squad>(
+                ss => from s in ss
+                      select (from m in s.Missions
+                              where m.MissionId < 42
+                              select (from ps in m.Mission.ParticipatingSquads
+                                      where ps.SquadId < 7
+                                      select ps)).ToList(),
+                elementSorter: CollectionSorter<object>(),
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter(
+                        CollectionSorter<SquadMission>(),
+                        CollectionAsserter<SquadMission>(
+                            ee => ee.SquadId + " " + ee.MissionId,
+                            (ee, aa) =>
+                            {
+                                Assert.Equal(ee.SquadId, aa.SquadId);
+                                Assert.Equal(ee.MissionId, aa.MissionId);
+                            }))(e, a);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_nested_with_custom_ordering()
+        {
+            AssertQuery<Gear>(
+                gs => gs
+                    .OfType<Officer>()
+                    .OrderByDescending(o => o.HasSoulPatch)
+                    .Select(o => new
+                    {
+                        o.FullName,
+                        OuterCollection = o.Reports
+                            .Where(r => r.FullName != "Foo")
+                            .OrderBy(r => r.Rank)
+                            .Select(g => new
+                            {
+                                g.FullName,
+                                InnerCollection = g.Weapons
+                                    .Where(w => w.Name != "Bar")
+                                    .OrderBy(w => w.IsAutomatic).ToList()
+                            }).ToList()
+                    }),
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+                    CollectionAsserter<dynamic>(
+                        ee => ee.FullName,
+                        (ee, aa) =>
+                        {
+                            Assert.Equal(ee.FullName, aa.FullName);
+                            CollectionAsserter<dynamic>(
+                                eee => eee.Name,
+                                (eee, aaa) => Assert.Equal(eee.Name, aaa.Name))(ee.InnerCollection, aa.InnerCollection);
+                        })(e.OuterCollection, a.OuterCollection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_same_collection_projected_multiple_times()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from g in gs
+                    select new
+                    {
+                        g.FullName,
+                        First = g.Weapons.Where(w1 => w1.IsAutomatic).ToList(),
+                        Second = g.Weapons.Where(w2 => w2.IsAutomatic).ToList()
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+                    CollectionAsserter<Weapon>(ee => ee.Id, (ee, aa) => Assert.Equal(ee.Id, aa.Id))(e.First, a.First);
+                    CollectionAsserter<Weapon>(ee => ee.Id, (ee, aa) => Assert.Equal(ee.Id, aa.Id))(e.Second, a.Second);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_similar_collection_projected_multiple_times()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from g in gs
+                    orderby g.Rank
+                    select new
+                    {
+                        g.FullName,
+                        First = g.Weapons.OrderBy(w1 => w1.OwnerFullName).Where(w1 => w1.IsAutomatic).ToList(),
+                        Second = g.Weapons.OrderBy(w2 => w2.IsAutomatic).Where(w2 => !w2.IsAutomatic).ToArray()
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+                    CollectionAsserter<Weapon>(ee => ee.Id, (ee, aa) => Assert.Equal(ee.Id, aa.Id))(e.First, a.First);
+                    CollectionAsserter<Weapon>(ee => ee.Id, (ee, aa) => Assert.Equal(ee.Id, aa.Id))(e.Second, a.Second);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_different_collections_projected()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from o in gs.OfType<Officer>()
+                    orderby o.FullName
+                    select new
+                    {
+                        o.Nickname,
+                        First = o.Weapons.Where(w => w.IsAutomatic).Select(w => new { w.Name, w.IsAutomatic }).ToArray(),
+                        Second = o.Reports.OrderBy(r => r.FullName).Select(r => new { r.Nickname, r.Rank }).ToList()
+                    },
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.Nickname, a.Nickname);
+                    CollectionAsserter<dynamic>()(e.First, a.First);
+                    CollectionAsserter<dynamic>()(e.Second, a.Second);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_multiple_nested_complex_collections()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from o in gs.OfType<Officer>()
+                    orderby o.HasSoulPatch descending, o.Tag.Note
+                    where o.Reports.Any()
+                    select new
+                    {
+                        o.FullName,
+                        OuterCollection = (from r in o.Reports
+                                           where r.FullName != "Foo"
+                                           orderby r.Rank
+                                           select new
+                                           {
+                                               r.FullName,
+                                               InnerCollection = (from w in r.Weapons
+                                                                  where w.Name != "Bar"
+                                                                  orderby w.IsAutomatic
+                                                                  select new
+                                                                  {
+                                                                      w.Id,
+                                                                      InnerFirst = w.Owner.Weapons.Select(ww => new { ww.Name, ww.IsAutomatic }).ToList(),
+                                                                      InnerSecond = w.Owner.Squad.Members.OrderBy(mm => mm.Nickname).Select(mm => new { mm.Nickname, mm.HasSoulPatch }).ToList()
+                                                                  }).ToList()
+                                           }).ToList(),
+                        OuterCollection2 = (from www in o.Tag.Gear.Weapons
+                                            orderby www.IsAutomatic, www.Owner.Nickname descending
+                                            select www).ToList()
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+
+                    CollectionAsserter<dynamic>(
+                        ee => ee.FullName,
+                        (ee, aa) =>
+                        {
+                            Assert.Equal(ee.FullName, aa.FullName);
+                            CollectionAsserter<dynamic>(
+                                eee => eee.Id,
+                                (eee, aaa) =>
+                                {
+                                    Assert.Equal(eee.Id, aaa.Id);
+                                    CollectionAsserter<dynamic>(eeee => eeee.Name)(eee.InnerFirst, aaa.InnerFirst);
+                                    CollectionAsserter<dynamic>()(eee.InnerSecond, aaa.InnerSecond);
+                                })(ee.InnerCollection, aa.InnerCollection);
+                        })(e.OuterCollection, a.OuterCollection);
+
+                    CollectionAsserter<dynamic>(
+                        ee => ee.Id,
+                        (ee, aa) => Assert.Equal(ee.Id, aa.Id))(e.OuterCollection2, a.OuterCollection2);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_inner_subquery_selector_references_outer_qsre()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from o in gs.OfType<Officer>()
+                    select new
+                    {
+                        o.FullName,
+                        Collection = from r in o.Reports
+                                     select new { ReportName = r.FullName, OfficerName = o.FullName }
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+                    CollectionAsserter<dynamic>(ee => ee.ReportName)(e.Collection, a.Collection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_inner_subquery_predicate_references_outer_qsre()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from o in gs.OfType<Officer>()
+                    select new
+                    {
+                        o.FullName,
+                        Collection = from r in o.Reports
+                                     where o.FullName != "Foo"
+                                     select new { ReportName = r.FullName }
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+                    CollectionAsserter<dynamic>(ee => ee.ReportName)(e.Collection, a.Collection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_nested_inner_subquery_references_outer_qsre_one_level_up()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from o in gs.OfType<Officer>()
+                    select new
+                    {
+                        o.FullName,
+                        OuterCollection = (from r in o.Reports
+                                           where r.FullName != "Foo"
+                                           select new
+                                           {
+                                               r.FullName,
+                                               InnerCollection = (from w in r.Weapons
+                                                                  where w.Name != "Bar"
+                                                                  select new
+                                                                  {
+                                                                      w.Name,
+                                                                      r.Nickname
+                                                                  }).ToList()
+                                           }).ToList(),
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+                    CollectionAsserter<dynamic>(
+                        ee => ee.FullName,
+                        (ee, aa) =>
+                        {
+                            Assert.Equal(ee.FullName, aa.FullName);
+                            CollectionAsserter<dynamic>(eee => eee.Name)(ee.InnerCollection, aa.InnerCollection);
+                        })(e.OuterCollection, a.OuterCollection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_nested_inner_subquery_references_outer_qsre_two_levels_up()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from o in gs.OfType<Officer>()
+                    select new
+                    {
+                        o.FullName,
+                        OuterCollection = from r in o.Reports
+                                          where r.FullName != "Foo"
+                                          select new
+                                          {
+                                              r.FullName,
+                                              InnerCollection = from w in r.Weapons
+                                                                where w.Name != "Bar"
+                                                                select new
+                                                                {
+                                                                    w.Name,
+                                                                    o.Nickname
+                                                                }
+                                          },
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+                    CollectionAsserter<dynamic>(
+                        ee => ee.FullName,
+                        (ee, aa) =>
+                        {
+                            Assert.Equal(ee.FullName, aa.FullName);
+                            CollectionAsserter<dynamic>(eee => eee.Name)(ee.InnerCollection, aa.InnerCollection);
+                        })(e.OuterCollection, a.OuterCollection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_on_select_many()
+        {
+            AssertQuery<Gear, Squad>(
+                (gs, ss) =>
+                    from g in gs
+                    from s in ss
+                    where g.HasSoulPatch
+                    orderby g.Nickname, s.Id descending
+                    select new
+                    {
+                        GearNickname = g.Nickname,
+                        SquadName = s.Name,
+                        Collection1 = from w in g.Weapons
+                                      where w.IsAutomatic || w.Name != "foo"
+                                      select w,
+                        Collection2 = from m in s.Members
+                                      where !m.HasSoulPatch
+                                      select m
+                    },
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.GearNickname, e.GearNickname);
+                    Assert.Equal(e.SquadName, e.SquadName);
+
+                    CollectionAsserter<Weapon>(ee => ee.Id, (ee, aa) => Assert.Equal(ee.Id, aa.Id))(e.Collection1, a.Collection1);
+                    CollectionAsserter<Gear>(ee => ee.Nickname, (ee, aa) => Assert.Equal(ee.Nickname, aa.Nickname))(e.Collection2, a.Collection2);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_with_Skip()
+        {
+            AssertQuery<Squad>(
+                ss => ss.OrderBy(s => s.Name).Select(s => s.Members.OrderBy(m => m.Nickname).Skip(1)),
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter<Gear>(elementAsserter: (ee, aa) => Assert.Equal(ee.Nickname, aa.Nickname))(e, a);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_with_Take()
+        {
+            AssertQuery<Squad>(
+                ss => ss.OrderBy(s => s.Name).Select(s => s.Members.OrderBy(m => m.Nickname).Take(2)),
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter<Gear>(elementAsserter: (ee, aa) => Assert.Equal(ee.Nickname, aa.Nickname))(e, a);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_with_Distinct()
+        {
+            AssertQuery<Squad>(
+                ss => ss.OrderBy(s => s.Name).Select(s => s.Members.OrderBy(m => m.Nickname).Distinct()),
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter<Gear>(elementAsserter: (ee, aa) => Assert.Equal(ee.Nickname, aa.Nickname))(e, a);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_with_FirstOrDefault()
+        {
+            AssertQuery<Squad>(
+                ss => ss.OrderBy(s => s.Name).Select(s => s.Members.OrderBy(m => m.Nickname).Select(m => m.FullName).FirstOrDefault()),
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter<Gear>(elementAsserter: (ee, aa) => Assert.Equal(ee.Nickname, aa.Nickname));
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_on_left_join_with_predicate()
+        {
+            AssertQuery<CogTag, Gear>(
+                (ts, gs) =>
+                    from t in ts
+                    join g in gs on t.GearNickName equals g.Nickname into grouping
+                    from g in grouping.DefaultIfEmpty()
+                    where !g.HasSoulPatch
+                    select new { g.Nickname, WeaponNames = g.Weapons.Select(w => w.Name).ToList() },
+                (ts, gs) =>
+                    from t in ts
+                    join g in gs on t.GearNickName equals g.Nickname into grouping
+                    from g in grouping.DefaultIfEmpty()
+                    where !MaybeScalar<bool>(g, () => g.HasSoulPatch) == true || g == null
+                    select new { Nickname = Maybe(g, () => g.Nickname), WeaponNames = g == null ? new List<string>() : g.Weapons.Select(w => w.Name) },
+                elementSorter: e => e.Nickname,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.Nickname, a.Nickname);
+                    CollectionAsserter<string>(ee => ee)(e.WeaponNames, a.WeaponNames);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_on_left_join_with_null_value()
+        {
+            AssertQuery<CogTag, Gear>(
+                (ts, gs) =>
+                    from t in ts
+                    join g in gs on t.GearNickName equals g.Nickname into grouping
+                    from g in grouping.DefaultIfEmpty()
+                    orderby t.Note
+                    select g.Weapons.Select(w => w.Name).ToList(),
+                (ts, gs) =>
+                    from t in ts
+                    join g in gs on t.GearNickName equals g.Nickname into grouping
+                    from g in grouping.DefaultIfEmpty()
+                    orderby t.Note
+                    select g != null ? g.Weapons.Select(w => w.Name) : new List<string>(),
+                assertOrder: true,
+                elementAsserter: (e, a) => CollectionAsserter<string>(ee => ee));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_left_join_with_self_reference()
+        {
+            AssertQuery<CogTag, Gear>(
+                (ts, gs) =>
+                    from t in ts
+                    join o in gs.OfType<Officer>() on t.GearNickName equals o.Nickname into grouping
+                    from o in grouping.DefaultIfEmpty()
+                    select new { t.Note, ReportNames = o.Reports.Select(r => r.FullName).ToList() },
+                (ts, gs) =>
+                    from t in ts
+                    join o in gs.OfType<Officer>() on t.GearNickName equals o.Nickname into grouping
+                    from o in grouping.DefaultIfEmpty()
+                    select new { t.Note, ReportNames = o != null ? o.Reports.Select(r => r.FullName) : new List<string>() },
+                elementSorter: e => e.Note,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.Note, a.Note);
+                    CollectionAsserter<string>(ee => ee)(e.ReportNames, a.ReportNames);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_deeply_nested_left_join()
+        {
+            AssertQuery<CogTag, Gear>(
+                (ts, gs) =>
+                    from t in ts
+                    join g in gs on t.GearNickName equals g.Nickname into grouping
+                    from g in grouping.DefaultIfEmpty()
+                    orderby t.Note, g.Nickname descending
+                    select g.Squad.Members.Where(m => m.HasSoulPatch).Select(m => new { m.Nickname, AutomaticWeapons = m.Weapons.Where(w => w.IsAutomatic).ToList() }).ToList(),
+                (ts, gs) =>
+                    from t in ts
+                    join g in gs on t.GearNickName equals g.Nickname into grouping
+                    from g in grouping.DefaultIfEmpty()
+                    orderby t.Note, Maybe(g, () => g.Nickname) descending
+                    select g != null ? g.Squad.Members.Where(m => m.HasSoulPatch).OrderBy(m => m.Nickname).Select(m => m.Weapons.Where(w => w.IsAutomatic)) : new List<List<Weapon>>(),
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                    CollectionAsserter<dynamic>(
+                        elementAsserter: (ee, aa) => CollectionAsserter<Weapon>(eee => eee.Id, (eee, aaa) => Assert.Equal(eee.Id, aaa.Id))));
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_from_left_join_with_additional_elements_projected_of_that_join()
+        {
+            AssertQuery<Weapon>(
+                ws => ws.OrderBy(w => w.Name).Select(w => w.Owner.Squad.Members.OrderByDescending(m => m.FullName).Select(m => new { Weapons = m.Weapons.Where(ww => !ww.IsAutomatic).OrderBy(ww => ww.Id).ToList(), m.Rank }).ToList()),
+                ws => ws.OrderBy(w => w.Name).Select(w => w.Owner != null
+                    ? w.Owner.Squad.Members.OrderByDescending(m => m.FullName).Select(m => new Tuple<IEnumerable<Weapon>, MilitaryRank>(m.Weapons.Where(ww => !ww.IsAutomatic).OrderBy(ww => ww.Id), m.Rank))
+                    : new List<Tuple<IEnumerable<Weapon>, MilitaryRank>>()),
+                assertOrder: true,
+                elementAsserter: (e, a) =>
+                {
+                    CollectionAsserter<dynamic>(
+                        elementAsserter: (ee, aa) =>
+                        {
+                            Assert.Equal(ee.Item2, aa.Rank);
+                            CollectionAsserter<Weapon>(
+                                elementAsserter: (eee, aaa) => Assert.Equal(eee.Id, aaa.Id))(ee.Item1, aa.Weapons);
+                        })(e, a);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_complex_scenario1()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from r in gs
+                    select new
+                    {
+                        r.FullName,
+                        OuterCollection = (from w in r.Weapons
+                                           select new
+                                           {
+                                               w.Id,
+                                               InnerCollection = w.Owner.Squad.Members.OrderBy(mm => mm.Nickname).Select(mm => new { mm.Nickname, mm.HasSoulPatch }).ToList()
+                                           }).ToList()
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+
+                    CollectionAsserter<dynamic>(
+                        ee => ee.Id,
+                        (ee, aa) =>
+                        {
+                            Assert.Equal(ee.Id, aa.Id);
+                            CollectionAsserter<dynamic>(eee => eee.Nickname)(ee.InnerCollection, aa.InnerCollection);
+                        })(e.OuterCollection, a.OuterCollection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collections_complex_scenario2()
+        {
+            AssertQuery<Gear>(
+                gs =>
+                    from o in gs.OfType<Officer>()
+                    select new
+                    {
+                        o.FullName,
+                        OuterCollection = (from r in o.Reports
+                                           select new
+                                           {
+                                               r.FullName,
+                                               InnerCollection = (from w in r.Weapons
+                                                                  select new
+                                                                  {
+                                                                      w.Id,
+                                                                      InnerSecond = w.Owner.Squad.Members.OrderBy(mm => mm.Nickname).Select(mm => new { mm.Nickname, mm.HasSoulPatch }).ToList()
+                                                                  }).ToList()
+                                           }).ToList(),
+                    },
+                elementSorter: e => e.FullName,
+                elementAsserter: (e, a) =>
+                {
+                    Assert.Equal(e.FullName, a.FullName);
+
+                    CollectionAsserter<dynamic>(
+                        ee => ee.FullName,
+                        (ee, aa) =>
+                        {
+                            Assert.Equal(ee.FullName, aa.FullName);
+                            CollectionAsserter<dynamic>(
+                                eee => eee.Id,
+                                (eee, aaa) =>
+                                {
+                                    Assert.Equal(eee.Id, aaa.Id);
+                                    CollectionAsserter<dynamic>()(eee.InnerSecond, aaa.InnerSecond);
+                                })(ee.InnerCollection, aa.InnerCollection);
+                        })(e.OuterCollection, a.OuterCollection);
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collection_with_top_level_FirstOrDefault()
+        {
+            using (var ctx = CreateContext())
+            {
+                var actual = ctx.Gears.OrderBy(g => g.Nickname).Select(g => g.Weapons).FirstOrDefault();
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Gear>().OrderBy(g => g.Nickname).Select(g => g.Weapons).FirstOrDefault();
+
+                Assert.Equal(expected.Count, actual.Count);
+
+                var actualList = actual.ToList();
+                var expectedList = expected.ToList();
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expectedList[i].Id, actualList[i].Id);
+                    Assert.Equal(expectedList[i].Name, actualList[i].Name);
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collection_with_top_level_Count()
+        {
+            AssertSingleResult<Gear>(
+                gs => gs.Select(g => g.Weapons).Count());
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collection_with_top_level_Last_with_orderby_on_outer()
+        {
+            using (var ctx = CreateContext())
+            {
+                var actual = ctx.Gears.OrderByDescending(g => g.FullName).Select(g => g.Weapons).Last();
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Gear>().OrderByDescending(g => g.FullName).Select(g => g.Weapons).Last();
+
+                Assert.Equal(expected.Count, actual.Count);
+
+                var actualList = actual.ToList();
+                var expectedList = expected.ToList();
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expectedList[i].Id, actualList[i].Id);
+                    Assert.Equal(expectedList[i].Name, actualList[i].Name);
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Correlated_collection_with_top_level_Last_with_order_by_on_inner()
+        {
+            using (var ctx = CreateContext())
+            {
+                var actual = ctx.Gears.OrderBy(g => g.FullName).Select(g => g.Weapons.OrderBy(w => w.Name).ToList()).Last();
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Gear>().OrderBy(g => g.FullName).Select(g => g.Weapons.OrderBy(w => w.Name).ToList()).Last();
+
+                Assert.Equal(expected.Count, actual.Count);
+
+                var actualList = actual.ToList();
+                var expectedList = expected.ToList();
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expectedList[i].Id, actualList[i].Id);
+                    Assert.Equal(expectedList[i].Name, actualList[i].Name);
+                }
+            }
+        }
+
+
+        [ConditionalFact]
+        public virtual void Include_with_group_by_and_last()
+        {
+            using (var ctx = CreateContext())
+            {
+                var actual = ctx.Gears.OrderByDescending(g => g.HasSoulPatch).Include(g => g.Weapons).Select(g => new { g.Rank, g }).GroupBy(g => g.Rank).ToList().OrderBy(g => g.Key).ToList();
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Gear>().OrderByDescending(g => g.HasSoulPatch).Include(g => g.Weapons).Select(g => new { g.Rank, g }).GroupBy(g => g.Rank).ToList().OrderBy(g => g.Key).ToList();
+
+                Assert.Equal(expected.Count, actual.Count);
+
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expected[i].Key, actual[i].Key);
+                    var expectedInners = expected[i].ToList();
+                    var actualInners = actual[i].ToList();
+
+                    Assert.Equal(expectedInners.Count, actualInners.Count);
+                    for (var j = 0; j < expectedInners.Count; j++)
+                    {
+                        Assert.Equal(expectedInners[j].g.Rank, actualInners[j].g.Rank);
+
+                        var expectedWeapons = expectedInners[j].g.Weapons.OrderBy(w => w.Id).ToList();
+                        var actualWeapons = actualInners[j].g.Weapons.OrderBy(w => w.Id).ToList();
+
+                        Assert.Equal(expectedWeapons.Count, actualWeapons.Count);
+                        for (var k = 0; k < expectedWeapons.Count; k++)
+                        {
+                            Assert.Equal(expectedWeapons[k].Id, actualWeapons[k].Id);
+                            Assert.Equal(expectedWeapons[k].Name, actualWeapons[k].Name);
+                        }
+                    }
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Include_with_group_by_with_composite_group_key()
+        {
+            using (var ctx = CreateContext())
+            {
+                var actual = ctx.Gears.OrderBy(g => g.Nickname).Include(g => g.Weapons).GroupBy(g => new { g.Rank, g.HasSoulPatch }).ToList().OrderBy(g => g.Key.Rank).ThenBy(g => g.Key.HasSoulPatch).ToList();
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Gear>().OrderBy(g => g.Nickname).Include(g => g.Weapons).GroupBy(g => new { g.Rank, g.HasSoulPatch }).ToList().OrderBy(g => g.Key.Rank).ThenBy(g => g.Key.HasSoulPatch).ToList();
+
+                Assert.Equal(expected.Count, actual.Count);
+
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expected[i].Key, actual[i].Key);
+                    var expectedInners = expected[i].ToList();
+                    var actualInners = actual[i].ToList();
+
+                    Assert.Equal(expectedInners.Count, actualInners.Count);
+                    for (var j = 0; j < expectedInners.Count; j++)
+                    {
+                        Assert.Equal(expectedInners[j].Rank, actualInners[j].Rank);
+                        Assert.Equal(expectedInners[j].HasSoulPatch, actualInners[j].HasSoulPatch);
+
+                        var expectedWeapons = expectedInners[j].Weapons.OrderBy(w => w.Id).ToList();
+                        var actualWeapons = actualInners[j].Weapons.OrderBy(w => w.Id).ToList();
+
+                        Assert.Equal(expectedWeapons.Count, actualWeapons.Count);
+                        for (var k = 0; k < expectedWeapons.Count; k++)
+                        {
+                            Assert.Equal(expectedWeapons[k].Id, actualWeapons[k].Id);
+                            Assert.Equal(expectedWeapons[k].Name, actualWeapons[k].Name);
+                        }
+                    }
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Include_with_group_by_order_by_take()
+        {
+            using (var ctx = CreateContext())
+            {
+                var actual = ctx.Gears.Include(g => g.Weapons).OrderBy(g => g.Nickname).Take(3).GroupBy(g => g.HasSoulPatch).ToList();
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Gear>().OrderBy(g => g.Nickname).Take(3).GroupBy(g => g.HasSoulPatch).ToList();
+
+                Assert.Equal(expected.Count, actual.Count);
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expected[i].Key, actual[i].Key);
+                    Assert.Equal(expected[i].Count(), actual[i].Count());
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Include_with_group_by_distinct()
+        {
+            using (var ctx = CreateContext())
+            {
+                var actual = ctx.Gears.Include(g => g.Weapons).OrderBy(g => g.Nickname).Distinct().GroupBy(g => g.HasSoulPatch).ToList();
+                var expected = Fixture.QueryAsserter.ExpectedData.Set<Gear>().OrderBy(g => g.Nickname).Distinct().GroupBy(g => g.HasSoulPatch).ToList();
+
+                Assert.Equal(expected.Count, actual.Count);
+                for (var i = 0; i < expected.Count; i++)
+                {
+                    Assert.Equal(expected[i].Key, actual[i].Key);
+                    Assert.Equal(expected[i].Count(), actual[i].Count());
+                }
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Null_semantics_on_nullable_bool_from_inner_join_subuery_is_fully_applied()
+        {
+            AssertQuery<LocustLeader, Faction>(
+                (lls, fs) =>
+                    from ll in lls
+                    join h in fs.OfType<LocustHorde>().Where(f => f.Name == "Swarm") on ll.Name equals h.CommanderName
+                    where h.Eradicated != true
+                    select h);
+        }
+
+        [ConditionalFact]
+        public virtual void Null_semantics_on_nullable_bool_from_left_join_subuery_is_fully_applied()
+        {
+            AssertQuery<LocustLeader, Faction>(
+                (lls, fs) =>
+                    from ll in lls
+                    join h in fs.OfType<LocustHorde>().Where(f => f.Name == "Swarm") on ll.Name equals h.CommanderName into grouping
+                    from h in grouping.DefaultIfEmpty()
+                    where h.Eradicated != true
+                    select h,
+                (lls, fs) =>
+                    from ll in lls
+                    join h in fs.OfType<LocustHorde>().Where(f => f.Name == "Swarm") on ll.Name equals h.CommanderName into grouping
+                    from h in grouping.DefaultIfEmpty()
+                    where MaybeScalar(h, () => h.Eradicated) != true
+                    select h);
+        }
+
+        [ConditionalFact(Skip = "Issue #10974")]
+        public virtual void Include_collection_group_by_reference()
+        {
+            using (var context = CreateContext())
+            {
+                var query = context.Set<Gear>()
+                    .Include(g => g.Weapons)
+                    .GroupBy(g => g.Squad)
+                    .ToList();
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void Include_on_derived_type_with_order_by_and_paging()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<LocustCommander>(e => e.DefeatedBy, "DefeatedBy"),
+                new ExpectedInclude<Gear>(e => e.Weapons, "Weapons", "DefeatedBy"),
+            };
+
+            AssertIncludeQuery<LocustLeader>(
+                lls => lls.Include(ll => ((LocustCommander)ll).DefeatedBy).ThenInclude(g => g.Weapons).OrderBy(ll => ((LocustCommander)ll).DefeatedBy.Tag.Note).Take(10),
+                lls => lls.Take(10),
+                expectedIncludes,
+                elementSorter: e => e.Name);
+        }
+
+        [ConditionalFact]
+        public virtual void Select_required_navigation_on_derived_type()
+        {
+            AssertQuery<LocustLeader>(
+                lls => lls.Select(ll => ((LocustCommander)ll).HighCommand.Name),
+                lls => lls.Select(ll => ll is LocustCommander ? ((LocustCommander)ll).HighCommand.Name : null));
+        }
+
+        [ConditionalFact]
+        public virtual void Where_required_navigation_on_derived_type()
+        {
+            AssertQuery<LocustLeader>(
+                lls => lls.Where(ll => ((LocustCommander)ll).HighCommand.IsOperational),
+                lls => lls.Where(ll => ll is LocustCommander ? ((LocustCommander)ll).HighCommand.IsOperational : false));
         }
 
         protected GearsOfWarContext CreateContext() => Fixture.CreateContext();

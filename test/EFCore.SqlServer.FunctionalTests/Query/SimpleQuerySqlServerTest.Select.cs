@@ -79,6 +79,24 @@ ORDER BY [e0].[EmployeeID]");
 FROM [Customers] AS [c]");
         }
 
+        public override void Projection_when_client_evald_subquery()
+        {
+            base.Projection_when_client_evald_subquery();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID]
+FROM [Customers] AS [c]
+ORDER BY [c].[CustomerID]",
+                //
+                @"SELECT [t].[CustomerID], [c.Orders].[CustomerID]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT [c0].[CustomerID]
+    FROM [Customers] AS [c0]
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[CustomerID]");
+        }
+
         public override void Project_to_object_array()
         {
             base.Project_to_object_array();
@@ -435,9 +453,9 @@ WHERE [o].[CustomerID] = N'ALFKI'
 ORDER BY [o].[OrderID]");
         }
 
-        public override void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduces_explicit_cast()
+        public override void Select_non_matching_value_types_nullable_int_to_int_doesnt_introduce_explicit_cast()
         {
-            base.Select_non_matching_value_types_nullable_int_to_int_doesnt_introduces_explicit_cast();
+            base.Select_non_matching_value_types_nullable_int_to_int_doesnt_introduce_explicit_cast();
 
             AssertSql(
                 @"SELECT [o].[EmployeeID]
@@ -545,6 +563,19 @@ ORDER BY [Order]");
 END
 FROM [Orders] AS [o]
 WHERE [o].[CustomerID] = N'ALFKI'");
+        }
+
+        public override void Projection_in_a_subquery_should_be_liftable()
+        {
+            base.Projection_in_a_subquery_should_be_liftable();
+
+            AssertSql(
+                @"@__p_0='1'
+
+SELECT [e].[EmployeeID]
+FROM [Employees] AS [e]
+ORDER BY [e].[EmployeeID]
+OFFSET @__p_0 ROWS");
         }
     }
 }

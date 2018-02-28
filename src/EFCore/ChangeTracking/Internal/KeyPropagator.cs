@@ -65,7 +65,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
         public virtual async Task<InternalEntityEntry> PropagateValueAsync(
             InternalEntityEntry entry,
             IProperty property,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             Debug.Assert(property.IsForeignKey());
 
@@ -100,8 +100,10 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 {
                     if (property == foreignKey.Properties[propertyIndex])
                     {
+                        var principal = foreignKey.DependentToPrincipal == null
+                            ? null
+                            : entry[foreignKey.DependentToPrincipal];
                         InternalEntityEntry principalEntry = null;
-                        var principal = foreignKey.DependentToPrincipal?.GetGetter().GetClrValue(entry.Entity);
                         if (principal != null)
                         {
                             principalEntry = stateManager.GetOrCreateEntry(principal);

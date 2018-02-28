@@ -6,6 +6,7 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Expressions.Internal;
 
 // ReSharper disable SwitchStatementMissingSomeCases
@@ -428,14 +429,8 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                     return false;
                 }
 
-                if (a.Value is EnumerableQuery
-                    && b.Value is EnumerableQuery)
-                {
-                    return false; // EnumerableQueries are opaque
-                }
-
-                if (a.Value is IQueryable
-                    && b.Value is IQueryable
+                if (a.IsEntityQueryable()
+                    && b.IsEntityQueryable()
                     && a.Value.GetType() == b.Value.GetType())
                 {
                     return true;
@@ -743,7 +738,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                         }
                     }
 
-                    value = default(TValue);
+                    value = default;
 
                     return false;
                 }

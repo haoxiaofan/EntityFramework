@@ -12,7 +12,7 @@ namespace Microsoft.EntityFrameworkCore.Update
 {
     /// <summary>
     ///     <para>
-    ///         A a base class for the <see cref="IUpdateSqlGenerator" /> service that is typically inheritted from
+    ///         A a base class for the <see cref="IUpdateSqlGenerator" /> service that is typically inherited from
     ///         by database providers.
     ///     </para>
     ///     <para>
@@ -320,7 +320,14 @@ namespace Microsoft.EntityFrameworkCore.Update
                         {
                             helper.DelimitIdentifier(sb, o.ColumnName);
                             sb.Append(" = ");
-                            helper.GenerateParameterName(sb, o.ParameterName);
+                            if (!o.UseCurrentValueParameter)
+                            {
+                                AppendSqlLiteral(sb, o.Value);
+                            }
+                            else
+                            {
+                                helper.GenerateParameterName(sb, o.ParameterName);
+                            }
                         });
         }
 
@@ -403,7 +410,14 @@ namespace Microsoft.EntityFrameworkCore.Update
                             {
                                 if (o.IsWrite)
                                 {
-                                    helper.GenerateParameterName(sb, o.ParameterName);
+                                    if (!o.UseCurrentValueParameter)
+                                    {
+                                        AppendSqlLiteral(sb, o.Value);
+                                    }
+                                    else
+                                    {
+                                        helper.GenerateParameterName(sb, o.ParameterName);
+                                    }
                                 }
                                 else
                                 {
@@ -513,10 +527,17 @@ namespace Microsoft.EntityFrameworkCore.Update
             else
             {
                 commandStringBuilder.Append(" = ");
-                SqlGenerationHelper.GenerateParameterName(
-                    commandStringBuilder, useOriginalValue
+                if (!columnModification.UseCurrentValueParameter
+                    && !columnModification.UseOriginalValueParameter)
+                {
+                    AppendSqlLiteral(commandStringBuilder, columnModification.Value);
+                }
+                else
+                {
+                    SqlGenerationHelper.GenerateParameterName(commandStringBuilder, useOriginalValue
                         ? columnModification.OriginalParameterName
                         : columnModification.ParameterName);
+                }
             }
         }
 
@@ -561,6 +582,12 @@ namespace Microsoft.EntityFrameworkCore.Update
         {
             commandStringBuilder.Append("SELECT NEXT VALUE FOR ");
             SqlGenerationHelper.DelimitIdentifier(commandStringBuilder, Check.NotNull(name, nameof(name)), schema);
+        }
+
+        private void AppendSqlLiteral(StringBuilder commandStringBuilder, object value)
+        {
+            commandStringBuilder.Append(
+                Dependencies.TypeMappingSource.GetMappingForValue(value).GenerateSqlLiteral(value));
         }
     }
 }

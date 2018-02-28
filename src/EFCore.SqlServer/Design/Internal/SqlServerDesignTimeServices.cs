@@ -21,9 +21,9 @@ namespace Microsoft.EntityFrameworkCore.Design.Internal
         /// </summary>
         public virtual void ConfigureDesignTimeServices(IServiceCollection serviceCollection)
             => serviceCollection
-                .AddSingleton<IRelationalTypeMapper, SqlServerTypeMapper>()
+                .AddSingleton<IRelationalTypeMappingSource, SqlServerTypeMappingSource>()
                 .AddSingleton<IDatabaseModelFactory, SqlServerDatabaseModelFactory>()
-                .AddSingleton<IScaffoldingProviderCodeGenerator, SqlServerScaffoldingCodeGenerator>()
+                .AddSingleton<IProviderCodeGenerator, SqlServerCodeGenerator>()
                 .AddSingleton<IAnnotationCodeGenerator, SqlServerAnnotationCodeGenerator>();
     }
 }

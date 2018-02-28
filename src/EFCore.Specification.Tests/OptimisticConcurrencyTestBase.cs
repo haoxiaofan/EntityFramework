@@ -123,13 +123,13 @@ namespace Microsoft.EntityFrameworkCore
             return ConcurrencyTestAsync(
                 c =>
                     {
-                        var team = c.Teams.Include(t => t.Chassis).Single(t => t.Id == Team.McLaren);
+                        var team = c.Teams.Single(t => t.Id == Team.McLaren);
                         team.Chassis.Name = "MP4-25b";
                         team.Principal = "Larry David";
                     },
                 c =>
                     {
-                        var team = c.Teams.Include(t => t.Chassis).Single(t => t.Id == Team.McLaren);
+                        var team = c.Teams.Single(t => t.Id == Team.McLaren);
                         team.Chassis.Name = "MP4-25c";
                         team.Principal = "Jerry Seinfeld";
                     },
@@ -155,7 +155,7 @@ namespace Microsoft.EntityFrameworkCore
                     },
                 c =>
                     {
-                        var team = c.Teams.Include(t => t.Chassis).Single(t => t.Id == Team.McLaren);
+                        var team = c.Teams.Single(t => t.Id == Team.McLaren);
                         Assert.Equal("MP4-25b", team.Chassis.Name);
                         Assert.Equal("Larry David", team.Principal);
                     });
@@ -167,13 +167,13 @@ namespace Microsoft.EntityFrameworkCore
             return ConcurrencyTestAsync(
                 c =>
                     {
-                        var team = c.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.McLaren);
+                        var team = c.Teams.Single(t => t.Id == Team.McLaren);
                         team.Drivers.Single(d => d.Name == "Jenson Button").Poles = 1;
                         team.Principal = "Larry David";
                     },
                 c =>
                     {
-                        var team = c.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.McLaren);
+                        var team = c.Teams.Single(t => t.Id == Team.McLaren);
                         team.Drivers.Single(d => d.Name == "Jenson Button").Poles = 2;
                         team.Principal = "Jerry Seinfeld";
                     },
@@ -199,7 +199,7 @@ namespace Microsoft.EntityFrameworkCore
                     },
                 c =>
                     {
-                        var team = c.Teams.Include(t => t.Drivers).Single(t => t.Id == Team.McLaren);
+                        var team = c.Teams.Single(t => t.Id == Team.McLaren);
                         Assert.Equal(1, team.Drivers.Single(d => d.Name == "Jenson Button").Poles);
                         Assert.Equal("Larry David", team.Principal);
                     });
@@ -224,7 +224,7 @@ namespace Microsoft.EntityFrameworkCore
                 c =>
                     Assert.Equal(
                         "Cosworth",
-                        c.Engines.Include(e => e.EngineSupplier).Single(e => e.Name == "056").EngineSupplier.Name));
+                        c.Engines.Single(e => e.Name == "056").EngineSupplier.Name));
         }
 
         #endregion
@@ -303,7 +303,7 @@ namespace Microsoft.EntityFrameworkCore
         public virtual Task Concurrency_issue_where_a_complex_type_nested_member_is_the_concurrency_token_can_be_handled()
         {
             return ConcurrencyTestAsync(
-                c => c.Engines.Include(e => e.StorageLocation).Single(s => s.Name == "CA2010").StorageLocation.Latitude = 47.642576,
+                c => c.Engines.Single(s => s.Name == "CA2010").StorageLocation.Latitude = 47.642576,
                 (c, ex) =>
                     {
                         Assert.IsType<DbUpdateConcurrencyException>(ex);
@@ -313,7 +313,7 @@ namespace Microsoft.EntityFrameworkCore
                         entry.Reload();
                     },
                 c =>
-                    Assert.Equal(47.642576, c.Engines.Include(e => e.StorageLocation).Single(s => s.Name == "CA2010").StorageLocation.Latitude));
+                    Assert.Equal(47.642576, c.Engines.Single(s => s.Name == "CA2010").StorageLocation.Latitude));
         }
 
         #endregion

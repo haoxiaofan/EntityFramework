@@ -14,15 +14,19 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionTranslators.Internal
         private static readonly IMethodCallTranslator[] _sqliteTranslators =
         {
             new SqliteContainsOptimizedTranslator(),
+            new SqliteDateDiffTranslator(),
             new SqliteEndsWithOptimizedTranslator(),
-            new SqliteMathAbsTranslator(),
+            new SqliteMathTranslator(),
             new SqliteStartsWithOptimizedTranslator(),
             new SqliteStringIsNullOrWhiteSpaceTranslator(),
             new SqliteStringToLowerTranslator(),
             new SqliteStringToUpperTranslator(),
             new SqliteStringTrimEndTranslator(),
             new SqliteStringTrimStartTranslator(),
-            new SqliteStringTrimTranslator()
+            new SqliteStringTrimTranslator(),
+            new SqliteStringIndexOfTranslator(),
+            new SqliteStringReplaceTranslator(),
+            new SqliteStringSubstringTranslator()
         };
 
         /// <summary>

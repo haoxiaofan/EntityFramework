@@ -1,17 +1,17 @@
 ﻿<?xml version="1.0" encoding="utf-8"?>
 <root>
-  <!--
-    Microsoft ResX Schema
-
+  <!-- 
+    Microsoft ResX Schema 
+    
     Version 2.0
-
-    The primary goals of this format is to allow a simple XML format
-    that is mostly human readable. The generation and parsing of the
-    various data types are done through the TypeConverter classes
+    
+    The primary goals of this format is to allow a simple XML format 
+    that is mostly human readable. The generation and parsing of the 
+    various data types are done through the TypeConverter classes 
     associated with the data types.
-
+    
     Example:
-
+    
     ... ado.net/XML headers & schema ...
     <resheader name="resmimetype">text/microsoft-resx</resheader>
     <resheader name="version">2.0</resheader>
@@ -26,36 +26,36 @@
         <value>[base64 mime encoded string representing a byte array form of the .NET Framework object]</value>
         <comment>This is a comment</comment>
     </data>
-
-    There are any number of "resheader" rows that contain simple
+                
+    There are any number of "resheader" rows that contain simple 
     name/value pairs.
-
-    Each data row contains a name, and value. The row also contains a
-    type or mimetype. Type corresponds to a .NET class that support
-    text/value conversion through the TypeConverter architecture.
-    Classes that don't support this are serialized and stored with the
+    
+    Each data row contains a name, and value. The row also contains a 
+    type or mimetype. Type corresponds to a .NET class that support 
+    text/value conversion through the TypeConverter architecture. 
+    Classes that don't support this are serialized and stored with the 
     mimetype set.
-
-    The mimetype is used for serialized objects, and tells the
-    ResXResourceReader how to depersist the object. This is currently not
+    
+    The mimetype is used for serialized objects, and tells the 
+    ResXResourceReader how to depersist the object. This is currently not 
     extensible. For a given mimetype the value must be set accordingly:
-
-    Note - application/x-microsoft.net.object.binary.base64 is the format
-    that the ResXResourceWriter will generate, however the reader can
+    
+    Note - application/x-microsoft.net.object.binary.base64 is the format 
+    that the ResXResourceWriter will generate, however the reader can 
     read any of the formats listed below.
-
+    
     mimetype: application/x-microsoft.net.object.binary.base64
-    value   : The object must be serialized with
+    value   : The object must be serialized with 
             : System.Runtime.Serialization.Formatters.Binary.BinaryFormatter
             : and then encoded with base64 encoding.
-
+    
     mimetype: application/x-microsoft.net.object.soap.base64
-    value   : The object must be serialized with
+    value   : The object must be serialized with 
             : System.Runtime.Serialization.Formatters.Soap.SoapFormatter
             : and then encoded with base64 encoding.
 
     mimetype: application/x-microsoft.net.object.bytearray.base64
-    value   : The object must be serialized into a byte array
+    value   : The object must be serialized into a byte array 
             : using a System.ComponentModel.TypeConverter
             : and then encoded with base64 encoding.
     -->
@@ -145,7 +145,7 @@
     <value>Relational-specific methods can only be used when the context is using a relational database provider.</value>
   </data>
   <data name="LogBoolWithDefaultWarning" xml:space="preserve">
-    <value>The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used when the property value is 'null'.</value>
+    <value>The 'bool' property '{property}' on entity type '{entityType}' is configured with a database-generated default. This default will always be used for inserts when the property has the value 'false', since this is the CLR default for the 'bool' type. Consider using the nullable 'bool?' type instead so that the default will only be used for inserts when the property value is 'null'.</value>
     <comment>Warning RelationalEventId.BoolWithDefaultWarning string string</comment>
   </data>
   <data name="UpdateStoreException" xml:space="preserve">
@@ -233,7 +233,7 @@
     <value>Unable to set property '{property}' as a discriminator for entity type '{entityType}' because it is not a property of '{entityType}'.</value>
   </data>
   <data name="LogAmbientTransaction" xml:space="preserve">
-    <value>An ambient transaction has been detected. Entity Framework Core does not support ambient transactions. See http://go.microsoft.com/fwlink/?LinkId=800142</value>
+    <value>An ambient transaction has been detected. The current provider does not support ambient transactions. See http://go.microsoft.com/fwlink/?LinkId=800142</value>
     <comment>Warning RelationalEventId.AmbientTransactionWarning</comment>
   </data>
   <data name="LogPossibleUnintendedUseOfEquals" xml:space="preserve">
@@ -282,10 +282,7 @@
     <value>Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and the name '{keyName}' of the primary key {primaryKey} does not match the name '{otherName}' of the primary key {otherPrimaryKey}.</value>
   </data>
   <data name="IncompatibleTableNoRelationship" xml:space="preserve">
-    <value>Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between the primary key {primaryKey} and the primary key {otherPrimaryKey}.</value>
-  </data>
-  <data name="IncompatibleTableDerivedPrincipal" xml:space="preserve">
-    <value>Cannot use table '{table}' for entity type '{dependentType}' since it has a relationship to a derived entity type '{principalType}'. Either point the relationship to the base type '{rootType}' or map '{dependentType}' to a different table.</value>
+    <value>Cannot use table '{table}' for entity type '{entityType}' since it is being used for entity type '{otherEntityType}' and there is no relationship between their primary keys.</value>
   </data>
   <data name="LogKeyHasDefaultValue" xml:space="preserve">
     <value>Property '{property}' on entity type '{entityType}' is part of a primary or alternate key but has a constant default value set. Constant default values are not useful for primary or alternate keys since these properties must always have non-null unqiue values.</value>
@@ -353,10 +350,10 @@
     <value>The instance of entity type '{firstEntityType}' and the instance of entity type '{secondEntityType}' are mapped to the same row with the key value '{keyValue}', but have different original property values '{firstConflictingValues}' and '{secondConflictingValues}' mapped to {columns}.</value>
   </data>
   <data name="SharedRowEntryCountMismatch" xml:space="preserve">
-    <value>The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.</value>
+    <value>The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value that has been marked as '{state}'. Consider using 'DbContextOptionsBuilder.EnableSensitiveDataLogging' to see the key values.</value>
   </data>
   <data name="SharedRowEntryCountMismatchSensitive" xml:space="preserve">
-    <value>The entity of '{entityType}' is sharing the table '{tableName}' with '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.</value>
+    <value>The entity of type '{entityType}' is sharing the table '{tableName}' with entities of type '{missingEntityType}', but there is no entity of this type with the same key value '{keyValue}' that has been marked as '{state}'.</value>
   </data>
   <data name="IncorrectDefaultValueType" xml:space="preserve">
     <value>Cannot set default value '{value}' of type '{valueType}' on property '{property}' of type '{propertyType}' in entity type '{entityType}'.</value>
@@ -425,13 +422,45 @@
   <data name="DbFunctionInvalidParameterType" xml:space="preserve">
     <value>The parameter '{parameter}' for the DbFunction '{function}' has an invalid type '{type}'. Ensure the parameter type can be mapped by the current provider.</value>
   </data>
-  <data name="DbFunctionMethodMustBeStatic" xml:space="preserve">
-    <value>The DbFunction '{function}' must be a static method. Non-static methods are not supported.</value>
-  </data>
   <data name="DbFunctionGenericMethodNotSupported" xml:space="preserve">
     <value>The DbFunction '{function}' is generic. Generic methods are not supported.</value>
   </data>
   <data name="DbFunctionExpressionIsNotMethodCall" xml:space="preserve">
-    <value>The provided DbFunction expression '{expression}' is invalid. The expression should be a lambda expression containing a single method call to the target static method. Default values can be provided as arguments if required. E.g. () => SomeClass.SomeMethod(null, 0)</value>
+    <value>The provided DbFunction expression '{expression}' is invalid. The expression should be a lambda expression containing a single method call to the target static method. Default values can be provided as arguments if required. E.g. () =&gt; SomeClass.SomeMethod(null, 0)</value>
+  </data>
+  <data name="DbFunctionInvalidInstanceType" xml:space="preserve">
+    <value>The DbFunction '{function}' defined on type '{type}' must be either a static method or an instance method defined on a DbContext subclass. Instance methods on other types are not supported.</value>
+  </data>
+  <data name="ConflictingAmbientTransaction" xml:space="preserve">
+    <value>An ambient transaction has been detected. The ambient transaction needs to be completed before beginning a transaction on this connection.</value>
+  </data>
+  <data name="ConflictingEnlistedTransaction" xml:space="preserve">
+    <value>The connection is currently enlisted in a transaction. The enlisted transaction needs to be completed before starting a transaction.</value>
+  </data>
+  <data name="InvalidMinBatchSize" xml:space="preserve">
+    <value>The specified MinBatchSize value is not valid. It must be a positive number.</value>
+  </data>
+  <data name="ExpectedNonNullParameter" xml:space="preserve">
+    <value>Expected a non-null value for query parameter '{parameter}'.</value>
+  </data>
+  <data name="LogAmbientTransactionEnlisted" xml:space="preserve">
+    <value>Enlisted in an ambient transaction with isolation level '{isolationLevel}'.</value>
+    <comment>Debug RelationalEventId.AmbientTransactionEnlisted string</comment>
+  </data>
+  <data name="LogExplicitTransactionEnlisted" xml:space="preserve">
+    <value>Enlisted in an explicit transaction with isolation level '{isolationLevel}'.</value>
+    <comment>Debug RelationalEventId.ExplicitTransactionEnlisted string</comment>
+  </data>
+  <data name="LogBatchSmallerThanMinBatchSize" xml:space="preserve">
+    <value>Executing update commands individually as the number of batchable commands ({batchableCommandsCount}) is smaller than the minimum batch size ({minBatchSize}).</value>
+    <comment>Debug RelationalEventId.BatchSmallerThanMinBatchSize int int</comment>
+  </data>
+  <data name="LogBatchReadyForExecution" xml:space="preserve">
+    <value>Executing {batchCommandsCount} update commands as a batch.</value>
+    <comment>Debug RelationalEventId.BatchReadyForExecution int</comment>
+  </data>
+  <data name="LogMigrationAttributeMissingWarning" xml:space="preserve">
+    <value>A MigrationAttribute isn't specified on the '{class}' class.</value>
+    <comment>Warning RelationalEventId.MigrationAttributeMissingWarning string</comment>
   </data>
 </root>

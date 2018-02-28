@@ -61,7 +61,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                 entryCount: 4);
         }
 
+#if Test20
         private int GetEmployeeID(Employee employee)
+#else
+        private uint GetEmployeeID(Employee employee)
+#endif
         {
             return employee.EmployeeID;
         }
@@ -194,7 +198,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         [ConditionalFact]
         public virtual void Join_local_collection_int_closure_is_cached_correctly()
         {
-            var ids = new[] { 1, 2 };
+#if Test20
+            var ids = new int[] { 1, 2 };
+#else
+            var ids = new uint[] { 1, 2 };
+#endif
 
             AssertQueryScalar<Employee>(
                 es =>
@@ -202,7 +210,11 @@ namespace Microsoft.EntityFrameworkCore.Query
                     join id in ids on e.EmployeeID equals id
                     select e.EmployeeID);
 
-            ids = new[] { 3 };
+#if Test20
+            ids = new int[] { 3 };
+#else
+            ids = new uint[] { 3 };
+#endif
 
             AssertQueryScalar<Employee>(
                 es =>
@@ -304,7 +316,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             AssertQuery<Customer, Order>(
                 (cs, os) =>
-                    from c in cs.Where(c => c.CustomerID != "VAFFE").OrderBy(c => c.City).Take(5)
+                    from c in cs.Where(c => c.CustomerID != "VAFFE" && c.CustomerID != "DRACD").OrderBy(c => c.City).Take(5)
                     join o in os on c.CustomerID equals o.CustomerID into orders
                     select new { cust = c, ords = orders.Count() },
                 assertOrder: true,

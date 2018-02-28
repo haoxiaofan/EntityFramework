@@ -1,17 +1,20 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
-using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+// ReSharper disable UnusedMember.Local
+// ReSharper disable UnusedAutoPropertyAccessor.Local
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
     public class StateManagerTest
@@ -98,7 +101,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 context.Attach(new SingleKey { Id = 77, AlternateId = 66 });
 
                 Assert.Equal(
-                    CoreStrings.IdentityConflictSensitive("SingleKey", "Id:77"),
+                    CoreStrings.IdentityConflictSensitive("SingleKey", "{Id: 77}"),
                     Assert.Throws<InvalidOperationException>(
                         () => context.Attach(new SingleKey { Id = 77, AlternateId = 67 })).Message);
             }
@@ -112,7 +115,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 context.Attach(new SingleKey { Id = 77, AlternateId = 66 });
 
                 Assert.Equal(
-                    CoreStrings.IdentityConflictSensitive("SingleKey", "AlternateId:66"),
+                    CoreStrings.IdentityConflictSensitive("SingleKey", "{AlternateId: 66}"),
                     Assert.Throws<InvalidOperationException>(
                         () => context.Attach(new SingleKey { Id = 78, AlternateId = 66 })).Message);
             }
@@ -126,7 +129,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 context.Attach(new CompositeKey { Id1 = 77, Id2 = 78, AlternateId1 = 66, AlternateId2 = 67 });
 
                 Assert.Equal(
-                    CoreStrings.IdentityConflictSensitive("CompositeKey", "Id1:77, Id2:78"),
+                    CoreStrings.IdentityConflictSensitive("CompositeKey", "{Id1: 77, Id2: 78}"),
                     Assert.Throws<InvalidOperationException>(
                         () => context.Attach(
                             new CompositeKey { Id1 = 77, Id2 = 78, AlternateId1 = 66, AlternateId2 = 68 })).Message);
@@ -141,7 +144,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                 context.Attach(new CompositeKey { Id1 = 77, Id2 = 78, AlternateId1 = 66, AlternateId2 = 67 });
 
                 Assert.Equal(
-                    CoreStrings.IdentityConflictSensitive("CompositeKey", "AlternateId1:66, AlternateId2:67"),
+                    CoreStrings.IdentityConflictSensitive("CompositeKey", "{AlternateId1: 66, AlternateId2: 67}"),
                     Assert.Throws<InvalidOperationException>(
                         () => context.Attach(
                             new CompositeKey { Id1 = 77, Id2 = 79, AlternateId1 = 66, AlternateId2 = 67 })).Message);
@@ -699,6 +702,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
         internal class ChangeDetectorProxy : ChangeDetector
         {
+            public ChangeDetectorProxy(
+                IDiagnosticsLogger<DbLoggerCategory.ChangeTracking> logger,
+                ILoggingOptions loggingOptions)
+                : base(logger, loggingOptions)
+            {
+            }
+
             public List<InternalEntityEntry> Entries { get; } = new List<InternalEntityEntry>();
 
             public override void DetectChanges(InternalEntityEntry entry)
@@ -770,14 +780,15 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             Assert.Empty(stateManager.GetDependents(categoryEntry4, fk).ToArray());
         }
 
-        [Fact] // Issue #743
-        public void Throws_when_instance_of_unmapped_derived_type_is_used()
+        [Fact]
+        public void Does_not_throws_when_instance_of_unmapped_derived_type_is_used()
         {
             var model = BuildModel();
             var stateManager = CreateStateManager(model);
-            Assert.Equal(
-                CoreStrings.EntityTypeNotFound(typeof(SpecialProduct).Name),
-                Assert.Throws<InvalidOperationException>(() => stateManager.GetOrCreateEntry(new SpecialProduct())).Message);
+
+            var entry = stateManager.GetOrCreateEntry(new SpecialProduct());
+
+            Assert.Same(model.FindEntityType(typeof(Product)), entry.EntityType);
         }
 
         private static IStateManager CreateStateManager(IModel model)
@@ -819,8 +830,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 
         private static IMutableModel BuildModel()
         {
-            var builder = new ModelBuilder(new CoreConventionSetBuilder(new CoreConventionSetBuilderDependencies(new CoreTypeMapper(new CoreTypeMapperDependencies()))).CreateConventionSet());
-            var model = builder.Model;
+            var builder = InMemoryTestHelpers.Instance.CreateConventionBuilder();
 
             builder.Entity<Product>().HasOne<Category>().WithOne()
                 .HasForeignKey<Product>(e => e.DependentId)
@@ -843,7 +853,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                         eb.HasKey("Id");
                     });
 
-            return model;
+            return builder.Model;
         }
     }
 }

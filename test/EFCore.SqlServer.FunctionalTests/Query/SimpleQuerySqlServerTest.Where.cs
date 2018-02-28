@@ -2,13 +2,21 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using Microsoft.EntityFrameworkCore.Internal;
-using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Query
 {
     public partial class SimpleQuerySqlServerTest
     {
+        private const string ConvertParams =
+#if NET461
+            null;
+#elif NETCOREAPP2_0 || NETCOREAPP2_1
+            ", Object";
+#else
+#error target frameworks need to be updated.
+#endif
+
         public override void Where_simple()
         {
             base.Where_simple();
@@ -17,6 +25,23 @@ namespace Microsoft.EntityFrameworkCore.Query
                 @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
 FROM [Customers] AS [c]
 WHERE [c].[City] = N'London'");
+        }
+
+        public override void Where_as_queryable_expression()
+        {
+            base.Where_as_queryable_expression();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE EXISTS (
+    SELECT 1
+    FROM (
+        SELECT [o].*
+        FROM [Orders] AS [o]
+        WHERE [c].[CustomerID] = [o].[CustomerID]
+    ) AS [t]
+    WHERE [t].[CustomerID] = N'ALFKI')");
         }
 
         public override void Where_simple_closure()
@@ -36,8 +61,47 @@ WHERE [c].[City] = @__city_0");
             base.Where_indexer_closure();
 
             AssertSql(
-                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
-FROM [Customers] AS [c]");
+                @"@__p_0='London' (Size = 4000)
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[City] = @__p_0");
+        }
+
+        public override void Where_dictionary_key_access_closure()
+        {
+            base.Where_dictionary_key_access_closure();
+
+            AssertSql(
+                @"@__get_Item_0='London' (Size = 4000)
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[City] = @__get_Item_0");
+        }
+
+        public override void Where_tuple_item_closure()
+        {
+            base.Where_tuple_item_closure();
+
+            AssertSql(
+                @"@__predicateTuple_Item2_0='London' (Size = 4000)
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[City] = @__predicateTuple_Item2_0");
+        }
+
+        public override void Where_named_tuple_item_closure()
+        {
+            base.Where_named_tuple_item_closure();
+
+            AssertSql(
+                @"@__predicateTuple_Item2_0='London' (Size = 4000)
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[City] = @__predicateTuple_Item2_0");
         }
 
         public override void Where_simple_closure_constant()
@@ -477,7 +541,6 @@ FROM [Employees] AS [e]
 WHERE [e].[EmployeeID] = 1");
         }
 
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Failing after netcoreapp2.0 upgrade")]
         public override void Where_equals_using_object_overload_on_mismatched_types()
         {
             base.Where_equals_using_object_overload_on_mismatched_types();
@@ -487,7 +550,7 @@ WHERE [e].[EmployeeID] = 1");
 FROM [Employees] AS [e]
 WHERE 0 = 1");
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("e.EmployeeID.Equals(Convert(__longPrm_0))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"e.EmployeeID.Equals(Convert(__longPrm_0{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
         }
 
         public override void Where_equals_using_int_overload_on_mismatched_types()
@@ -495,14 +558,13 @@ WHERE 0 = 1");
             base.Where_equals_using_int_overload_on_mismatched_types();
 
             AssertSql(
-                @"@__shortPrm_0='1' (DbType = Int32)
+                @"@__shortPrm_0='1'
 
 SELECT [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[ReportsTo], [e].[Title]
 FROM [Employees] AS [e]
 WHERE [e].[EmployeeID] = @__shortPrm_0");
         }
 
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Failing after netcoreapp2.0 upgrade")]
         public override void Where_equals_on_mismatched_types_nullable_int_long()
         {
             base.Where_equals_on_mismatched_types_nullable_int_long();
@@ -516,12 +578,11 @@ WHERE 0 = 1",
 FROM [Employees] AS [e]
 WHERE 0 = 1");
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("__longPrm_0.Equals(Convert(e.ReportsTo))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"__longPrm_0.Equals(Convert(e.ReportsTo{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("e.ReportsTo.Equals(Convert(__longPrm_0))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"e.ReportsTo.Equals(Convert(__longPrm_0{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
         }
 
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Failing after netcoreapp2.0 upgrade")]
         public override void Where_equals_on_mismatched_types_nullable_long_nullable_int()
         {
             base.Where_equals_on_mismatched_types_nullable_long_nullable_int();
@@ -535,9 +596,9 @@ WHERE 0 = 1",
 FROM [Employees] AS [e]
 WHERE 0 = 1");
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("__nullableLongPrm_0.Equals(Convert(e.ReportsTo))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"__nullableLongPrm_0.Equals(Convert(e.ReportsTo{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
 
-            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage("e.ReportsTo.Equals(Convert(__nullableLongPrm_0))"), Fixture.TestSqlLoggerFactory.Log);
+            Assert.Contains(RelationalStrings.LogPossibleUnintendedUseOfEquals.GenerateMessage($"e.ReportsTo.Equals(Convert(__nullableLongPrm_0{ConvertParams}))"), Fixture.TestSqlLoggerFactory.Log);
         }
 
         public override void Where_equals_on_mismatched_types_int_nullable_int()
@@ -620,12 +681,42 @@ FROM [Customers] AS [c]
 WHERE CAST(LEN([c].[City]) AS int) = 6");
         }
 
+        public override void Where_string_indexof()
+        {
+            base.Where_string_indexof();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE (CHARINDEX(N'Sea', [c].[City]) - 1) <> -1");
+        }
+
+        public override void Where_string_replace()
+        {
+            base.Where_string_replace();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE REPLACE([c].[City], N'Sea', N'Rea') = N'Reattle'");
+        }
+
+        public override void Where_string_substring()
+        {
+            base.Where_string_substring();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE SUBSTRING([c].[City], 2, 2) = N'ea'");
+        }
+
         public override void Where_datetime_now()
         {
             base.Where_datetime_now();
 
             AssertSql(
-                @"@__myDatetime_0='04/10/2015 00:00:00'
+                @"@__myDatetime_0='2015-04-10T00:00:00'
 
 SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
 FROM [Customers] AS [c]
@@ -637,11 +728,21 @@ WHERE GETDATE() <> @__myDatetime_0");
             base.Where_datetime_utcnow();
 
             AssertSql(
-                @"@__myDatetime_0='04/10/2015 00:00:00'
+                @"@__myDatetime_0='2015-04-10T00:00:00'
 
 SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
 FROM [Customers] AS [c]
 WHERE GETUTCDATE() <> @__myDatetime_0");
+        }
+
+        public override void Where_datetime_today()
+        {
+            base.Where_datetime_today();
+
+            AssertSql(
+             @"SELECT [e].[EmployeeID], [e].[City], [e].[Country], [e].[FirstName], [e].[ReportsTo], [e].[Title]
+FROM [Employees] AS [e]
+WHERE CONVERT(date, GETDATE()) = CONVERT(date, GETDATE())");
         }
 
         public override void Where_datetime_date_component()
@@ -649,7 +750,7 @@ WHERE GETUTCDATE() <> @__myDatetime_0");
             base.Where_datetime_date_component();
 
             AssertSql(
-                @"@__myDatetime_0='05/04/1998 00:00:00'
+                @"@__myDatetime_0='1998-05-04T00:00:00'
 
 SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
 FROM [Orders] AS [o]
@@ -1296,9 +1397,54 @@ FROM [Customers] AS [c]");
 FROM [Customers] AS [c]");
         }
 
-        public override void Where_compare_constructed()
+        public override void Where_compare_tuple_constructed_equal()
         {
-            base.Where_compare_constructed();
+            base.Where_compare_tuple_constructed_equal();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]");
+        }
+
+        public override void Where_compare_tuple_constructed_multi_value_equal()
+        {
+            base.Where_compare_tuple_constructed_multi_value_equal();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]");
+        }
+
+        public override void Where_compare_tuple_constructed_multi_value_not_equal()
+        {
+            base.Where_compare_tuple_constructed_multi_value_not_equal();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]");
+        }
+
+        public override void Where_compare_tuple_create_constructed_equal()
+        {
+            base.Where_compare_tuple_create_constructed_equal();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]");
+        }
+
+        public override void Where_compare_tuple_create_constructed_multi_value_equal()
+        {
+            base.Where_compare_tuple_create_constructed_multi_value_equal();
+
+            AssertSql(
+                @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]");
+        }
+
+        public override void Where_compare_tuple_create_constructed_multi_value_not_equal()
+        {
+            base.Where_compare_tuple_create_constructed_multi_value_not_equal();
 
             AssertSql(
                 @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
@@ -1332,6 +1478,42 @@ FROM [Customers] AS [c]");
                 @"SELECT [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
 FROM [Orders] AS [o]
 WHERE ([o].[CustomerID] = N'QUICK') AND ([o].[OrderDate] > '1998-01-01T00:00:00.000')");
+        }
+
+        public override void Where_navigation_contains()
+        {
+            base.Where_navigation_contains();
+
+            AssertSql(
+                @"SELECT TOP(2) [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = N'ALFKI'
+ORDER BY [c].[CustomerID]",
+                //
+                @"SELECT [c.Orders].[OrderID], [c.Orders].[CustomerID], [c.Orders].[EmployeeID], [c.Orders].[OrderDate]
+FROM [Orders] AS [c.Orders]
+INNER JOIN (
+    SELECT TOP(1) [c0].[CustomerID]
+    FROM [Customers] AS [c0]
+    WHERE [c0].[CustomerID] = N'ALFKI'
+    ORDER BY [c0].[CustomerID]
+) AS [t] ON [c.Orders].[CustomerID] = [t].[CustomerID]
+ORDER BY [t].[CustomerID]",
+                //
+                @"SELECT [od].[OrderID], [od].[ProductID], [od].[Discount], [od].[Quantity], [od].[UnitPrice]
+FROM [Order Details] AS [od]");
+        }
+
+        public override void Where_array_index()
+        {
+            base.Where_array_index();
+
+            AssertSql(
+                @"@__p_0='ALFKI' (Size = 5)
+
+SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+FROM [Customers] AS [c]
+WHERE [c].[CustomerID] = @__p_0");
         }
     }
 }

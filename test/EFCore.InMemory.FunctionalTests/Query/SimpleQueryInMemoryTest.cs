@@ -4,13 +4,14 @@
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit.Abstractions;
 
-// ReSharper disable RedundantOverridenMember
-// ReSharper disable ConvertMethodToExpressionBody
 namespace Microsoft.EntityFrameworkCore.Query
 {
     public class SimpleQueryInMemoryTest : SimpleQueryTestBase<NorthwindQueryInMemoryFixture<NoopModelCustomizer>>
     {
-        public SimpleQueryInMemoryTest(NorthwindQueryInMemoryFixture<NoopModelCustomizer> fixture, ITestOutputHelper testOutputHelper)
+        public SimpleQueryInMemoryTest(
+            NorthwindQueryInMemoryFixture<NoopModelCustomizer> fixture,
+            // ReSharper disable once UnusedParameter.Local
+            ITestOutputHelper testOutputHelper)
             : base(fixture)
         {
             //TestLoggerFactory.TestOutputHelper = testOutputHelper;

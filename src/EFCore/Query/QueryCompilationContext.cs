@@ -40,6 +40,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         private IDictionary<IQuerySource, List<IReadOnlyList<INavigation>>> _trackableIncludes;
         private ISet<IQuerySource> _querySourcesRequiringMaterialization;
 
+        private IDictionary<MainFromClause, CorrelatedSubqueryMetadata> _correlatedSubqueryMetadataMap;
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
@@ -64,6 +66,58 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Registers a mapping between correlated collection query models and metadata needed to process them.
+        /// </summary>
+        /// <param name="mainFromClause"> The main from clause.</param>
+        /// <param name="trackingQuery"> Flag indicating whether query should be tracked or not. </param>
+        /// <param name="firstNavigation"> First navigation in the chain leading to collection navigation that is being optimized. </param>
+        /// <param name="collectionNavigation"> Collection navigation that is being optimized. </param>
+        /// <param name="parentQuerySource"> Query source that is origin of the collection navigation. </param>
+        public virtual void RegisterCorrelatedSubqueryMetadata(
+            [NotNull] MainFromClause mainFromClause,
+            bool trackingQuery,
+            [NotNull] INavigation firstNavigation,
+            [NotNull] INavigation collectionNavigation,
+            [NotNull] IQuerySource parentQuerySource)
+        {
+            Check.NotNull(mainFromClause, nameof(mainFromClause));
+            Check.NotNull(firstNavigation, nameof(firstNavigation));
+            Check.NotNull(collectionNavigation, nameof(collectionNavigation));
+            Check.NotNull(parentQuerySource, nameof(parentQuerySource));
+
+            if (_correlatedSubqueryMetadataMap == null)
+            {
+                _correlatedSubqueryMetadataMap = new Dictionary<MainFromClause, CorrelatedSubqueryMetadata>();
+            }
+
+            _correlatedSubqueryMetadataMap[mainFromClause]
+                = new CorrelatedSubqueryMetadata(
+                    _correlatedSubqueryMetadataMap.Count,
+                    trackingQuery,
+                    firstNavigation,
+                    collectionNavigation,
+                    parentQuerySource);
+        }
+
+        /// <summary>
+        ///     Looks up a mapping between correlated collection query models and metadata needed to process them.
+        /// </summary>
+        /// <param name="mainFromClause"> The main from clause.</param>
+        /// <param name="correlatedSubqueryMetadata"> The correlated sub-query metadata. </param>
+        /// <returns> <c>True</c> if correlated sub-query metadata was registered; <c>false</c> otherwise. </returns>
+        public virtual bool TryGetCorrelatedSubqueryMetadata(
+            [NotNull] MainFromClause mainFromClause,
+            [CanBeNull] out CorrelatedSubqueryMetadata correlatedSubqueryMetadata)
+        {
+            Check.NotNull(mainFromClause, nameof(mainFromClause));
+
+            correlatedSubqueryMetadata = null;
+
+            return _correlatedSubqueryMetadataMap != null
+                   && _correlatedSubqueryMetadataMap.TryGetValue(mainFromClause, out correlatedSubqueryMetadata);
+        }
+
+        /// <summary>
         ///     Gets the model.
         /// </summary>
         /// <value>
@@ -80,10 +134,10 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual IDiagnosticsLogger<DbLoggerCategory.Query> Logger { get; }
 
         /// <summary>
-        ///     Gets the linq operator provider.
+        ///     Gets the LINQ operator provider.
         /// </summary>
         /// <value>
-        ///     The linq operator provider.
+        ///     The LINQ operator provider.
         /// </value>
         public virtual ILinqOperatorProvider LinqOperatorProvider { get; }
 
@@ -110,6 +164,11 @@ namespace Microsoft.EntityFrameworkCore.Query
         ///     The query source mapping.
         /// </value>
         public virtual QuerySourceMapping QuerySourceMapping { get; } = new QuerySourceMapping();
+
+        /// <summary>
+        ///     Get a value indicating whether query that is being processed is asynchronous.
+        /// </summary>
+        public virtual bool IsAsyncQuery { get; set; }
 
         /// <summary>
         ///     Gets the entity type mapped to the given query source
@@ -180,7 +239,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         public virtual IReadOnlyCollection<IQueryAnnotation> QueryAnnotations => _queryAnnotations;
 
         /// <summary>
-        ///     Adds query annotations to the exisiting list.
+        ///     Adds query annotations to the existing list.
         /// </summary>
         /// <param name="annotations">The query annotations.</param>
         public virtual void AddAnnotations([NotNull] IEnumerable<IQueryAnnotation> annotations)
@@ -306,6 +365,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                     var entityType = _model.FindEntityType(entityQueryable.ElementType);
 
                     if (entityType != null
+                        && !entityType.IsQueryType
                         && (_referencedEntityTypes > 0
                             || entityType.ShadowPropertyCount() > 0))
                     {
@@ -546,7 +606,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 var resultOperatorSources = RequiresMaterializationExpressionVisitor.GetSetResultOperatorSourceExpressions(resultOperators);
                 if (resultOperatorSources.Any())
                 {
-                    // in case of set1.Concat(set2) we also need to add set1 qsre to materialization
+                    // in case of set1.Concat(set2) we also need to add set1 QSRE to materialization
                     // reusing existing infrastructure for cases where the projection is not trivial
                     var queryModelCopy = new QueryModel(queryModel.MainFromClause, queryModel.SelectClause);
                     foreach (var bodyClause in queryModel.BodyClauses)

@@ -17,6 +17,7 @@ using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 // ReSharper disable MemberCanBePrivate.Local
 // ReSharper disable UnusedAutoPropertyAccessor.Local
 namespace Microsoft.EntityFrameworkCore.Update
@@ -506,8 +507,18 @@ namespace Microsoft.EntityFrameworkCore.Update
             nonKey.Relational().ColumnName = "Col2";
             nonKey.ValueGenerated = computeNonKeyValue ? ValueGenerated.OnAddOrUpdate : ValueGenerated.Never;
 
+            GenerateMapping(key);
+            GenerateMapping(nonKey);
+
             return model;
         }
+
+        private static void GenerateMapping(IMutableProperty property)
+            => property[CoreAnnotationNames.TypeMapping] =
+                new TestRelationalTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())
+                    .FindMapping(property);
 
         private static InternalEntityEntry CreateEntry(
             EntityState entityState,
@@ -534,11 +545,18 @@ namespace Microsoft.EntityFrameworkCore.Update
                 : base(
                     new RelationalCommandBuilderFactory(
                         new FakeDiagnosticsLogger<DbLoggerCategory.Database.Command>(),
-                        new FakeRelationalTypeMapper(new RelationalTypeMapperDependencies())),
-                    new RelationalSqlGenerationHelper(new RelationalSqlGenerationHelperDependencies()),
+                        new TestRelationalTypeMappingSource(
+                            TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                            TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())),
+                    new RelationalSqlGenerationHelper(
+                        new RelationalSqlGenerationHelperDependencies()),
                     sqlGenerator ?? new FakeSqlGenerator(
                         RelationalTestHelpers.Instance.CreateContextServices().GetRequiredService<UpdateSqlGeneratorDependencies>()),
-                    new TypedRelationalValueBufferFactoryFactory(new RelationalValueBufferFactoryDependencies()))
+                    new TypedRelationalValueBufferFactoryFactory(
+                        new RelationalValueBufferFactoryDependencies(
+                            new TestRelationalTypeMappingSource(
+                                TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                                TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()))))
             {
                 ShouldAddCommand = true;
                 ShouldValidateSql = true;

@@ -20,6 +20,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
     ///         not used in application code.
     ///     </para>
     /// </summary>
+    [Obsolete("Use RelationalTypeMappingSource.")]
     public abstract class RelationalTypeMapper : IRelationalTypeMapper
     {
         private readonly ConcurrentDictionary<string, RelationalTypeMapping> _explicitMappings
@@ -46,13 +47,13 @@ namespace Microsoft.EntityFrameworkCore.Storage
         /// <returns> The type mappings. </returns>
         protected abstract IReadOnlyDictionary<string, RelationalTypeMapping> GetStoreTypeMappings();
 
-        // Not using IRelationalAnnotationProvider here because type mappers are Singletons
         /// <summary>
         ///     Gets column type for the given property.
         /// </summary>
         /// <param name="property"> The property. </param>
         /// <returns> The name of the database type. </returns>
-        protected abstract string GetColumnType([NotNull] IProperty property);
+        protected virtual string GetColumnType([NotNull] IProperty property) 
+            => (string)Check.NotNull(property, nameof(property))[RelationalAnnotationNames.ColumnType];
 
         /// <summary>
         ///     Ensures that the given type name is a valid type for the relational database.

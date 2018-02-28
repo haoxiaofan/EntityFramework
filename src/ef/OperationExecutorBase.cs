@@ -13,34 +13,34 @@ namespace Microsoft.EntityFrameworkCore.Tools
         public const string DesignAssemblyName = "Microsoft.EntityFrameworkCore.Design";
         protected const string ExecutorTypeName = "Microsoft.EntityFrameworkCore.Design.OperationExecutor";
 
-        private static readonly IDictionary EmptyArguments = new Dictionary<string, object>(0);
+        private static readonly IDictionary _emptyArguments = new Dictionary<string, object>(0);
         public string AppBasePath { get; }
 
         protected string AssemblyFileName { get; set; }
         protected string StartupAssemblyFileName { get; set; }
         protected string ProjectDirectory { get; }
         protected string RootNamespace { get; }
+        protected string Language { get; }
 
         protected OperationExecutorBase(
             string assembly,
             string startupAssembly,
             string projectDir,
             string dataDirectory,
-            string rootNamespace)
+            string rootNamespace,
+            string language)
         {
             AssemblyFileName = Path.GetFileNameWithoutExtension(assembly);
             StartupAssemblyFileName = startupAssembly == null
                 ? AssemblyFileName
                 : Path.GetFileNameWithoutExtension(startupAssembly);
 
-            AppBasePath = Path.GetDirectoryName(startupAssembly ?? assembly);
-            if (!Path.IsPathRooted(AppBasePath))
-            {
-                AppBasePath = Path.GetFullPath(Path.Combine(Directory.GetCurrentDirectory(), AppBasePath));
-            }
+            AppBasePath = Path.GetFullPath(
+                Path.Combine(Directory.GetCurrentDirectory(), Path.GetDirectoryName(startupAssembly ?? assembly)));
 
             RootNamespace = rootNamespace ?? AssemblyFileName;
             ProjectDirectory = projectDir ?? Directory.GetCurrentDirectory();
+            Language = language;
 
             Reporter.WriteVerbose(Resources.UsingAssembly(AssemblyFileName));
             Reporter.WriteVerbose(Resources.UsingStartupAssembly(StartupAssemblyFileName));
@@ -58,7 +58,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
         protected abstract void Execute(string operationName, object resultHandler, IDictionary arguments);
 
         private TResult InvokeOperation<TResult>(string operation)
-            => InvokeOperation<TResult>(operation, EmptyArguments);
+            => InvokeOperation<TResult>(operation, _emptyArguments);
 
         private TResult InvokeOperation<TResult>(string operation, IDictionary arguments)
             => (TResult)InvokeOperationImpl(operation, arguments);
@@ -142,6 +142,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
             string provider,
             string connectionString,
             string outputDir,
+            string outputDbContextDir,
             string dbContextClassName,
             IEnumerable<string> schemaFilters,
             IEnumerable<string> tableFilters,
@@ -155,6 +156,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     ["provider"] = provider,
                     ["connectionString"] = connectionString,
                     ["outputDir"] = outputDir,
+                    ["outputDbContextDir"] = outputDbContextDir,
                     ["dbContextClassName"] = dbContextClassName,
                     ["schemaFilters"] = schemaFilters,
                     ["tableFilters"] = tableFilters,

@@ -37,8 +37,8 @@ namespace Microsoft.EntityFrameworkCore
             var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider();
 
             Assert.Same(
-                CreateStore(serviceProvider, persist: true).Store,
-                CreateStore(serviceProvider, persist: true).Store);
+                CreateStore(serviceProvider).Store,
+                CreateStore(serviceProvider).Store);
         }
 
         [Fact]
@@ -46,18 +46,18 @@ namespace Microsoft.EntityFrameworkCore
         {
             var serviceProvider = InMemoryTestHelpers.Instance.CreateServiceProvider();
             var model = CreateModel();
-            var store = CreateStore(serviceProvider, persist: true);
+            var store = CreateStore(serviceProvider);
 
             Assert.True(store.EnsureDatabaseCreated(model));
             Assert.False(store.EnsureDatabaseCreated(model));
             Assert.False(store.EnsureDatabaseCreated(model));
 
-            store = CreateStore(serviceProvider, persist: true);
+            store = CreateStore(serviceProvider);
 
             Assert.False(store.EnsureDatabaseCreated(model));
         }
 
-        private static IInMemoryDatabase CreateStore(IServiceProvider serviceProvider, bool persist)
+        private static IInMemoryDatabase CreateStore(IServiceProvider serviceProvider)
         {
             var optionsBuilder = new DbContextOptionsBuilder();
             optionsBuilder.UseInMemoryDatabase(nameof(InMemoryDatabaseTest));
@@ -146,10 +146,10 @@ namespace Microsoft.EntityFrameworkCore
 
             await inMemoryDatabase.SaveChangesAsync(new[] { entityEntry });
 
-            var entry = log.Single(t => t.Id.Id == InMemoryEventId.ChangesSaved.Id);
+            var (Level, Id, Message) = log.Single(t => t.Id.Id == InMemoryEventId.ChangesSaved.Id);
 
-            Assert.Equal(LogLevel.Information, entry.Level);
-            Assert.Equal(InMemoryStrings.LogSavedChanges.GenerateMessage(1), entry.Message);
+            Assert.Equal(LogLevel.Information, Level);
+            Assert.Equal(InMemoryStrings.LogSavedChanges.GenerateMessage(1), Message);
         }
 
         private static IModel CreateModel()

@@ -5,6 +5,7 @@ using System;
 using System.Linq;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class SqliteInternalMetadataBuilderExtensionsTest

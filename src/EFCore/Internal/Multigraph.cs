@@ -15,7 +15,8 @@ namespace Microsoft.EntityFrameworkCore.Internal
     public class Multigraph<TVertex, TEdge> : Graph<TVertex>
     {
         private readonly HashSet<TVertex> _vertices = new HashSet<TVertex>();
-        private readonly Dictionary<TVertex, Dictionary<TVertex, List<TEdge>>> _successorMap = new Dictionary<TVertex, Dictionary<TVertex, List<TEdge>>>();
+        private readonly Dictionary<TVertex, Dictionary<TVertex, List<TEdge>>> _successorMap =
+            new Dictionary<TVertex, Dictionary<TVertex, List<TEdge>>>();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -35,11 +36,9 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public virtual IEnumerable<TEdge> GetEdges([NotNull] TVertex from, [NotNull] TVertex to)
         {
-            Dictionary<TVertex, List<TEdge>> successorSet;
-            if (_successorMap.TryGetValue(from, out successorSet))
+            if (_successorMap.TryGetValue(from, out var successorSet))
             {
-                List<TEdge> edgeList;
-                if (successorSet.TryGetValue(to, out edgeList))
+                if (successorSet.TryGetValue(to, out var edgeList))
                 {
                     return edgeList;
                 }
@@ -65,7 +64,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual void AddEdge([NotNull] TVertex from, [NotNull] TVertex to, [NotNull] TEdge edge)
+        public virtual void AddEdge([NotNull] TVertex from, [NotNull] TVertex to, [CanBeNull] TEdge edge)
             => AddEdges(from, to, new[] { edge });
 
         /// <summary>
@@ -84,15 +83,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 throw new InvalidOperationException(CoreStrings.GraphDoesNotContainVertex(to));
             }
 
-            Dictionary<TVertex, List<TEdge>> successorSet;
-            if (!_successorMap.TryGetValue(from, out successorSet))
+            if (!_successorMap.TryGetValue(from, out var successorSet))
             {
                 successorSet = new Dictionary<TVertex, List<TEdge>>();
                 _successorMap.Add(from, successorSet);
             }
 
-            List<TEdge> edgeList;
-            if (!successorSet.TryGetValue(to, out edgeList))
+            if (!successorSet.TryGetValue(to, out var edgeList))
             {
                 edgeList = new List<TEdge>();
                 successorSet.Add(to, edgeList);
@@ -129,7 +126,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public virtual IReadOnlyList<TVertex> TopologicalSort(
             [CanBeNull] Func<TVertex, TVertex, IEnumerable<TEdge>, bool> canBreakEdge,
-            [CanBeNull] Func<IEnumerable<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>, string> formatCycle)
+            [CanBeNull] Func<IReadOnlyList<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>, string> formatCycle)
         {
             var sortedQueue = new List<TVertex>();
             var predecessorCounts = new Dictionary<TVertex, int>();
@@ -238,29 +235,34 @@ namespace Microsoft.EntityFrameworkCore.Internal
                         }
                         cycle.Reverse();
 
-                        // Throw an exception
-                        if (formatCycle == null)
-                        {
-                            throw new InvalidOperationException(
-                                CoreStrings.CircularDependency(
-                                    cycle.Select(ToString).Join(" -> ")));
-                        }
-                        // Build the cycle message data
-                        currentCycleVertex = cycle.First();
-                        var cycleData = new List<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>();
-
-                        foreach (var vertex in cycle.Skip(1))
-                        {
-                            cycleData.Add(Tuple.Create(currentCycleVertex, vertex, GetEdges(currentCycleVertex, vertex)));
-                            currentCycleVertex = vertex;
-                        }
-                        throw new InvalidOperationException(
-                            CoreStrings.CircularDependency(
-                                formatCycle(cycleData)));
+                        ThrowCycle(cycle, formatCycle);
                     }
                 }
             }
             return sortedQueue;
+        }
+
+        private void ThrowCycle(List<TVertex> cycle, Func<IReadOnlyList<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>, string> formatCycle)
+        {
+            string cycleString;
+            if (formatCycle == null)
+            {
+                cycleString = cycle.Select(ToString).Join(" -> ");
+            }
+            else
+            {
+                var currentCycleVertex = cycle.First();
+                var cycleData = new List<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>();
+
+                foreach (var vertex in cycle.Skip(1))
+                {
+                    cycleData.Add(Tuple.Create(currentCycleVertex, vertex, GetEdges(currentCycleVertex, vertex)));
+                    currentCycleVertex = vertex;
+                }
+                cycleString = formatCycle(cycleData);
+            }
+
+            throw new InvalidOperationException(CoreStrings.CircularDependency(cycleString));
         }
 
         /// <summary>
@@ -275,7 +277,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual IReadOnlyList<List<TVertex>> BatchingTopologicalSort(
-            [CanBeNull] Func<IEnumerable<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>, string> formatCycle)
+            [CanBeNull] Func<IReadOnlyList<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>, string> formatCycle)
         {
             var currentRootsQueue = new List<TVertex>();
             var predecessorCounts = new Dictionary<TVertex, int>();
@@ -339,26 +341,25 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
             if (result.Sum(b => b.Count) != _vertices.Count)
             {
-                // TODO: Support cycle-breaking?
-
                 var currentCycleVertex = _vertices.First(
                     v =>
+                    {
+                        if (predecessorCounts.TryGetValue(v, out var predecessorNumber))
                         {
-                            int predecessorNumber;
-                            if (predecessorCounts.TryGetValue(v, out predecessorNumber))
-                            {
-                                return predecessorNumber != 0;
-                            }
-                            return false;
-                        });
-                var cyclicWalk = new List<TVertex> { currentCycleVertex };
+                            return predecessorNumber != 0;
+                        }
+                        return false;
+                    });
+                var cyclicWalk = new List<TVertex>
+                {
+                    currentCycleVertex
+                };
                 var finished = false;
                 while (!finished)
                 {
                     foreach (var predecessor in GetIncomingNeighbours(currentCycleVertex))
                     {
-                        int predecessorCount;
-                        if (!predecessorCounts.TryGetValue(predecessor, out predecessorCount))
+                        if (!predecessorCounts.TryGetValue(predecessor, out var predecessorCount))
                         {
                             continue;
                         }
@@ -392,25 +393,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
                 }
                 cycle.Add(startingVertex);
 
-                // Throw an exception
-                if (formatCycle == null)
-                {
-                    throw new InvalidOperationException(
-                        CoreStrings.CircularDependency(
-                            cycle.Select(ToString).Join(" -> ")));
-                }
-                // Build the cycle message data
-                currentCycleVertex = cycle.First();
-                var cycleData = new List<Tuple<TVertex, TVertex, IEnumerable<TEdge>>>();
-
-                foreach (var vertex in cycle.Skip(1))
-                {
-                    cycleData.Add(Tuple.Create(currentCycleVertex, vertex, GetEdges(currentCycleVertex, vertex)));
-                    currentCycleVertex = vertex;
-                }
-                throw new InvalidOperationException(
-                    CoreStrings.CircularDependency(
-                        formatCycle(cycleData)));
+                ThrowCycle(cycle, formatCycle);
             }
 
             return result;
@@ -427,13 +410,9 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public override IEnumerable<TVertex> GetOutgoingNeighbours(TVertex from)
-        {
-            Dictionary<TVertex, List<TEdge>> successorSet;
-
-            return _successorMap.TryGetValue(from, out successorSet)
+            => _successorMap.TryGetValue(from, out var successorSet)
                 ? successorSet.Keys
                 : Enumerable.Empty<TVertex>();
-        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

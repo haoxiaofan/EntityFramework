@@ -3,16 +3,16 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
-using Microsoft.EntityFrameworkCore.Internal;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Utilities;
 
 namespace Microsoft.EntityFrameworkCore.ChangeTracking
 {
-    // This is the app-developer facing public API to the change tracker
     /// <summary>
     ///     Provides access to change tracking information and operations for entity instances the context is tracking.
     ///     Instances of this class are typically obtained from <see cref="DbContext.ChangeTracker" /> and it is not designed
@@ -20,18 +20,26 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
     /// </summary>
     public class ChangeTracker : IInfrastructure<IStateManager>
     {
-        private IEntityEntryGraphIterator _graphIterator;
+        private readonly IModel _model;
         private QueryTrackingBehavior _queryTrackingBehavior;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public ChangeTracker([NotNull] DbContext context)
+        public ChangeTracker(
+            [NotNull] DbContext context,
+            [NotNull] IStateManager stateManager,
+            [NotNull] IChangeDetector changeDetector,
+            [NotNull] IModel model,
+            [NotNull] IEntityEntryGraphIterator graphIterator)
         {
             Check.NotNull(context, nameof(context));
+            Check.NotNull(stateManager, nameof(stateManager));
+            Check.NotNull(changeDetector, nameof(changeDetector));
 
             Context = context;
+
             _queryTrackingBehavior = context
                                          .GetService<IDbContextOptions>()
                                          .Extensions
@@ -39,6 +47,11 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
                                          .FirstOrDefault()
                                          ?.QueryTrackingBehavior
                                      ?? QueryTrackingBehavior.TrackAll;
+
+            StateManager = stateManager;
+            ChangeDetector = changeDetector;
+            _model = model;
+            GraphIterator = graphIterator;
         }
 
         /// <summary>
@@ -59,6 +72,18 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
         /// <summary>
         ///     <para>
+        ///         Gets or sets a value indicating whether navigation properties for tracked entities
+        ///         will be loaded on first access.
+        ///     </para>
+        ///     <para>
+        ///         The default value is true. However, lazy loading will only occur for navigation properties
+        ///         of entities that have also been configured in the model for lazy loading.
+        ///     </para>
+        /// </summary>
+        public virtual bool LazyLoadingEnabled { get; set; } = true;
+
+        /// <summary>
+        ///     <para>
         ///         Gets or sets the tracking behavior for LINQ queries run against the context. Disabling change tracking
         ///         is useful for read-only scenarios because it avoids the overhead of setting up change tracking for each
         ///         entity instance. You should not disable change tracking if you want to manipulate entity instances and
@@ -76,8 +101,8 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         /// </summary>
         public virtual QueryTrackingBehavior QueryTrackingBehavior
         {
-            get { return _queryTrackingBehavior; }
-            set { _queryTrackingBehavior = value; }
+            get => _queryTrackingBehavior;
+            set => _queryTrackingBehavior = value;
         }
 
         /// <summary>
@@ -147,6 +172,7 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///         application code.
         ///     </para>
         /// </summary>
+        [Obsolete]
         IStateManager IInfrastructure<IStateManager>.Instance => StateManager;
 
         /// <summary>
@@ -160,7 +186,13 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     <see cref="DbContext.SaveChanges()" /> and when returning change tracking information). You typically only need to
         ///     call this method if you have disabled <see cref="AutoDetectChangesEnabled" />.
         /// </summary>
-        public virtual void DetectChanges() => ChangeDetector.DetectChanges(StateManager);
+        public virtual void DetectChanges()
+        {
+            if (_model[Internal.ChangeDetector.SkipDetectChangesAnnotation] == null)
+            {
+                ChangeDetector.DetectChanges(StateManager);
+            }
+        }
 
         /// <summary>
         ///     Accepts all changes made to entities in the context. It will be assumed that the tracked entities
@@ -195,8 +227,54 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
         ///     the <see cref="EntityEntry.State" /> must be set.
         /// </param>
         public virtual void TrackGraph(
+             [NotNull] object rootEntity,
+             [NotNull] Action<EntityEntryGraphNode> callback)
+             => TrackGraph(rootEntity, callback, (n, c) =>
+             {
+                 if (n.Entry.State != EntityState.Detached)
+                 {
+                     return false;
+                 }
+
+                 ((Action<EntityEntryGraphNode>)c)(n);
+
+                 return n.Entry.State != EntityState.Detached;
+             });
+
+        /// <summary>
+        ///     <para>
+        ///         Begins tracking an entity and any entities that are reachable by traversing it's navigation properties.
+        ///         Traversal is recursive so the navigation properties of any discovered entities will also be scanned.
+        ///         The specified <paramref name="callback" /> is called for each discovered entity and must set the
+        ///         <see cref="EntityEntry.State" /> that each entity should be tracked in. If no state is set, the entity
+        ///         remains untracked. 
+        ///     </para>
+        ///     <para>
+        ///         This method is designed for use in disconnected scenarios where entities are retrieved using one instance of
+        ///         the context and then changes are saved using a different instance of the context. An example of this is a
+        ///         web service where one service call retrieves entities from the database and another service call persists
+        ///         any changes to the entities. Each service call uses a new instance of the context that is disposed when the
+        ///         call is complete.
+        ///     </para>
+        ///     <para>
+        ///         Typically traversal of the graph should stop whenever an already tracked entity is encountered or when
+        ///         an entity is reached that should not be tracked. For this typical behavior, use the 
+        ///         <see cref="TrackGraph(object,Action{EntityEntryGraphNode})"/> overload. This overload, on the other hand,
+        ///         allows the callback to decide when traversal will end, but the onus is then on the caller to ensure that
+        ///         traversal will not enter an infinite loop.
+        ///     </para>
+        /// </summary>
+        /// <param name="rootEntity"> The entity to begin traversal from. </param>
+        /// <param name="state"> An arbitrary state object passed to the callback. </param>
+        /// <param name="callback">
+        ///     An delegate to configure the change tracking information for each entity. The second parameter to the 
+        ///     callback is the arbitrary state object passed above. Iteration of the graph will not continue down the graph
+        ///     if the callback returns <c>false</c>.
+        /// </param>
+        public virtual void TrackGraph(
             [NotNull] object rootEntity,
-            [NotNull] Action<EntityEntryGraphNode> callback)
+            [CanBeNull] object state,
+            [NotNull] Func<EntityEntryGraphNode, object, bool> callback)
         {
             Check.NotNull(rootEntity, nameof(rootEntity));
             Check.NotNull(callback, nameof(callback));
@@ -205,26 +283,66 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking
 
             GraphIterator.TraverseGraph(
                 new EntityEntryGraphNode(rootEntry, null, null),
-                n =>
-                    {
-                        if (n.Entry.State != EntityState.Detached)
-                        {
-                            return false;
-                        }
-
-                        callback(n);
-
-                        return n.Entry.State != EntityState.Detached;
-                    });
+                state,
+                callback);
         }
 
-        private IStateManager StateManager
-            => Context.GetDependencies().StateManager;
+        private IStateManager StateManager { get; }
 
-        private IChangeDetector ChangeDetector
-            => Context.GetDependencies().ChangeDetector;
+        private IChangeDetector ChangeDetector { get; }
 
-        private IEntityEntryGraphIterator GraphIterator
-            => _graphIterator ?? (_graphIterator = Context.GetService<IEntityEntryGraphIterator>());
+        private IEntityEntryGraphIterator GraphIterator { get; }
+
+        /// <summary>
+        ///     An event fired when an entity is tracked by the context, either because it was returned
+        ///     from a tracking query, or because it was attached or added to the context.
+        /// </summary>
+        public event EventHandler<EntityTrackedEventArgs> Tracked
+        {
+            add => StateManager.Tracked += value;
+            remove => StateManager.Tracked -= value;
+        }
+
+        /// <summary>
+        ///     <para>
+        ///         An event fired when an entity that is tracked by the associated <see cref="DbContext" /> has moved
+        ///         from one <see cref="EntityState" /> to another.
+        ///     </para>
+        ///     <para>
+        ///         Note that this event does not fire for entities when they are first tracked by the context.
+        ///         Use the <see cref="Tracked" /> event to get notified when the context begins tracking an entity.
+        ///     </para>
+        /// </summary>
+        public event EventHandler<EntityStateChangedEventArgs> StateChanged
+        {
+            add => StateManager.StateChanged += value;
+            remove => StateManager.StateChanged -= value;
+        }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

@@ -23,6 +23,9 @@ namespace System
                    && typeInfo.GetGenericTypeDefinition() == typeof(Nullable<>);
         }
 
+        public static bool IsValidEntityType(this Type type)
+            => type.GetTypeInfo().IsClass;
+
         public static Type MakeNullable(this Type type)
             => type.IsNullableType()
                 ? type
@@ -188,6 +191,7 @@ namespace System
 
         private static readonly Dictionary<Type, object> _commonTypeDictionary = new Dictionary<Type, object>
         {
+#pragma warning disable IDE0034 // Simplify 'default' expression - default causes default(object)
             { typeof(int), default(int) },
             { typeof(Guid), default(Guid) },
             { typeof(DateTime), default(DateTime) },
@@ -203,6 +207,7 @@ namespace System
             { typeof(ushort), default(ushort) },
             { typeof(ulong), default(ulong) },
             { typeof(sbyte), default(sbyte) }
+#pragma warning restore IDE0034 // Simplify 'default' expression
         };
 
         public static object GetDefaultValue(this Type type)
@@ -220,7 +225,7 @@ namespace System
                 : Activator.CreateInstance(type);
         }
 
-        public static IEnumerable<TypeInfo> GetConstructableTypes(this Assembly assembly)
+        public static IEnumerable<TypeInfo> GetConstructibleTypes(this Assembly assembly)
             => assembly.GetLoadableDefinedTypes().Where(
                 t => !t.IsAbstract
                      && !t.IsGenericTypeDefinition);

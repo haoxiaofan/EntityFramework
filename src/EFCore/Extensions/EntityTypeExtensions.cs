@@ -73,8 +73,10 @@ namespace Microsoft.EntityFrameworkCore
                 {
                     return true;
                 }
+
                 baseType = baseType.BaseType;
             }
+
             return false;
         }
 

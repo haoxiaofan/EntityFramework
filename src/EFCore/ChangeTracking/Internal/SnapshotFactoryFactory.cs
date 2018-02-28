@@ -10,6 +10,7 @@ using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Remotion.Linq.Parsing.ExpressionVisitors;
 
 namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
 {
@@ -51,7 +52,6 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             foreach (var propertyBase in entityType.GetPropertiesAndNavigations())
             {
                 var index = GetPropertyIndex(propertyBase);
-
                 if (index >= 0)
                 {
                     types[index] = (propertyBase as IProperty)?.ClrType ?? typeof(object);
@@ -105,23 +105,29 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
             for (var i = 0; i < count; i++)
             {
                 var propertyBase = propertyBases[i];
-
-                var navigation = propertyBase as INavigation;
-
-                arguments[i] =
-                    navigation != null
-                    && navigation.IsCollection()
+                if (propertyBase == null)
+                {
+                    arguments[i] = Expression.Constant(null);
+                    types[i] = typeof(object);
+                }
+                else if (propertyBase.IsShadowProperty)
+                {
+                    arguments[i] = CreateSnapshotValueExpression(
+                        CreateReadShadowValueExpression(parameter, propertyBase),
+                        propertyBase);
+                }
+                else
+                {
+                    var memberAccess = Expression.MakeMemberAccess(
+                        entityVariable,
+                        propertyBase.GetMemberInfo(forConstruction: false, forSet: false));
+                    arguments[i] = (propertyBase as INavigation)?.IsCollection() ?? false
                         ? Expression.Call(
                             null,
                             _snapshotCollectionMethod,
-                            Expression.MakeMemberAccess(
-                                entityVariable,
-                                propertyBase.GetMemberInfo(forConstruction: false, forSet: false)))
-                        : propertyBase.IsShadowProperty
-                            ? CreateReadShadowValueExpression(parameter, propertyBase)
-                            : Expression.MakeMemberAccess(
-                                entityVariable,
-                                propertyBase.GetMemberInfo(forConstruction: false, forSet: false));
+                            memberAccess)
+                        : CreateSnapshotValueExpression(memberAccess, propertyBase);
+                }
             }
 
             var constructorExpression = Expression.Convert(
@@ -144,6 +150,24 @@ namespace Microsoft.EntityFrameworkCore.ChangeTracking.Internal
                         constructorExpression
                     })
                 : constructorExpression;
+        }
+
+        private Expression CreateSnapshotValueExpression(Expression expression, IPropertyBase propertyBase)
+        {
+            if (propertyBase is IProperty property)
+            {
+                var comparer = property.GetValueComparer() ?? property.FindMapping()?.Comparer;
+
+                if (comparer != null)
+                {
+                    expression = ReplacingExpressionVisitor.Replace(
+                        comparer.SnapshotExpression.Parameters.Single(),
+                        expression,
+                        comparer.SnapshotExpression.Body);
+                }
+            }
+
+            return expression;
         }
 
         /// <summary>

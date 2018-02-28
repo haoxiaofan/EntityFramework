@@ -327,6 +327,19 @@ namespace Microsoft.EntityFrameworkCore.Query
             => await AssertQueryScalar<TItem1, int>(actualQuery, expectedQuery, assertOrder);
 
         public virtual async Task AssertQueryScalar<TItem1>(
+            Func<IQueryable<TItem1>, IQueryable<uint>> query,
+            bool assertOrder = false)
+            where TItem1 : class
+            => await AssertQueryScalar(query, query, assertOrder);
+
+        public virtual async Task AssertQueryScalar<TItem1>(
+            Func<IQueryable<TItem1>, IQueryable<uint>> actualQuery,
+            Func<IQueryable<TItem1>, IQueryable<uint>> expectedQuery,
+            bool assertOrder = false)
+            where TItem1 : class
+            => await AssertQueryScalar<TItem1, uint>(actualQuery, expectedQuery, assertOrder);
+
+        public virtual async Task AssertQueryScalar<TItem1>(
             Func<IQueryable<TItem1>, IQueryable<long>> query,
             bool assertOrder = false)
             where TItem1 : class
@@ -334,6 +347,12 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         public virtual async Task AssertQueryScalar<TItem1>(
             Func<IQueryable<TItem1>, IQueryable<short>> query,
+            bool assertOrder = false)
+            where TItem1 : class
+            => await AssertQueryScalar(query, query, assertOrder);
+
+        public virtual async Task AssertQueryScalar<TItem1>(
+            Func<IQueryable<TItem1>, IQueryable<double>> query,
             bool assertOrder = false)
             where TItem1 : class
             => await AssertQueryScalar(query, query, assertOrder);
@@ -472,6 +491,32 @@ namespace Microsoft.EntityFrameworkCore.Query
                         elementAsserter(expected[i], actual[i]);
                     }
                 };
+        }
+
+        #endregion
+
+        #region Helpers - Maybe
+
+        public static TResult Maybe<TResult>(object caller, Func<TResult> expression)
+            where TResult : class
+        {
+            if (caller == null)
+            {
+                return null;
+            }
+
+            return expression();
+        }
+
+        public static TResult? MaybeScalar<TResult>(object caller, Func<TResult?> expression)
+            where TResult : struct
+        {
+            if (caller == null)
+            {
+                return null;
+            }
+
+            return expression();
         }
 
         #endregion

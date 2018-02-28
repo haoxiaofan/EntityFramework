@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Diagnostics;
 using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -69,9 +70,21 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             public int? P1 { get; set; }
             public int? P2 { get; set; }
             public int? P3 { get; set; }
+
+            public A A { get; set; }
+            [NotMapped]
+            public A AnotherA { get; set; }
+        }
+
+        protected class C : A
+        {
         }
 
         protected class D : A
+        {
+        }
+
+        protected class F : D
         {
         }
 
@@ -79,6 +92,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
         }
 
+        // ReSharper disable once UnusedTypeParameter
         protected class Generic<T> : Abstract
         {
         }
@@ -89,6 +103,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             public int Number { get; set; }
             public string Name { get; set; }
             public ReferencedEntity ReferencedEntity { get; set; }
+            public ICollection<SampleEntity> OtherSamples { get; set; }
         }
 
         public class AnotherSampleEntity
@@ -107,21 +122,22 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             public int Id { get; set; }
             public bool ImBool { get; set; }
+            public bool ImNotUsed { get; set; }
             public bool? ImNot { get; set; }
         }
 
         protected ModelValidatorTest()
         {
             Log = new List<(LogLevel, EventId, string)>();
-            Logger = new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
-                new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Validation.Name),
-                new LoggingOptions(),
-                new DiagnosticListener("Fake"));
+            Logger = CreateLogger();
+            ModelLogger = CreateModelLogger();
         }
 
         protected List<(LogLevel Level, EventId Id, string Message)> Log { get; }
 
-        protected IDiagnosticsLogger<DbLoggerCategory.Model.Validation> Logger { get; }
+        protected IDiagnosticsLogger<DbLoggerCategory.Model.Validation> Logger { get; set; }
+
+        protected IDiagnosticsLogger<DbLoggerCategory.Model> ModelLogger { get; set; }
 
         protected virtual void VerifyWarning(string expectedMessage, IModel model)
         {
@@ -133,10 +149,40 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         }
 
         protected virtual void VerifyError(string expectedMessage, IModel model)
-            => Assert.Equal(expectedMessage, Assert.Throws<InvalidOperationException>(() => Validate(model)).Message);
+        {
+            ((Model)model).Validate();
+            Assert.Equal(expectedMessage, Assert.Throws<InvalidOperationException>(() => Validate(model)).Message);
+        }
 
-        protected virtual void Validate(IModel model) => CreateModelValidator().Validate(model);
+        protected virtual void Validate(IModel model)
+        {
+            ((Model)model).Validate();
+            CreateModelValidator().Validate(model);
+        }
 
-        protected abstract ModelValidator CreateModelValidator();
+        protected DiagnosticsLogger<DbLoggerCategory.Model.Validation> CreateLogger(bool sensitiveDataLoggingEnabled = false)
+        {
+            var options = new LoggingOptions();
+            options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(sensitiveDataLoggingEnabled).Options);
+            return new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
+                new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Validation.Name),
+                options,
+                new DiagnosticListener("Fake"));
+        }
+
+        protected DiagnosticsLogger<DbLoggerCategory.Model> CreateModelLogger(bool sensitiveDataLoggingEnabled = false)
+        {
+            var options = new LoggingOptions();
+            options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(sensitiveDataLoggingEnabled).Options);
+            return new DiagnosticsLogger<DbLoggerCategory.Model>(
+                new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Name),
+                options,
+                new DiagnosticListener("Fake"));
+        }
+
+        protected abstract IModelValidator CreateModelValidator();
+
+        protected virtual ModelBuilder CreateConventionalModelBuilder()
+            => InMemoryTestHelpers.Instance.CreateConventionBuilder();
     }
 }

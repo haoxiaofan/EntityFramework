@@ -11,10 +11,12 @@ using Microsoft.EntityFrameworkCore.Metadata.Builders;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
     public class ModelBuilderGenericTest : ModelBuilderTest
@@ -123,6 +125,9 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
                 return this;
             }
 
+            public override void Owned<T>()
+                => ModelBuilder.Owned<T>();
+
             public override TestModelBuilder Ignore<TEntity>()
             {
                 ModelBuilder.Ignore<TEntity>();
@@ -130,7 +135,7 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             }
         }
 
-        protected class GenericTestEntityTypeBuilder<TEntity> : TestEntityTypeBuilder<TEntity>
+        protected class GenericTestEntityTypeBuilder<TEntity> : TestEntityTypeBuilder<TEntity>, IInfrastructure<EntityTypeBuilder<TEntity>>
             where TEntity : class
         {
             public GenericTestEntityTypeBuilder(EntityTypeBuilder<TEntity> entityTypeBuilder)
@@ -190,10 +195,9 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public override TestEntityTypeBuilder<TEntity> OwnsOne<TRelatedEntity>(
                 Expression<Func<TEntity, TRelatedEntity>> navigationExpression,
                 Action<TestReferenceOwnershipBuilder<TEntity, TRelatedEntity>> buildAction)
-                => Wrap(
-                    EntityTypeBuilder.OwnsOne(
-                        navigationExpression,
-                        r => buildAction(new GenericTestReferenceOwnershipBuilder<TEntity, TRelatedEntity>(r))));
+                => Wrap(EntityTypeBuilder.OwnsOne(
+                    navigationExpression,
+                    r => buildAction(new GenericTestReferenceOwnershipBuilder<TEntity, TRelatedEntity>(r))));
 
             public override TestReferenceNavigationBuilder<TEntity, TRelatedEntity> HasOne<TRelatedEntity>(
                 Expression<Func<TEntity, TRelatedEntity>> navigationExpression = null)
@@ -208,6 +212,8 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public override TestEntityTypeBuilder<TEntity> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
                 => Wrap(EntityTypeBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public EntityTypeBuilder<TEntity> Instance => EntityTypeBuilder;
         }
 
         protected class GenericTestPropertyBuilder<TProperty> : TestPropertyBuilder<TProperty>, IInfrastructure<PropertyBuilder<TProperty>>
@@ -265,6 +271,25 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public override TestPropertyBuilder<TProperty> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
                 => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.UsePropertyAccessMode(propertyAccessMode));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TStore>()
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion<TStore>());
+
+            public override TestPropertyBuilder<TProperty> HasConversion(Type storeType)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(storeType));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TStore>(
+                Expression<Func<TProperty, TStore>> convertToStoreExpression,
+                Expression<Func<TStore, TProperty>> convertFromStoreExpression)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(
+                    convertToStoreExpression,
+                    convertFromStoreExpression));
+
+            public override TestPropertyBuilder<TProperty> HasConversion<TStore>(ValueConverter<TProperty, TStore> converter)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(converter));
+
+            public override TestPropertyBuilder<TProperty> HasConversion(ValueConverter converter)
+                => new GenericTestPropertyBuilder<TProperty>(PropertyBuilder.HasConversion(converter));
 
             PropertyBuilder<TProperty> IInfrastructure<PropertyBuilder<TProperty>>.Instance => PropertyBuilder;
         }

@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -80,7 +81,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns> An object that can be used to configure the entity type. </returns>
         public virtual EntityTypeBuilder<TEntity> Entity<TEntity>()
             where TEntity : class
-            => new EntityTypeBuilder<TEntity>(Builder.Entity(typeof(TEntity), ConfigurationSource.Explicit));
+            => new EntityTypeBuilder<TEntity>(Builder.Entity(typeof(TEntity), ConfigurationSource.Explicit, throwOnQuery: true));
 
         /// <summary>
         ///     Returns an object that can be used to configure a given entity type in the model.
@@ -92,7 +93,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             Check.NotNull(type, nameof(type));
 
-            return new EntityTypeBuilder(Builder.Entity(type, ConfigurationSource.Explicit));
+            return new EntityTypeBuilder(Builder.Entity(type, ConfigurationSource.Explicit, throwOnQuery: true));
         }
 
         /// <summary>
@@ -106,7 +107,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             Check.NotEmpty(name, nameof(name));
 
-            return new EntityTypeBuilder(Builder.Entity(name, ConfigurationSource.Explicit));
+            return new EntityTypeBuilder(Builder.Entity(name, ConfigurationSource.Explicit, throwOnQuery: true));
         }
 
         /// <summary>
@@ -189,6 +190,83 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         /// <summary>
+        ///     Returns an object that can be used to configure a given query type in the model.
+        ///     If the query type is not already part of the model, it will be added to the model.
+        /// </summary>
+        /// <typeparam name="TQuery"> The query type to be configured. </typeparam>
+        /// <returns> An object that can be used to configure the query type. </returns>
+        public virtual QueryTypeBuilder<TQuery> Query<TQuery>()
+            where TQuery : class
+        {
+            return new QueryTypeBuilder<TQuery>(Builder.Query(typeof(TQuery)));
+        }
+
+        /// <summary>
+        ///     Returns an object that can be used to configure a given query type in the model.
+        ///     If the query type is not already part of the model, it will be added to the model.
+        /// </summary>
+        /// <param name="type"> The query type to be configured. </param>
+        /// <returns> An object that can be used to configure the query type. </returns>
+        public virtual QueryTypeBuilder Query([NotNull] Type type)
+        {
+            Check.NotNull(type, nameof(type));
+
+            return new QueryTypeBuilder(Builder.Query(type));
+        }
+
+        /// <summary>
+        ///     <para>
+        ///         Performs configuration of a given query type in the model. If the query type is not already part
+        ///         of the model, it will be added to the model.
+        ///     </para>
+        ///     <para>
+        ///         This overload allows configuration of the query type to be done in line in the method call rather
+        ///         than being chained after a call to <see cref="Query{TQuery}()" />. This allows additional
+        ///         configuration at the model level to be chained after configuration for the query type.
+        ///     </para>
+        /// </summary>
+        /// <typeparam name="TQuery"> The query type to be configured. </typeparam>
+        /// <param name="buildAction"> An action that performs configuration of the query type. </param>
+        /// <returns>
+        ///     The same <see cref="ModelBuilder" /> instance so that additional configuration calls can be chained.
+        /// </returns>
+        public virtual ModelBuilder Query<TQuery>([NotNull] Action<QueryTypeBuilder<TQuery>> buildAction)
+            where TQuery : class
+        {
+            Check.NotNull(buildAction, nameof(buildAction));
+
+            buildAction(Query<TQuery>());
+
+            return this;
+        }
+
+        /// <summary>
+        ///     <para>
+        ///         Performs configuration of a given query type in the model. If the query type is not already part
+        ///         of the model, it will be added to the model.
+        ///     </para>
+        ///     <para>
+        ///         This overload allows configuration of the query type to be done in line in the method call rather
+        ///         than being chained after a call to <see cref="Query{TQuery}()" />. This allows additional
+        ///         configuration at the model level to be chained after configuration for the query type.
+        ///     </para>
+        /// </summary>
+        /// <param name="type"> The query type to be configured. </param>
+        /// <param name="buildAction"> An action that performs configuration of the query type. </param>
+        /// <returns>
+        ///     The same <see cref="ModelBuilder" /> instance so that additional configuration calls can be chained.
+        /// </returns>
+        public virtual ModelBuilder Query([NotNull] Type type, [NotNull] Action<QueryTypeBuilder> buildAction)
+        {
+            Check.NotNull(type, nameof(type));
+            Check.NotNull(buildAction, nameof(buildAction));
+
+            buildAction(Query(type));
+
+            return this;
+        }
+
+        /// <summary>
         ///     Excludes the given entity type from the model. This method is typically used to remove types from
         ///     the model that were added by convention.
         /// </summary>
@@ -236,6 +314,33 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         /// <summary>
+        ///     Marks an entity type as owned. All references to this type will be configured as
+        ///     separate owned type instances.
+        /// </summary>
+        /// <typeparam name="T"> The entity type to be configured. </typeparam>
+        public virtual OwnedEntityTypeBuilder<T> Owned<T>()
+            where T : class
+        {
+            Builder.Owned(typeof(T), ConfigurationSource.Explicit);
+
+            return null;
+        }
+
+        /// <summary>
+        ///     Marks an entity type as owned. All references to this type will be configured as
+        ///     separate owned type instances.
+        /// </summary>
+        /// <param name="type"> The entity type to be configured. </param>
+        public virtual OwnedEntityTypeBuilder Owned([NotNull] Type type)
+        {
+            Check.NotNull(type, nameof(type));
+
+            Builder.Owned(type, ConfigurationSource.Explicit);
+
+            return null;
+        }
+
+        /// <summary>
         ///     Configures the default <see cref="ChangeTrackingStrategy" /> to be used for this model.
         ///     This strategy indicates how the context detects changes to properties for an instance of an entity type.
         /// </summary>
@@ -257,7 +362,7 @@ namespace Microsoft.EntityFrameworkCore
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for all properties in the model as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         /// </summary>
@@ -273,5 +378,31 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         private InternalModelBuilder Builder => this.GetInfrastructure();
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

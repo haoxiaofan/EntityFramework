@@ -866,8 +866,7 @@ WHERE 0 = 1");
 
             AssertSql(
                 @"SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
-FROM [Customers] AS [c]
-WHERE 1 = 1");
+FROM [Customers] AS [c]");
         }
 
         public override void Contains_top_level()
@@ -884,6 +883,30 @@ SELECT CASE
     )
     THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
 END");
+        }
+
+        public override void Contains_with_local_tuple_array_closure()
+        {
+            base.Contains_with_local_tuple_array_closure();
+
+            AssertSql(
+                @"SELECT [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]",
+                //
+                @"SELECT [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]");
+        }
+
+        public override void Contains_with_local_anonymous_type_array_closure()
+        {
+            base.Contains_with_local_anonymous_type_array_closure();
+
+            AssertSql(
+                @"SELECT [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]",
+                //
+                @"SELECT [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]");
         }
 
         public override void OfType_Select()
@@ -916,6 +939,103 @@ ORDER BY [o].[OrderID]");
                 @"SELECT AVG(CAST([o].[OrderID] AS float))
 FROM [Orders] AS [o]
 WHERE [o].[CustomerID] LIKE N'A' + N'%' AND (LEFT([o].[CustomerID], LEN(N'A')) = N'A')");
+        }
+
+        public override void Max_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            base.Max_with_non_matching_types_in_projection_introduces_explicit_cast();
+
+            AssertSql(
+                @"SELECT MAX(CAST([o].[OrderID] AS bigint))
+FROM [Orders] AS [o]
+WHERE [o].[CustomerID] LIKE N'A' + N'%' AND (LEFT([o].[CustomerID], LEN(N'A')) = N'A')");
+        }
+
+        public override void Min_with_non_matching_types_in_projection_introduces_explicit_cast()
+        {
+            base.Min_with_non_matching_types_in_projection_introduces_explicit_cast();
+
+            AssertSql(
+                @"SELECT MIN(CAST([o].[OrderID] AS bigint))
+FROM [Orders] AS [o]
+WHERE [o].[CustomerID] LIKE N'A' + N'%' AND (LEFT([o].[CustomerID], LEN(N'A')) = N'A')");
+        }
+
+        public override void OrderBy_Take_Last_gives_correct_result()
+        {
+            base.OrderBy_Take_Last_gives_correct_result();
+
+            AssertSql(
+                @"@__p_0='20'
+
+SELECT TOP(1) [t].*
+FROM (
+    SELECT TOP(@__p_0) [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+    ORDER BY [c].[CustomerID]
+) AS [t]
+ORDER BY [t].[CustomerID] DESC");
+        }
+
+        public override void OrderBy_Skip_Last_gives_correct_result()
+        {
+            base.OrderBy_Skip_Last_gives_correct_result();
+
+            AssertSql(
+                @"@__p_0='20'
+
+SELECT TOP(1) [t].*
+FROM (
+    SELECT [c].[CustomerID], [c].[Address], [c].[City], [c].[CompanyName], [c].[ContactName], [c].[ContactTitle], [c].[Country], [c].[Fax], [c].[Phone], [c].[PostalCode], [c].[Region]
+    FROM [Customers] AS [c]
+    ORDER BY [c].[CustomerID]
+    OFFSET @__p_0 ROWS
+) AS [t]
+ORDER BY [t].[CustomerID] DESC");
+        }
+
+        public override void Contains_over_entityType_should_rewrite_to_identity_equality()
+        {
+            base.Contains_over_entityType_should_rewrite_to_identity_equality();
+
+            AssertSql(
+                @"SELECT TOP(2) [o].[OrderID], [o].[CustomerID], [o].[EmployeeID], [o].[OrderDate]
+FROM [Orders] AS [o]
+WHERE [o].[OrderID] = 10248",
+                //
+                @"@__p_0_OrderID='10248'
+
+SELECT CASE
+    WHEN @__p_0_OrderID IN (
+        SELECT [o].[OrderID]
+        FROM [Orders] AS [o]
+        WHERE [o].[CustomerID] = N'VINET'
+    )
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END");
+        }
+
+        public override void Contains_over_entityType_should_materialize_when_composite()
+        {
+            base.Contains_over_entityType_should_materialize_when_composite();
+
+            AssertSql(
+                @"SELECT TOP(1) [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]
+WHERE ([o].[OrderID] = 10248) AND ([o].[ProductID] = 42)",
+                //
+                @"SELECT [o].[OrderID], [o].[ProductID], [o].[Discount], [o].[Quantity], [o].[UnitPrice]
+FROM [Order Details] AS [o]
+WHERE [o].[ProductID] = 42");
+        }
+
+        public override void Paging_operation_on_string_doesnt_issue_warning()
+        {
+            base.Paging_operation_on_string_doesnt_issue_warning();
+
+            Assert.DoesNotContain(
+                CoreStrings.LogFirstWithoutOrderByAndFilter.GenerateMessage(
+                    @"(from char <generated>_1 in [c].CustomerID select [<generated>_1]).FirstOrDefault()"), Fixture.TestSqlLoggerFactory.Log);
         }
     }
 }

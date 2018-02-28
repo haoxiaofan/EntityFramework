@@ -3,6 +3,7 @@
 
 using System;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -11,8 +12,10 @@ using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.Update.Internal;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Migrations
 {
     public class SqlServerModelDifferTest : MigrationsModelDifferTestBase
@@ -276,6 +279,94 @@ namespace Microsoft.EntityFrameworkCore.Migrations
         }
 
         [Fact]
+        public void Create_shared_table_with_two_entity_types()
+        {
+            Execute(
+                _ => { },
+                modelBuilder =>
+                    {
+                        modelBuilder.Entity("Order", eb =>
+                            {
+                                eb.Property<int>("Id");
+                                eb.ToTable("Orders");
+                            });
+                        modelBuilder.Entity("Details", eb =>
+                            {
+                                eb.Property<int>("Id");
+                                eb.Property<DateTime>("Time");
+                                eb.HasOne("Order").WithOne().HasForeignKey("Details", "Id");
+                                eb.ToTable("Orders");
+                            });
+                    },
+                operations =>
+                    {
+                        Assert.Equal(1, operations.Count);
+
+                        var createTableOperation = Assert.IsType<CreateTableOperation>(operations[0]);
+                        Assert.Equal(2, createTableOperation.Columns.Count);
+                        var idColumn = createTableOperation.Columns[0];
+                        Assert.Equal("Id", idColumn.Name);
+                        Assert.Equal(SqlServerValueGenerationStrategy.IdentityColumn, idColumn["SqlServer:ValueGenerationStrategy"]);
+                        var timeColumn = createTableOperation.Columns[1];
+                        Assert.Equal("Time", timeColumn.Name);
+                        Assert.False(timeColumn.IsNullable);
+                    });
+        }
+
+        [Fact]
+        public void Add_SequenceHiLo_with_seed_data()
+        {
+            Execute(
+                common => common.Entity(
+                    "Firefly",
+                    x =>
+                        {
+                            x.ToTable("Firefly", "dbo");
+                            x.Property<int>("Id");
+                            x.Property<int>("SequenceId");
+                            x.SeedData(new { Id = 42 });
+                        }),
+                _ => { },
+                target => target.Entity(
+                    "Firefly",
+                    x =>
+                        {
+                            x.ToTable("Firefly", "dbo");
+                            x.Property<int>("SequenceId").ForSqlServerUseSequenceHiLo(schema: "dbo");
+                            x.SeedData(
+                                new { Id = 42 },
+                                new { Id = 43 });
+                        }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<CreateSequenceOperation>(o);
+                            Assert.Equal("dbo", operation.Schema);
+                            Assert.Equal("EntityFrameworkHiLoSequence", operation.Name);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<InsertDataOperation>(o);
+                            AssertMultidimensionalArray(m.Values,
+                                v => Assert.Equal(43, v),
+                                v => Assert.Equal(0, v));
+                        }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                        {
+                            var operation = Assert.IsType<DropSequenceOperation>(o);
+                            Assert.Equal("dbo", operation.Schema);
+                            Assert.Equal("EntityFrameworkHiLoSequence", operation.Name);
+                        },
+                    o =>
+                        {
+                            var m = Assert.IsType<DeleteDataOperation>(o);
+                            AssertMultidimensionalArray(m.KeyValues,
+                                v => Assert.Equal(43, v));
+                        }));
+        }
+
+        [Fact]
         public void Alter_index_clustering()
         {
             Execute(
@@ -295,7 +386,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                             x.ToTable("Mutton", "bah");
                             x.Property<int>("Id");
                             x.Property<int>("Value");
-                            x.HasIndex("Value").ForSqlServerIsClustered(true);
+                            x.HasIndex("Value").ForSqlServerIsClustered();
                         }),
                 operations =>
                     {
@@ -316,7 +407,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations
 
         public static int Function()
         {
-            return default(int);
+            return default;
         }
 
         [Fact]
@@ -362,12 +453,131 @@ namespace Microsoft.EntityFrameworkCore.Migrations
                     });
         }
 
+        [Fact]
+        public void SeedData_all_operations()
+        {
+            Execute(
+                _ => { },
+                source => source.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { Id = 99999, Value1 = 0, Value2 = "" }, // deleted
+                            new { Id = 42, Value1 = 32, Value2 = "equal", InvalidProperty = "is ignored" }, // modified
+                            new { Id = 8, Value1 = 100, Value2 = "equal" }, // unchanged
+                            new { Id = 24, Value1 = 72, Value2 = "not equal1" }); // modified
+                    }),
+                target => target.Entity(
+                    "EntityWithTwoProperties",
+                    x =>
+                    {
+                        x.Property<int>("Id");
+                        x.Property<int>("Value1");
+                        x.Property<string>("Value2");
+                        x.SeedData(
+                            new { Id = 11111, Value1 = 0, Value2 = "" }, // added
+                            new { Id = 11112, Value1 = 1, Value2 = "new" }, // added
+                            new { Id = 42, Value1 = 27, Value2 = "equal", InvalidProperty = "is ignored here too" }, // modified
+                            new { Id = 8, Value1 = 100, Value2 = "equal" }, // unchanged
+                            new { Id = 24, Value1 = 99, Value2 = "not equal2" }); // modified
+                    }),
+                upOps => Assert.Collection(upOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(99999, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(99, v),
+                            v => Assert.Equal("not equal2", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(27, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        Assert.Collection(ToJaggedArray(m.Values),
+                            r => Assert.Collection(r,
+                                v => Assert.Equal(11111, v),
+                                v => Assert.Equal(0, v),
+                                v => Assert.Equal("", v)),
+                            r => Assert.Collection(r,
+                                v => Assert.Equal(11112, v),
+                                v => Assert.Equal(1, v),
+                                v => Assert.Equal("new", v))
+                            );
+                    }),
+                downOps => Assert.Collection(downOps,
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(11111, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<DeleteDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(11112, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(24, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(72, v),
+                            v => Assert.Equal("not equal1", v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<UpdateDataOperation>(o);
+                        AssertMultidimensionalArray(m.KeyValues,
+                            v => Assert.Equal(42, v));
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(32, v));
+                    },
+                    o =>
+                    {
+                        var m = Assert.IsType<InsertDataOperation>(o);
+                        AssertMultidimensionalArray(m.Values,
+                            v => Assert.Equal(99999, v),
+                            v => Assert.Equal(0, v),
+                            v => Assert.Equal("", v));
+                    }));
+        }
+
         protected override ModelBuilder CreateModelBuilder() => SqlServerTestHelpers.Instance.CreateConventionBuilder();
 
-        protected override MigrationsModelDiffer CreateModelDiffer()
-            => new MigrationsModelDiffer(
-                new SqlServerTypeMapper(new RelationalTypeMapperDependencies()),
-                new SqlServerMigrationsAnnotationProvider(new MigrationsAnnotationProviderDependencies()));
+        protected override MigrationsModelDiffer CreateModelDiffer(IModel model)
+        {
+            var ctx = SqlServerTestHelpers.Instance.CreateContext(model);
+            return new MigrationsModelDiffer(
+                new SqlServerTypeMappingSource(
+                    TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                    TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>()),
+                new SqlServerMigrationsAnnotationProvider(
+                    new MigrationsAnnotationProviderDependencies()),
+                ctx.GetService<IChangeDetector>(),
+                ctx.GetService<StateManagerDependencies>(),
+                ctx.GetService<CommandBatchPreparerDependencies>());
+        }
 
         private bool? IsMemoryOptimized(Annotatable annotatable)
             => annotatable[SqlServerAnnotationNames.MemoryOptimized] as bool?;

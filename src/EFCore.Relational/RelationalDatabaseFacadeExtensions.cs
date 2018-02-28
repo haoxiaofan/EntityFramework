@@ -64,7 +64,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns> A task that represents the asynchronous operation. </returns>
         public static async Task<IEnumerable<string>> GetAppliedMigrationsAsync(
             [NotNull] this DatabaseFacade databaseFacade,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => (await Check.NotNull(databaseFacade, nameof(databaseFacade)).GetRelationalService<IHistoryRepository>()
                 .GetAppliedMigrationsAsync(cancellationToken)).Select(hr => hr.MigrationId);
 
@@ -84,7 +84,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns> A task that represents the asynchronous operation. </returns>
         public static async Task<IEnumerable<string>> GetPendingMigrationsAsync(
             [NotNull] this DatabaseFacade databaseFacade,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => GetMigrations(databaseFacade).Except(await GetAppliedMigrationsAsync(databaseFacade, cancellationToken));
 
         /// <summary>
@@ -102,7 +102,7 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns> A task that represents the asynchronous migration operation. </returns>
         public static Task MigrateAsync(
             [NotNull] this DatabaseFacade databaseFacade,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => Check.NotNull(databaseFacade, nameof(databaseFacade)).GetRelationalService<IMigrator>()
                 .MigrateAsync(cancellationToken: cancellationToken);
 
@@ -222,7 +222,7 @@ namespace Microsoft.EntityFrameworkCore
         public static Task<int> ExecuteSqlCommandAsync(
             [NotNull] this DatabaseFacade databaseFacade,
             [NotNull] FormattableString sql,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => ExecuteSqlCommandAsync(databaseFacade, sql.Format, sql.GetArguments(), cancellationToken);
 
         /// <summary>
@@ -249,7 +249,7 @@ namespace Microsoft.EntityFrameworkCore
         public static Task<int> ExecuteSqlCommandAsync(
             [NotNull] this DatabaseFacade databaseFacade,
             RawSqlString sql,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => ExecuteSqlCommandAsync(databaseFacade, sql, Enumerable.Empty<object>(), cancellationToken);
 
         /// <summary>
@@ -305,7 +305,7 @@ namespace Microsoft.EntityFrameworkCore
             [NotNull] this DatabaseFacade databaseFacade,
             RawSqlString sql,
             [NotNull] IEnumerable<object> parameters,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             Check.NotNull(databaseFacade, nameof(databaseFacade));
             Check.NotNull(sql, nameof(sql));
@@ -355,7 +355,7 @@ namespace Microsoft.EntityFrameworkCore
         /// </returns>
         public static Task OpenConnectionAsync(
             [NotNull] this DatabaseFacade databaseFacade,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => databaseFacade.CreateExecutionStrategy().ExecuteAsync(
                 databaseFacade, (database, ct) =>
                     database.GetRelationalService<IRelationalConnection>().OpenAsync(cancellationToken), cancellationToken);
@@ -379,9 +379,7 @@ namespace Microsoft.EntityFrameworkCore
                     {
                         var transactionManager = database.GetTransactionManager();
 
-                        var relationalTransactionManager = transactionManager as IRelationalTransactionManager;
-
-                        return relationalTransactionManager != null
+                        return transactionManager is IRelationalTransactionManager relationalTransactionManager
                             ? relationalTransactionManager.BeginTransaction(isolationLevel)
                             : transactionManager.BeginTransaction();
                     });
@@ -399,15 +397,13 @@ namespace Microsoft.EntityFrameworkCore
         public static Task<IDbContextTransaction> BeginTransactionAsync(
             [NotNull] this DatabaseFacade databaseFacade,
             IsolationLevel isolationLevel,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => databaseFacade.CreateExecutionStrategy().ExecuteAsync(
                 databaseFacade, (database, ct) =>
                     {
                         var transactionManager = database.GetTransactionManager();
 
-                        var relationalTransactionManager = transactionManager as IRelationalTransactionManager;
-
-                        return relationalTransactionManager != null
+                        return transactionManager is IRelationalTransactionManager relationalTransactionManager
                             ? relationalTransactionManager.BeginTransactionAsync(isolationLevel, ct)
                             : transactionManager.BeginTransactionAsync(ct);
                     }, cancellationToken);
@@ -423,9 +419,7 @@ namespace Microsoft.EntityFrameworkCore
         {
             var transactionManager = GetTransactionManager(databaseFacade);
 
-            var relationalTransactionManager = transactionManager as IRelationalTransactionManager;
-
-            if (relationalTransactionManager == null)
+            if (!(transactionManager is IRelationalTransactionManager relationalTransactionManager))
             {
                 throw new InvalidOperationException(RelationalStrings.RelationalNotInUse);
             }
@@ -486,6 +480,15 @@ namespace Microsoft.EntityFrameworkCore
         /// <returns> The timeout, in seconds, or null if no timeout has been set. </returns>
         public static int? GetCommandTimeout([NotNull] this DatabaseFacade databaseFacade)
             => databaseFacade.GetRelationalService<IRelationalConnection>().CommandTimeout;
+
+        /// <summary>
+        ///     Generates a script to create all tables for the current model.
+        /// </summary>
+        /// <returns>
+        ///     A SQL script.
+        /// </returns>
+        public static string GenerateCreateScript([NotNull] this DatabaseFacade databaseFacade)
+            => databaseFacade.GetRelationalService<IRelationalDatabaseCreator>().GenerateCreateScript();
 
         private static TService GetRelationalService<TService>(this IInfrastructure<IServiceProvider> databaseFacade)
         {

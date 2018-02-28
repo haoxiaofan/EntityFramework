@@ -16,6 +16,7 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.Extensions.Caching.Memory;
+using Microsoft.Extensions.Logging;
 using Xunit;
 using Xunit.Abstractions;
 
@@ -33,8 +34,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         public QueryBugsTest(SqlServerFixture fixture, ITestOutputHelper testOutputHelper)
         {
             Fixture = fixture;
-            fixture.TestSqlLoggerFactory.Clear();
-            //fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
+            Fixture.TestSqlLoggerFactory.Clear();
+            //Fixture.TestSqlLoggerFactory.SetTestOutputHelper(testOutputHelper);
         }
 
         protected SqlServerFixture Fixture { get; }
@@ -101,7 +102,9 @@ INSERT [dbo].[Postcodes] ([PostcodeID], [PostcodeValue], [TownName]) VALUES (5, 
             }
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
-                => modelBuilder.Entity<Customer>().ToTable("Customers");
+            {
+                modelBuilder.Entity<Customer>().ToTable("Customers");
+            }
 
             public DbSet<Customer> Customers { get; set; }
             public DbSet<Postcode> Postcodes { get; set; }
@@ -250,7 +253,9 @@ INSERT [dbo].[Postcodes] ([PostcodeID], [PostcodeValue], [TownName]) VALUES (5, 
             }
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
-                => modelBuilder.Entity<ZeroKey>().ToTable("ZeroKey");
+            {
+                modelBuilder.Entity<ZeroKey>().ToTable("ZeroKey");
+            }
 
             public DbSet<ZeroKey> ZeroKeys { get; set; }
 
@@ -319,11 +324,15 @@ INSERT [dbo].[Postcodes] ([PostcodeID], [PostcodeValue], [TownName]) VALUES (5, 
             public DbSet<Product> Products { get; set; }
 
             protected override void OnModelCreating(ModelBuilder modelBuilder)
-                => modelBuilder.Entity<Product>().ToTable("Product");
+            {
+                modelBuilder.Entity<Product>().ToTable("Product");
+            }
         }
 
         private SqlServerTestStore CreateDatabase603()
-            => CreateTestStore(() => new MyContext603(_options), null);
+        {
+            return CreateTestStore(() => new MyContext603(_options), null);
+        }
 
         #endregion
 
@@ -387,7 +396,8 @@ LEFT JOIN [Customer] AS [o.Customer] ON ([o].[CustomerFirstName] = [o.Customer].
         }
 
         private SqlServerTestStore CreateDatabase925()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext925(_options),
                 context =>
                     {
@@ -397,8 +407,18 @@ LEFT JOIN [Customer] AS [o.Customer] ON ([o].[CustomerFirstName] = [o.Customer].
                         var order22 = new Order { Name = "Order22" };
                         var order23 = new Order { Name = "Order23" };
 
-                        var customer1 = new Customer { FirstName = "Customer", LastName = "One", Orders = new List<Order> { order11, order12 } };
-                        var customer2 = new Customer { FirstName = "Customer", LastName = "Two", Orders = new List<Order> { order21, order22, order23 } };
+                        var customer1 = new Customer
+                        {
+                            FirstName = "Customer",
+                            LastName = "One",
+                            Orders = new List<Order> { order11, order12 }
+                        };
+                        var customer2 = new Customer
+                        {
+                            FirstName = "Customer",
+                            LastName = "Two",
+                            Orders = new List<Order> { order21, order22, order23 }
+                        };
 
                         context.Customers.AddRange(customer1, customer2);
                         context.Orders.AddRange(order11, order12, order21, order22, order23);
@@ -406,6 +426,7 @@ LEFT JOIN [Customer] AS [o.Customer] ON ([o].[CustomerFirstName] = [o.Customer].
 
                         ClearLog();
                     });
+        }
 
         public class Customer
         {
@@ -532,7 +553,8 @@ LEFT JOIN [Customer] AS [o.Customer] ON ([o].[CustomerFirstName] = [o.Customer].
         }
 
         private SqlServerTestStore CreateDatabase7293()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new Context7293(_options),
                 context =>
                     {
@@ -567,6 +589,7 @@ LEFT JOIN [Customer] AS [o.Customer] ON ([o].[CustomerFirstName] = [o.Customer].
                         context.ProjectUsers.AddRange(permissions);
                         context.SaveChanges();
                     });
+        }
 
         #endregion
 
@@ -635,7 +658,8 @@ LEFT JOIN [Customer] AS [o.Customer] ON ([o].[CustomerFirstName] = [o.Customer].
         }
 
         private SqlServerTestStore CreateDatabase963()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext963(_options),
                 context =>
                     {
@@ -658,6 +682,7 @@ Queen of the Andals and the Rhoynar and the First Men, Khaleesi of the Great Gra
 
                         context.SaveChanges();
                     });
+        }
 
         public class Targaryen
         {
@@ -720,7 +745,9 @@ Queen of the Andals and the Rhoynar and the First Men, Khaleesi of the Great Gra
 
         [Fact]
         public void Compiler_generated_local_closure_produces_valid_parameter_name_1742()
-            => Execute1742(new CustomerDetails_1742 { FirstName = "Foo", LastName = "Bar" });
+        {
+            Execute1742(new CustomerDetails_1742 { FirstName = "Foo", LastName = "Bar" });
+        }
 
         public void Execute1742(CustomerDetails_1742 details)
         {
@@ -814,10 +841,10 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                         {
                             b.ToTable("Customer3758");
 
-                            b.HasMany(e => e.Orders1).WithOne();
-                            b.HasMany(e => e.Orders2).WithOne();
-                            b.HasMany(e => e.Orders3).WithOne();
-                            b.HasMany(e => e.Orders4).WithOne();
+                            b.HasMany(e => e.Orders1).WithOne().HasForeignKey("CustomerId1");
+                            b.HasMany(e => e.Orders2).WithOne().HasForeignKey("CustomerId2");
+                            b.HasMany(e => e.Orders3).WithOne().HasForeignKey("CustomerId3");
+                            b.HasMany(e => e.Orders4).WithOne().HasForeignKey("CustomerId4");
                         });
 
                 modelBuilder.Entity<Order3758>().ToTable("Order3758");
@@ -858,7 +885,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase3758()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext3758(_options),
                 context =>
                     {
@@ -905,10 +933,15 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                         c2.Orders4.Add(o241);
 
                         context.Customers.AddRange(c1, c2);
-                        context.Orders.AddRange(o111, o112, o121, o122, o131, o132, o141, o211, o212, o221, o222, o231, o232, o241);
+                        context.Orders.AddRange(
+                            o111, o112, o121, o122,
+                            o131, o132, o141, o211,
+                            o212, o221, o222, o231,
+                            o232, o241);
 
                         context.SaveChanges();
                     });
+        }
 
         #endregion
 
@@ -1042,7 +1075,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase3409()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext3409(_options),
                 context =>
                     {
@@ -1060,6 +1094,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
 
                         context.SaveChanges();
                     });
+        }
 
         #endregion
 
@@ -1177,7 +1212,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                // ReSharper disable once ConstantNullCoalescingCondition
+                                    // ReSharper disable once ConstantNullCoalescingCondition
                                 select new { One = 1, Coalesce = eRootJoined ?? (eVersion ?? eRootJoined) };
 
                     var result = query.ToList();
@@ -1198,7 +1233,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                // ReSharper disable once ConstantNullCoalescingCondition
+                                    // ReSharper disable once ConstantNullCoalescingCondition
                                 select new { One = eRootJoined, Two = 2, Coalesce = eRootJoined ?? (eVersion ?? eRootJoined) };
 
                     var result = query.ToList();
@@ -1219,8 +1254,10 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                                     on eVersion.RootEntityId equals (int?)eRoot.Id
                                     into RootEntities
                                 from eRootJoined in RootEntities.DefaultIfEmpty()
-                                // ReSharper disable once MergeConditionalExpression
+                                    // ReSharper disable once MergeConditionalExpression
+#pragma warning disable IDE0029 // Use coalesce expression
                                 select eRootJoined != null ? eRootJoined : eVersion;
+#pragma warning restore IDE0029 // Use coalesce expression
 
                     var result = query.ToList();
                     Assert.True(result.All(e => e.Children.Count > 0));
@@ -1250,7 +1287,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase3101()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext3101(_options),
                 context =>
                     {
@@ -1273,6 +1311,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                         context.Entities.AddRange(e1, e2, e3);
                         context.SaveChanges();
                     });
+        }
 
         public class MyContext3101 : DbContext
         {
@@ -1363,7 +1402,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase6986()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new ReproContext6986(_options),
                 context =>
                     {
@@ -1396,6 +1436,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                             });
                         context.SaveChanges();
                     });
+        }
 
         public class ReproContext6986 : DbContext
         {
@@ -1562,7 +1603,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase5456()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext5456(_options),
                 context =>
                     {
@@ -1588,6 +1630,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                         }
                         context.SaveChanges();
                     });
+        }
 
         public class MyContext5456 : DbContext
         {
@@ -1684,7 +1727,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase7359()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext7359(_options),
                 context =>
                     {
@@ -1692,6 +1736,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                         context.Add(new SpecialProduct { Name = "SpecialProduct" });
                         context.SaveChanges();
                     });
+        }
 
         #endregion
 
@@ -1746,7 +1791,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase7312()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext7312(_options),
                 context =>
                     {
@@ -1764,6 +1810,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                         );
                         context.SaveChanges();
                     });
+        }
 
         #endregion
 
@@ -1809,7 +1856,8 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
         }
 
         private SqlServerTestStore CreateDatabase8282()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext8282(_options),
                 context =>
                     {
@@ -1818,6 +1866,7 @@ WHERE ([c].[FirstName] = @__firstName_0) AND ([c].[LastName] = @__8__locals1_det
                         );
                         context.SaveChanges();
                     });
+        }
 
         #endregion
 
@@ -1886,7 +1935,8 @@ WHERE ([e].[Permission] & [e].[Permission]) = [e].[Permission]");
         }
 
         private SqlServerTestStore CreateDatabase8538()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext8538(_options),
                 context =>
                     {
@@ -1899,6 +1949,7 @@ WHERE ([e].[Permission] & [e].[Permission]) = [e].[Permission]");
 
                         ClearLog();
                     });
+        }
 
         #endregion
 
@@ -2021,9 +2072,11 @@ WHERE [c].[Id] IN (
         }
 
         private SqlServerTestStore CreateDatabase8909()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext8909(_options),
                 context => { ClearLog(); });
+        }
 
         public class MyContext8909 : DbContext
         {
@@ -2042,7 +2095,7 @@ WHERE [c].[Id] IN (
 
                     return (MemoryCache)typeof(CompiledQueryCache).GetTypeInfo()
                         .GetField("_memoryCache", BindingFlags.Instance | BindingFlags.NonPublic)
-                        .GetValue(compiledQueryCache);
+                        ?.GetValue(compiledQueryCache);
                 }
             }
         }
@@ -2055,7 +2108,7 @@ WHERE [c].[Id] IN (
 
         #endregion
 
-        #region Bug9202
+        #region Bug9202/9210
 
         [Fact]
         public void Include_collection_for_entity_with_owned_type_works()
@@ -2070,13 +2123,45 @@ WHERE [c].[Id] IN (
                     Assert.Equal(1, result.Count);
                     Assert.Equal(3, result[0].Cast.Count);
                     Assert.NotNull(result[0].Details);
+                    Assert.True(result[0].Cast.All(a => a.Details != null));
 
                     AssertSql(
                         @"SELECT [m].[Id], [m].[Title], [m].[Id], [m].[Details_Info]
 FROM [Movies] AS [m]
 ORDER BY [m].[Id]",
                         //
-                        @"SELECT [m.Cast].[Id], [m.Cast].[Movie9202Id], [m.Cast].[Name]
+                        @"SELECT [m.Cast].[Id], [m.Cast].[Movie9202Id], [m.Cast].[Name], [m.Cast].[Id], [m.Cast].[Details_Info]
+FROM [Actors] AS [m.Cast]
+INNER JOIN (
+    SELECT DISTINCT [m0].[Id]
+    FROM [Movies] AS [m0]
+) AS [t] ON [m.Cast].[Movie9202Id] = [t].[Id]
+ORDER BY [t].[Id]");
+                }
+            }
+        }
+
+        [Fact]
+        public void Include_collection_for_entity_with_owned_type_works_string()
+        {
+            using (CreateDatabase9202())
+            {
+                using (var context = new MyContext9202(_options))
+                {
+                    var query = context.Movies.Include("Cast");
+                    var result = query.ToList();
+
+                    Assert.Equal(1, result.Count);
+                    Assert.Equal(3, result[0].Cast.Count);
+                    Assert.NotNull(result[0].Details);
+                    Assert.True(result[0].Cast.All(a => a.Details != null));
+
+                    AssertSql(
+                        @"SELECT [m].[Id], [m].[Title], [m].[Id], [m].[Details_Info]
+FROM [Movies] AS [m]
+ORDER BY [m].[Id]",
+                        //
+                        @"SELECT [m.Cast].[Id], [m.Cast].[Movie9202Id], [m.Cast].[Name], [m.Cast].[Id], [m.Cast].[Details_Info]
 FROM [Actors] AS [m.Cast]
 INNER JOIN (
     SELECT DISTINCT [m0].[Id]
@@ -2088,13 +2173,14 @@ ORDER BY [t].[Id]");
         }
 
         private SqlServerTestStore CreateDatabase9202()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext9202(_options),
                 context =>
                     {
-                        var av = new Actor9202 { Name = "Alicia Vikander" };
-                        var oi = new Actor9202 { Name = "Oscar Isaac" };
-                        var dg = new Actor9202 { Name = "Domhnall Gleeson" };
+                        var av = new Actor9202 { Name = "Alicia Vikander", Details = new Details9202 { Info = "Best actor ever made" } };
+                        var oi = new Actor9202 { Name = "Oscar Isaac", Details = new Details9202 { Info = "Best actor ever made" } };
+                        var dg = new Actor9202 { Name = "Domhnall Gleeson", Details = new Details9202 { Info = "Best actor ever made" } };
                         var em = new Movie9202 { Title = "Ex Machina", Cast = new List<Actor9202> { av, oi, dg }, Details = new Details9202 { Info = "Best movie ever made" } };
                         context.Actors.AddRange(av, oi, dg);
                         context.Movies.Add(em);
@@ -2102,6 +2188,7 @@ ORDER BY [t].[Id]");
 
                         ClearLog();
                     });
+        }
 
         public class MyContext9202 : DbContext
         {
@@ -2117,6 +2204,7 @@ ORDER BY [t].[Id]");
             {
                 modelBuilder.Entity<Movie9202>().HasMany(m => m.Cast).WithOne();
                 modelBuilder.Entity<Movie9202>().OwnsOne(m => m.Details);
+                modelBuilder.Entity<Actor9202>().OwnsOne(m => m.Details);
             }
         }
 
@@ -2134,6 +2222,7 @@ ORDER BY [t].[Id]");
         {
             public int Id { get; set; }
             public string Name { get; set; }
+            public Details9202 Details { get; set; }
         }
 
         public class Details9202
@@ -2157,7 +2246,7 @@ ORDER BY [t].[Id]");
                     Assert.Equal(2, result);
 
                     AssertSql(
-                        @"SELECT TOP(2) [foo].AddOne([w].[Val])
+                        @"SELECT TOP(2) [foo].[AddOne]([w].[Val])
 FROM [foo].[Widgets] AS [w]
 WHERE [w].[Val] = 1");
                 }
@@ -2176,7 +2265,7 @@ WHERE [w].[Val] = 1");
                     Assert.Equal(3, result);
 
                     AssertSql(
-                        @"SELECT TOP(2) [dbo].AddTwo([w].[Val])
+                        @"SELECT TOP(2) [dbo].[AddTwo]([w].[Val])
 FROM [foo].[Widgets] AS [w]
 WHERE [w].[Val] = 1");
                 }
@@ -2184,7 +2273,8 @@ WHERE [w].[Val] = 1");
         }
 
         private SqlServerTestStore CreateDatabase9214()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext9214(_options),
                 context =>
                     {
@@ -2194,14 +2284,16 @@ WHERE [w].[Val] = 1");
                         context.Widgets.AddRange(w1, w2, w3);
                         context.SaveChanges();
 
-                        context.Database.ExecuteSqlCommand(@"CREATE FUNCTION foo.AddOne (@num int)  
+                        context.Database.ExecuteSqlCommand(
+                            @"CREATE FUNCTION foo.AddOne (@num int)
                                                             RETURNS int
                                                                 AS
                                                             BEGIN  
                                                                 return @num + 1 ;
                                                             END");
 
-                        context.Database.ExecuteSqlCommand(@"CREATE FUNCTION dbo.AddTwo (@num int)  
+                        context.Database.ExecuteSqlCommand(
+                            @"CREATE FUNCTION dbo.AddTwo (@num int)
                                                             RETURNS int
                                                                 AS
                                                             BEGIN  
@@ -2210,6 +2302,7 @@ WHERE [w].[Val] = 1");
 
                         ClearLog();
                     });
+        }
 
         public class MyContext9214 : DbContext
         {
@@ -2252,7 +2345,6 @@ WHERE [w].[Val] = 1");
             public int Val { get; set; }
         }
 
-
         #endregion
 
         #region Bug9277
@@ -2287,7 +2379,8 @@ WHERE [w].[Val] = 1");
         }
 
         private SqlServerTestStore CreateDatabase9277()
-            => CreateTestStore(
+        {
+            return CreateTestStore(
                 () => new MyContext9277(_options),
                 context =>
                     {
@@ -2317,6 +2410,7 @@ BEGIN
 
                         ClearLog();
                     });
+        }
 
         public class MyContext9277 : DbContext
         {
@@ -2336,6 +2430,741 @@ BEGIN
 
         #endregion
 
+        #region Bug9038
+
+        [Fact]
+        public virtual async Task Include_collection_optional_reference_collection_9038()
+        {
+            using (CreateDatabase9038())
+            {
+                using (var context = new MyContext9038(_options))
+                {
+                    var result = await context.People.OfType<PersonTeacher9038>()
+                        .Include(m => m.Students)
+                        .ThenInclude(m => m.Family)
+                        .ThenInclude(m => m.Members)
+                        .ToListAsync();
+
+                    Assert.Equal(2, result.Count);
+                    Assert.Equal(true, result.All(r => r.Students.Any()));
+                }
+            }
+        }
+
+        [Fact]
+        public async Task Include_optional_reference_collection_another_collection()
+        {
+            using (CreateDatabase9038())
+            {
+                using (var context = new MyContext9038(_options))
+                {
+                    var result = await context.Set<PersonTeacher9038>()
+                        .Include(m => m.Family.Members)
+                        .Include(m => m.Students)
+                        .ToListAsync();
+
+                    Assert.Equal(2, result.Count);
+                    Assert.True(result.All(r => r.Students.Any()));
+                    Assert.Null(result.Single(t => t.Name == "Ms. Frizzle").Family);
+                    Assert.NotNull(result.Single(t => t.Name == "Mr. Garrison").Family);
+                }
+            }
+        }
+
+        public abstract class Person9038
+        {
+            public int Id { get; set; }
+
+            public string Name { get; set; }
+
+            public int? TeacherId { get; set; }
+
+            public PersonFamily9038 Family { get; set; }
+        }
+
+        public class PersonKid9038 : Person9038
+        {
+            public int Grade { get; set; }
+
+            public PersonTeacher9038 Teacher { get; set; }
+        }
+
+        public class PersonTeacher9038 : Person9038
+        {
+            public ICollection<PersonKid9038> Students { get; set; }
+        }
+
+        public class PersonFamily9038
+        {
+            public int Id { get; set; }
+
+            public string LastName { get; set; }
+
+            public ICollection<Person9038> Members { get; set; }
+        }
+
+        public class MyContext9038 : DbContext
+        {
+            public MyContext9038(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Person9038> People { get; set; }
+
+            public DbSet<PersonFamily9038> Families { get; set; }
+
+            protected override void OnModelCreating(ModelBuilder modelBuilder)
+            {
+                modelBuilder.Entity<PersonTeacher9038>().HasBaseType<Person9038>();
+                modelBuilder.Entity<PersonKid9038>().HasBaseType<Person9038>();
+                modelBuilder.Entity<PersonFamily9038>();
+
+                modelBuilder.Entity<PersonKid9038>(
+                    entity =>
+                        {
+                            entity.Property("Discriminator")
+                                .HasMaxLength(63);
+                            entity.HasIndex("Discriminator");
+
+                            entity.HasOne(m => m.Teacher)
+                                .WithMany(m => m.Students)
+                                .HasForeignKey(m => m.TeacherId)
+                                .HasPrincipalKey(m => m.Id)
+                                .OnDelete(DeleteBehavior.Restrict);
+                        });
+            }
+        }
+
+        private SqlServerTestStore CreateDatabase9038()
+        {
+            return CreateTestStore(
+                () => new MyContext9038(_options),
+                context =>
+                    {
+                        var famalies = new List<PersonFamily9038>
+                        {
+                            new PersonFamily9038
+                            {
+                                LastName = "Garrison"
+                            },
+                            new PersonFamily9038
+                            {
+                                LastName = "Cartman"
+                            }
+                        };
+                        var teachers = new List<PersonTeacher9038>
+                        {
+                            new PersonTeacher9038 { Name = "Ms. Frizzle" },
+                            new PersonTeacher9038 { Name = "Mr. Garrison", Family = famalies[0] }
+                        };
+                        var students = new List<PersonKid9038>
+                        {
+                            new PersonKid9038 { Name = "Arnold", Grade = 2, Teacher = teachers[0] },
+                            new PersonKid9038 { Name = "Eric", Grade = 4, Teacher = teachers[1], Family = famalies[1] }
+                        };
+
+                        context.People.AddRange(teachers);
+                        context.People.AddRange(students);
+                        context.SaveChanges();
+
+                        ClearLog();
+                    });
+        }
+
+        #endregion
+
+        #region Bug9735
+
+        [Fact]
+        // TODO: Convert to test in IncludeTestBase once issue #9742 is fixed
+        public virtual void Repro9735()
+        {
+            using (CreateDatabase9735())
+            {
+                using (var context = new MyContext9735(_options))
+                {
+                    var result = context.Customers
+                        .Include(b => b.Orders)
+                        .OrderBy(b => b.Address.Id > 0)
+                        .ThenBy(b => b.CustomerDetails != null ? b.CustomerDetails.Name : string.Empty)
+                        .Take(2)
+                        .ToList();
+
+                    Assert.Equal(1, result.Count);
+
+                    AssertSql(
+                        @"@__p_0='2'
+
+SELECT TOP(@__p_0) [b].[Id], [b].[AddressId], [b].[CustomerDetailsId], [b].[Name]
+FROM [Customers] AS [b]
+LEFT JOIN [CustomerDetails9735] AS [b.CustomerDetails] ON [b].[CustomerDetailsId] = [b.CustomerDetails].[Id]
+ORDER BY CASE
+    WHEN [b].[AddressId] > 0
+    THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+END, CASE
+    WHEN [b].[CustomerDetailsId] IS NOT NULL
+    THEN [b.CustomerDetails].[Name] ELSE N''
+END, [b].[Id]",
+                        //
+                        @"@__p_0='2'
+
+SELECT [b.Orders].[Id], [b.Orders].[CustomerId], [b.Orders].[Name]
+FROM [Order9735] AS [b.Orders]
+INNER JOIN (
+    SELECT DISTINCT [t].*
+    FROM (
+        SELECT TOP(@__p_0) [b0].[Id], CASE
+            WHEN [b0].[AddressId] > 0
+            THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+        END AS [c], CASE
+            WHEN [b0].[CustomerDetailsId] IS NOT NULL
+            THEN [b.CustomerDetails0].[Name] ELSE N''
+        END AS [c0], [b0].[AddressId], [b0].[CustomerDetailsId], [b.CustomerDetails0].[Name]
+        FROM [Customers] AS [b0]
+        LEFT JOIN [CustomerDetails9735] AS [b.CustomerDetails0] ON [b0].[CustomerDetailsId] = [b.CustomerDetails0].[Id]
+        ORDER BY [c], [c0], [b0].[Id]
+    ) AS [t]
+) AS [t0] ON [b.Orders].[CustomerId] = [t0].[Id]
+ORDER BY [t0].[c], [t0].[c0], [t0].[Id]");
+                }
+            }
+        }
+
+        public class Address9735
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+        }
+
+        public class Customer9735
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public int AddressId { get; set; }
+            public virtual Address9735 Address { get; set; }
+            public virtual List<Order9735> Orders { get; set; }
+            public virtual CustomerDetails9735 CustomerDetails { get; set; }
+        }
+
+        public class Order9735
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public int CustomerId { get; set; }
+            public virtual Customer9735 Customer { get; set; }
+        }
+
+        public class CustomerDetails9735
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+        }
+
+        public class MyContext9735 : DbContext
+        {
+            public MyContext9735(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Customer9735> Customers { get; set; }
+        }
+
+        private SqlServerTestStore CreateDatabase9735()
+        {
+            return CreateTestStore(
+                () => new MyContext9735(_options),
+                context =>
+                    {
+                        context.AddRange(
+                            new Address9735 { Name = "An A" },
+                            new Customer9735 { Name = "A B", AddressId = 1 }
+                        );
+                        context.SaveChanges();
+
+                        ClearLog();
+                    });
+        }
+
+        #endregion
+
+        #region Bug9892
+
+        [Fact]
+        public virtual void GroupJoin_to_parent_with_no_child_works_9892()
+        {
+            using (CreateDatabase9892())
+            {
+                using (var context = new MyContext9892(_options))
+                {
+                    var results = (
+                        from p in context.Parents
+                        join c in (
+                                from x in context.Children
+                                select new
+                                {
+                                    x.ParentId,
+                                    OtherParent = x.OtherParent.Name
+                                })
+                            on p.Id equals c.ParentId into child
+                        select new
+                        {
+                            ParentId = p.Id,
+                            ParentName = p.Name,
+                            Children = child.Select(c => c.OtherParent)
+                        }).ToList();
+
+                    Assert.Equal(3, results.Count);
+                    Assert.Single(results.Where(t => !t.Children.Any()));
+                }
+            }
+        }
+
+        private SqlServerTestStore CreateDatabase9892()
+        {
+            return CreateTestStore(
+                () => new MyContext9892(_options),
+                context =>
+                    {
+                        context.Parents.Add(new Parent9892 { Name = "Parent1" });
+                        context.Parents.Add(new Parent9892 { Name = "Parent2" });
+                        context.Parents.Add(new Parent9892 { Name = "Parent3" });
+
+                        context.OtherParents.Add(new OtherParent9892 { Name = "OtherParent1" });
+                        context.OtherParents.Add(new OtherParent9892 { Name = "OtherParent2" });
+
+                        context.SaveChanges();
+
+                        context.Children.Add(new Child9892 { ParentId = 1, OtherParentId = 1 });
+                        context.Children.Add(new Child9892 { ParentId = 1, OtherParentId = 2 });
+                        context.Children.Add(new Child9892 { ParentId = 2, OtherParentId = 1 });
+                        context.Children.Add(new Child9892 { ParentId = 2, OtherParentId = 2 });
+
+                        context.SaveChanges();
+
+                        ClearLog();
+                    });
+        }
+
+        public class MyContext9892 : DbContext
+        {
+            public MyContext9892(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Parent9892> Parents { get; set; }
+            public DbSet<Child9892> Children { get; set; }
+            public DbSet<OtherParent9892> OtherParents { get; set; }
+        }
+
+        public class Parent9892
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public List<Child9892> Children { get; set; }
+        }
+
+        public class OtherParent9892
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+        }
+
+        public class Child9892
+        {
+            public int Id { get; set; }
+            public int ParentId { get; set; }
+            public Parent9892 Parent { get; set; }
+            public int OtherParentId { get; set; }
+            public OtherParent9892 OtherParent { get; set; }
+        }
+
+        #endregion
+
+        #region Bug9468
+
+        [Fact]
+        public virtual void Conditional_expression_with_conditions_does_not_collapse_if_nullable_bool()
+        {
+            using (CreateDatabase9468())
+            {
+                using (var context = new MyContext9468(_options))
+                {
+                    var query = context.Carts.Select(
+                        t => new
+                        {
+                            Processing = t.Configuration != null ? !t.Configuration.Processed : (bool?)null
+                        }).ToList();
+
+                    Assert.Single(query.Where(t => t.Processing == null));
+                    Assert.Single(query.Where(t => t.Processing == true));
+                    Assert.Single(query.Where(t => t.Processing == false));
+
+                    AssertSql(
+                        @"SELECT CASE
+    WHEN [t].[ConfigurationId] IS NOT NULL
+    THEN CASE
+        WHEN [t.Configuration].[Processed] = 0
+        THEN CAST(1 AS BIT) ELSE CAST(0 AS BIT)
+    END ELSE NULL
+END AS [Processing]
+FROM [Carts] AS [t]
+LEFT JOIN [Configuration9468] AS [t.Configuration] ON [t].[ConfigurationId] = [t.Configuration].[Id]");
+                }
+            }
+        }
+
+        private SqlServerTestStore CreateDatabase9468()
+        {
+            return CreateTestStore(
+                () => new MyContext9468(_options),
+                context =>
+                    {
+                        context.AddRange(
+                            new Cart9468(),
+                            new Cart9468
+                            {
+                                Configuration = new Configuration9468 { Processed = true }
+                            },
+                            new Cart9468
+                            {
+                                Configuration = new Configuration9468()
+                            }
+                        );
+
+                        context.SaveChanges();
+
+                        ClearLog();
+                    });
+        }
+
+        public class MyContext9468 : DbContext
+        {
+            public MyContext9468(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Cart9468> Carts { get; set; }
+        }
+
+        public class Cart9468
+        {
+            public int Id { get; set; }
+            public int? ConfigurationId { get; set; }
+            public Configuration9468 Configuration { get; set; }
+        }
+
+        public class Configuration9468
+        {
+            public int Id { get; set; }
+            public bool Processed { get; set; }
+        }
+
+        #endregion
+
+        #region Bug10635
+
+        [Fact]
+        public void Include_with_order_by_on_interface_key()
+        {
+            using (CreateDatabase10635())
+            {
+                using (var context = new MyContext10635(_options))
+                {
+                    var query1 = context.Parents.Include(p => p.Children).OrderBy(p => ((IEntity10635)p).Id).ToList();
+
+                    AssertSql(
+                        @"SELECT [p].[Id], [p].[Name]
+FROM [Parents] AS [p]
+ORDER BY [p].[Id]",
+                        //
+                        @"SELECT [p.Children].[Id], [p.Children].[Name], [p.Children].[Parent10635Id], [p.Children].[ParentId]
+FROM [Children] AS [p.Children]
+INNER JOIN (
+    SELECT [p0].[Id]
+    FROM [Parents] AS [p0]
+) AS [t] ON [p.Children].[Parent10635Id] = [t].[Id]
+ORDER BY [t].[Id]");
+
+                    ClearLog();
+
+                    var query2 = context.Parents.Include(p => p.Children).OrderBy(p => EF.Property<int>((IEntity10635)p, "Id")).ToList();
+
+                    AssertSql(
+                        @"SELECT [p].[Id], [p].[Name]
+FROM [Parents] AS [p]
+ORDER BY [p].[Id]",
+                        //
+                        @"SELECT [p.Children].[Id], [p.Children].[Name], [p.Children].[Parent10635Id], [p.Children].[ParentId]
+FROM [Children] AS [p.Children]
+INNER JOIN (
+    SELECT [p0].[Id]
+    FROM [Parents] AS [p0]
+) AS [t] ON [p.Children].[Parent10635Id] = [t].[Id]
+ORDER BY [t].[Id]");
+                }
+            }
+        }
+
+        [Fact]
+        public void Correlated_collection_with_order_by_on_interface_key()
+        {
+            using (CreateDatabase10635())
+            {
+                using (var context = new MyContext10635(_options))
+                {
+                    var query1 = context.Parents.OrderBy(p => ((IEntity10635)p).Id).Select(p => p.Children.ToList()).ToList();
+
+                    AssertSql(
+                        @"SELECT [p].[Id]
+FROM [Parents] AS [p]
+ORDER BY [p].[Id]",
+                        //
+                        @"SELECT [p.Children].[Id], [p.Children].[Name], [p.Children].[Parent10635Id], [p.Children].[ParentId], [t].[Id]
+FROM [Children] AS [p.Children]
+INNER JOIN (
+    SELECT [p0].[Id]
+    FROM [Parents] AS [p0]
+) AS [t] ON [p.Children].[Parent10635Id] = [t].[Id]
+ORDER BY [t].[Id]");
+
+                    ClearLog();
+
+                    var query2 = context.Parents.OrderBy(p => EF.Property<int>((IEntity10635)p, "Id")).Select(p => p.Children.ToList()).ToList();
+
+                    AssertSql(
+                        @"SELECT [p].[Id]
+FROM [Parents] AS [p]
+ORDER BY [p].[Id]",
+                        //
+                        @"SELECT [p.Children].[Id], [p.Children].[Name], [p.Children].[Parent10635Id], [p.Children].[ParentId], [t].[Id]
+FROM [Children] AS [p.Children]
+INNER JOIN (
+    SELECT [p0].[Id]
+    FROM [Parents] AS [p0]
+) AS [t] ON [p.Children].[Parent10635Id] = [t].[Id]
+ORDER BY [t].[Id]");
+                }
+            }
+        }
+
+        private SqlServerTestStore CreateDatabase10635()
+        {
+            return CreateTestStore(
+                () => new MyContext10635(_options),
+                context =>
+                {
+                    var c11 = new Child10635 { Name = "Child111" };
+                    var c12 = new Child10635 { Name = "Child112" };
+                    var c13 = new Child10635 { Name = "Child113" };
+                    var c21 = new Child10635 { Name = "Child121" };
+
+                    var p1 = new Parent10635 { Name = "Parent1", Children = new[] { c11, c12, c13 } };
+                    var p2 = new Parent10635 { Name = "Parent2", Children = new[] { c21 } };
+                    context.Parents.AddRange(p1, p2);
+                    context.Children.AddRange(c11, c12, c13, c21);
+                    context.SaveChanges();
+
+                    ClearLog();
+                });
+        }
+
+        public class MyContext10635 : DbContext
+        {
+            public MyContext10635(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Parent10635> Parents { get; set; }
+            public DbSet<Child10635> Children { get; set; }
+        }
+
+        public interface IEntity10635
+        {
+            int Id { get; set; }
+        }
+
+        public class Parent10635 : IEntity10635
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public virtual ICollection<Child10635> Children { get; set; }
+        }
+
+        public class Child10635 : IEntity10635
+        {
+            public int Id { get; set; }
+            public string Name { get; set; }
+            public int ParentId { get; set; }
+        }
+
+        #endregion
+
+        #region Bug10168
+
+        [Fact]
+        public void Row_number_paging_with_owned_type()
+        {
+            using (var context = new MyContext10168(Fixture.TestSqlLoggerFactory))
+            {
+                context.Database.EnsureCreated();
+
+                ClearLog();
+
+                var queryableObj = context.Note.Where(x => x.Text == "Foo Bar").AsQueryable();
+
+                queryableObj.Skip(0).Take(100).ToList();
+
+                AssertSql(
+                    @"@__p_0='?' (DbType = Int32)
+@__p_1='?' (DbType = Int32)
+
+SELECT [t].[Id], [t].[Text], [t].[Id0], [t].[User_Email], [t].[User_Fullname]
+FROM (
+    SELECT [x].[Id], [x].[Text], [x].[Id] AS [Id0], [x].[User_Email], [x].[User_Fullname], ROW_NUMBER() OVER(ORDER BY @@RowCount) AS [__RowNumber__]
+    FROM [Note] AS [x]
+    WHERE [x].[Text] = N'Foo Bar'
+) AS [t]
+WHERE ([t].[__RowNumber__] > @__p_0) AND ([t].[__RowNumber__] <= (@__p_0 + @__p_1))");
+            }
+        }
+
+        public class MyContext10168 : DbContext
+        {
+            private readonly ILoggerFactory _loggerFactory;
+
+            public MyContext10168(ILoggerFactory loggerFactory)
+            {
+                _loggerFactory = loggerFactory;
+            }
+
+            public DbSet<Note> Note { get; set; }
+
+            protected override void OnConfiguring(DbContextOptionsBuilder optionsBuilder)
+            {
+                optionsBuilder
+                    .UseLoggerFactory(_loggerFactory)
+                    .UseSqlServer(
+                        SqlServerTestStore.CreateConnectionString("RowNumberPaging_Owned"),
+                        b => b.UseRowNumberForPaging());
+            }
+
+            protected override void OnModelCreating(ModelBuilder modelBuilder)
+            {
+                modelBuilder.Entity<Note>().OwnsOne(n => n.User);
+            }
+        }
+
+        public class Note
+        {
+            [Key]
+            public Guid Id { get; set; }
+            public string Text { get; set; }
+            public User10168 User { get; set; }
+        }
+
+        public class User10168
+        {
+            public string Fullname { get; set; }
+            public string Email { get; set; }
+        }
+
+        #endregion
+
+        #region Bug10301
+
+        [Fact]
+        public virtual void MultiContext()
+        {
+            using (CreateDatabase10301())
+            {
+                using (var context = new FilterContext10301(_options))
+                {
+                    Assert.Empty(context.Blogs.ToList());
+
+                    context.Tenant = 1;
+                    Assert.Single(context.Blogs.ToList());
+
+                    context.Tenant = 2;
+                    Assert.Equal(2, context.Blogs.Count());
+
+                    AssertSql(
+                        @"@__ef_filter__Tenant_0='0'
+
+SELECT [e].[Id], [e].[SomeValue]
+FROM [Blogs] AS [e]
+WHERE [e].[SomeValue] = @__ef_filter__Tenant_0",
+                        //
+                        @"@__ef_filter__Tenant_0='1'
+
+SELECT [e].[Id], [e].[SomeValue]
+FROM [Blogs] AS [e]
+WHERE [e].[SomeValue] = @__ef_filter__Tenant_0",
+                        //
+                        @"@__ef_filter__Tenant_0='2'
+
+SELECT COUNT(*)
+FROM [Blogs] AS [e]
+WHERE [e].[SomeValue] = @__ef_filter__Tenant_0");
+                }
+            }
+        }
+
+        private SqlServerTestStore CreateDatabase10301()
+        {
+            return CreateTestStore(
+                () => new FilterContext10301(_options),
+                context =>
+                {
+                    context.AddRange(
+                        new Blog10301 { SomeValue = 1 },
+                        new Blog10301 { SomeValue = 2 },
+                        new Blog10301 { SomeValue = 2 }
+                    );
+
+                    context.SaveChanges();
+
+                    ClearLog();
+                });
+        }
+
+        public class FilterContextBase10301 : DbContext
+        {
+            public int Tenant { get; set; }
+
+            public FilterContextBase10301(DbContextOptions options)
+                : base(options)
+            {
+            }
+
+            public DbSet<Blog10301> Blogs { get; set; }
+
+            protected override void OnModelCreating(ModelBuilder modelBuilder)
+            {
+                modelBuilder.Entity<Blog10301>().HasQueryFilter(e => e.SomeValue == Tenant);
+            }
+        }
+
+        public class Blog10301
+        {
+            public int Id { get; set; }
+            public int SomeValue { get; set; }
+        }
+
+        public class FilterContext10301 : FilterContextBase10301
+        {
+            public FilterContext10301(DbContextOptions options)
+                : base(options)
+            {
+            }
+        }
+
+        #endregion
+
         private DbContextOptions _options;
 
         private SqlServerTestStore CreateTestStore<TContext>(
@@ -2343,7 +3172,7 @@ BEGIN
             Action<TContext> contextInitializer)
             where TContext : DbContext, IDisposable
         {
-            var testStore = SqlServerTestStore.CreateInitialized("QueryBugsTest");
+            var testStore = SqlServerTestStore.CreateInitialized("QueryBugsTest", multipleActiveResultSets: true);
 
             _options = Fixture.CreateOptions(testStore);
 
@@ -2356,9 +3185,13 @@ BEGIN
         }
 
         protected void ClearLog()
-            => Fixture.TestSqlLoggerFactory.Clear();
+        {
+            Fixture.TestSqlLoggerFactory.Clear();
+        }
 
         private void AssertSql(params string[] expected)
-            => Fixture.TestSqlLoggerFactory.AssertBaseline(expected);
+        {
+            Fixture.TestSqlLoggerFactory.AssertBaseline(expected);
+        }
     }
 }

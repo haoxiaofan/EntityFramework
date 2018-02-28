@@ -12,10 +12,14 @@ namespace Microsoft.EntityFrameworkCore.Storage
     ///         Maps .NET types to their corresponding relational database types.
     ///     </para>
     ///     <para>
+    ///         Note: Use <see cref="IRelationalTypeMappingSource" /> going forward.
+    ///     </para>
+    ///     <para>
     ///         This type is typically used by database providers (and other extensions). It is generally
     ///         not used in application code.
     ///     </para>
     /// </summary>
+    [Obsolete("Use IRelationalTypeMappingSource.")]
     public interface IRelationalTypeMapper : ITypeMapper
     {
         /// <summary>

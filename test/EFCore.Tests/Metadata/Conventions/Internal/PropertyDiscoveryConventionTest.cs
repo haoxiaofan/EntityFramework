@@ -5,7 +5,8 @@ using System;
 using System.Linq;
 using System.Reflection;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
-using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.Internal;
+using Microsoft.EntityFrameworkCore.TestUtilities;
 using Xunit;
 
 namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
@@ -39,7 +40,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var entityBuilder = CreateInternalEntityBuilder<EntityWithInvalidProperties>();
 
-            Assert.Same(entityBuilder, new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())).Apply(entityBuilder));
+            Assert.Same(
+                entityBuilder, new PropertyDiscoveryConvention(
+                    TestServiceFactory.Instance.Create<FallbackTypeMappingSource>()).Apply(entityBuilder));
 
             Assert.Empty(entityBuilder.Metadata.GetProperties());
         }
@@ -97,7 +100,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var entityBuilder = CreateInternalEntityBuilder<EntityWithEveryPrimitive>();
 
-            Assert.Same(entityBuilder, new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())).Apply(entityBuilder));
+            Assert.Same(
+                entityBuilder, new PropertyDiscoveryConvention(
+                        TestServiceFactory.Instance.Create<FallbackTypeMappingSource>())
+                    .Apply(entityBuilder));
 
             Assert.Equal(
                 typeof(EntityWithEveryPrimitive)
@@ -116,7 +122,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             var entityBuilder = CreateInternalEntityBuilder<EntityWithNoPrimitives>();
 
-            Assert.Same(entityBuilder, new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())).Apply(entityBuilder));
+            Assert.Same(
+                entityBuilder, new PropertyDiscoveryConvention(
+                        TestServiceFactory.Instance.Create<FallbackTypeMappingSource>())
+                    .Apply(entityBuilder));
 
             Assert.Empty(entityBuilder.Metadata.GetProperties());
         }

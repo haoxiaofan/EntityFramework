@@ -22,6 +22,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
     /// </summary>
+    [Obsolete("This is now handled by correlated collection optimization.")]
     public class CollectionNavigationIncludeExpressionRewriter : ExpressionVisitorBase
     {
         private readonly EntityQueryModelVisitor _queryModelVisitor;
@@ -72,18 +73,6 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                 && properties[properties.Count - 1] is INavigation lastNavigation
                 && lastNavigation.IsCollection())
             {
-                // include doesn't handle navigations on derived class, so we can't leverage include pipeline for those cases
-                var expectedCallerType = querySource.ItemType;
-                foreach (var property in properties)
-                {
-                    if (expectedCallerType != property.DeclaringType.ClrType)
-                    {
-                        return expression;
-                    }
-
-                    expectedCallerType = property.ClrType;
-                }
-
                 var qsre = new QuerySourceReferenceExpression(querySource);
 
                 CollectionNavigationIncludeResultOperators.Add(
@@ -115,7 +104,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             Expression memberExpression = parameter;
             foreach (var navigation in navigations)
             {
-                memberExpression = memberExpression.MakeMemberAccess(navigation.PropertyInfo);
+                memberExpression = memberExpression.MakeMemberAccess(navigation.GetIdentifyingMemberInfo());
                 result = new NullConditionalExpression(result, memberExpression);
             }
 

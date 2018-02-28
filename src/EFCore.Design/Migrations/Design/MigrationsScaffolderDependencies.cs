@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Design.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
@@ -52,44 +53,48 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
         /// <param name="migrationsAssembly"> The migrations assembly. </param>
         /// <param name="migrationsModelDiffer"> The migrations model differ. </param>
         /// <param name="migrationsIdGenerator"> The migrations ID generator. </param>
-        /// <param name="migrationCodeGenerator"> The migrations code generator. </param>
+        /// <param name="migrationsCodeGeneratorSelector"> The migrations code generator selector. </param>
         /// <param name="historyRepository"> The history repository. </param>
         /// <param name="operationReporter"> The operation reporter. </param>
         /// <param name="databaseProvider"> The database provider. </param>
         /// <param name="snapshotModelProcessor"> The snapshot model processor. </param>
+        /// <param name="migrator"> The migrator. </param>
         public MigrationsScaffolderDependencies(
             [NotNull] ICurrentDbContext currentDbContext,
             [NotNull] IModel model,
             [NotNull] IMigrationsAssembly migrationsAssembly,
             [NotNull] IMigrationsModelDiffer migrationsModelDiffer,
             [NotNull] IMigrationsIdGenerator migrationsIdGenerator,
-            [NotNull] IMigrationsCodeGenerator migrationCodeGenerator,
+            [NotNull] IMigrationsCodeGeneratorSelector migrationsCodeGeneratorSelector,
             [NotNull] IHistoryRepository historyRepository,
             [NotNull] IOperationReporter operationReporter,
             [NotNull] IDatabaseProvider databaseProvider,
-            [NotNull] ISnapshotModelProcessor snapshotModelProcessor)
+            [NotNull] ISnapshotModelProcessor snapshotModelProcessor,
+            [NotNull] IMigrator migrator)
         {
             Check.NotNull(currentDbContext, nameof(currentDbContext));
             Check.NotNull(model, nameof(model));
             Check.NotNull(migrationsAssembly, nameof(migrationsAssembly));
             Check.NotNull(migrationsModelDiffer, nameof(migrationsModelDiffer));
             Check.NotNull(migrationsIdGenerator, nameof(migrationsIdGenerator));
-            Check.NotNull(migrationCodeGenerator, nameof(migrationCodeGenerator));
+            Check.NotNull(migrationsCodeGeneratorSelector, nameof(migrationsCodeGeneratorSelector));
             Check.NotNull(historyRepository, nameof(historyRepository));
             Check.NotNull(operationReporter, nameof(operationReporter));
             Check.NotNull(databaseProvider, nameof(databaseProvider));
             Check.NotNull(snapshotModelProcessor, nameof(snapshotModelProcessor));
+            Check.NotNull(migrator, nameof(migrator));
 
             CurrentDbContext = currentDbContext;
             Model = model;
             MigrationsAssembly = migrationsAssembly;
             MigrationsModelDiffer = migrationsModelDiffer;
             MigrationsIdGenerator = migrationsIdGenerator;
-            MigrationCodeGenerator = migrationCodeGenerator;
+            MigrationsCodeGeneratorSelector = migrationsCodeGeneratorSelector;
             HistoryRepository = historyRepository;
             OperationReporter = operationReporter;
             DatabaseProvider = databaseProvider;
             SnapshotModelProcessor = snapshotModelProcessor;
+            Migrator = migrator;
         }
 
         /// <summary>
@@ -120,7 +125,14 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
         /// <summary>
         ///     The migrations code generator.
         /// </summary>
-        public IMigrationsCodeGenerator MigrationCodeGenerator { get; }
+        [Obsolete("Use MigrationsCodeGeneratorSelector instead.")]
+        public IMigrationsCodeGenerator MigrationCodeGenerator
+            => MigrationsCodeGeneratorSelector.Select(language: null);
+
+        /// <summary>
+        ///     The migrations code generator selector.
+        /// </summary>
+        public IMigrationsCodeGeneratorSelector MigrationsCodeGeneratorSelector { get; }
 
         /// <summary>
         ///     The history repository.
@@ -143,6 +155,11 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
         public ISnapshotModelProcessor SnapshotModelProcessor { get; }
 
         /// <summary>
+        ///     The migrator.
+        /// </summary>
+        public IMigrator Migrator { get; }
+
+        /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="currentDbContext"> A replacement for the current dependency of this type. </param>
@@ -154,11 +171,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -172,11 +190,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -190,11 +209,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 migrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -208,11 +228,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 migrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -226,29 +247,47 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 migrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
         /// </summary>
         /// <param name="migrationCodeGenerator"> A replacement for the current dependency of this type. </param>
         /// <returns> A new parameter object with the given service replaced. </returns>
+        [Obsolete("Use an MigrationCodeGeneratorSelector instead.")]
         public MigrationsScaffolderDependencies With([NotNull] IMigrationsCodeGenerator migrationCodeGenerator)
+        {
+            if (MigrationsCodeGeneratorSelector is MigrationsCodeGeneratorSelector overridableSelector)
+            {
+                overridableSelector.Override = migrationCodeGenerator;
+            }
+
+            return this;
+        }
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="migrationsCodeGeneratorSelector"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public MigrationsScaffolderDependencies With([NotNull] IMigrationsCodeGeneratorSelector migrationsCodeGeneratorSelector)
             => new MigrationsScaffolderDependencies(
                 CurrentDbContext,
                 Model,
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                migrationCodeGenerator,
+                migrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -262,11 +301,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 historyRepository,
                 OperationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -280,11 +320,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 operationReporter,
                 DatabaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -298,11 +339,12 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 databaseProvider,
-                SnapshotModelProcessor);
+                SnapshotModelProcessor,
+                Migrator);
 
         /// <summary>
         ///     Clones this dependency parameter object with one service replaced.
@@ -316,10 +358,30 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Design
                 MigrationsAssembly,
                 MigrationsModelDiffer,
                 MigrationsIdGenerator,
-                MigrationCodeGenerator,
+                MigrationsCodeGeneratorSelector,
                 HistoryRepository,
                 OperationReporter,
                 DatabaseProvider,
-                snapshotModelProcessor);
+                snapshotModelProcessor,
+                Migrator);
+
+        /// <summary>
+        ///     Clones this dependency parameter object with one service replaced.
+        /// </summary>
+        /// <param name="migrator"> A replacement for the current dependency of this type. </param>
+        /// <returns> A new parameter object with the given service replaced. </returns>
+        public MigrationsScaffolderDependencies With([NotNull] IMigrator migrator)
+            => new MigrationsScaffolderDependencies(
+                CurrentDbContext,
+                Model,
+                MigrationsAssembly,
+                MigrationsModelDiffer,
+                MigrationsIdGenerator,
+                MigrationsCodeGeneratorSelector,
+                HistoryRepository,
+                OperationReporter,
+                DatabaseProvider,
+                SnapshotModelProcessor,
+                migrator);
     }
 }

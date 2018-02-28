@@ -1,6 +1,7 @@
 ﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Linq;
 using Microsoft.EntityFrameworkCore.TestModels.Northwind;
 using Microsoft.EntityFrameworkCore.TestUtilities;
@@ -34,6 +35,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             using (var context = CreateContext())
             {
                 var count = context.Customers.Count(c => EF.Functions.Like(c.ContactName, c.ContactName));
+
                 Assert.Equal(91, count);
             }
         }
@@ -44,6 +46,115 @@ namespace Microsoft.EntityFrameworkCore.Query
             using (var context = CreateContext())
             {
                 var count = context.Customers.Count(c => EF.Functions.Like(c.ContactName, "!%", "!"));
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Year()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffYear(c.OrderDate, DateTime.Now) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Month()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffMonth(c.OrderDate, DateTime.Now) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Day()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffDay(c.OrderDate, DateTime.Now) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Hour()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffHour(c.OrderDate, DateTime.Now) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Minute()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffMinute(c.OrderDate, DateTime.Now) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Second()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffSecond(c.OrderDate, DateTime.Now) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Millisecond()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffMillisecond(DateTime.Now, DateTime.Now.AddDays(1)) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Microsecond()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffMicrosecond(DateTime.Now, DateTime.Now.AddSeconds(1)) == 0);
+
+                Assert.Equal(0, count);
+            }
+        }
+
+        [ConditionalFact]
+        public virtual void DateDiff_Nanosecond()
+        {
+            using (var context = CreateContext())
+            {
+                var count = context.Orders
+                    .Count(c => EF.Functions.DateDiffNanosecond(DateTime.Now, DateTime.Now.AddSeconds(1)) == 0);
+
                 Assert.Equal(0, count);
             }
         }

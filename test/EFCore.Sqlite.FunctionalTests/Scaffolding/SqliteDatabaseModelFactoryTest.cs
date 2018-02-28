@@ -5,11 +5,16 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Linq;
+using Microsoft.EntityFrameworkCore.Design.Internal;
+using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
-using Microsoft.EntityFrameworkCore.Scaffolding.Internal;
 using Microsoft.EntityFrameworkCore.Scaffolding.Metadata;
+using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
+using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Xunit;
 
@@ -30,11 +35,22 @@ namespace Microsoft.EntityFrameworkCore.Scaffolding
 
             try
             {
-                var databaseModelFactory = new SqliteDatabaseModelFactory(
-                    new DiagnosticsLogger<DbLoggerCategory.Scaffolding>(
-                        new ListLoggerFactory(Log),
-                        new LoggingOptions(),
-                        new DiagnosticListener("Fake")));
+                // NOTE: You may need to update AddEntityFrameworkDesignTimeServices() too
+                var services = new ServiceCollection()
+                    .AddSingleton<TypeMappingSourceDependencies>()
+                    .AddSingleton<RelationalTypeMapperDependencies>()
+                    .AddSingleton<RelationalTypeMappingSourceDependencies>()
+                    .AddSingleton<ValueConverterSelectorDependencies>()
+                    .AddSingleton<DiagnosticSource>(new DiagnosticListener(DbLoggerCategory.Name))
+                    .AddSingleton<ILoggingOptions, LoggingOptions>()
+                    .AddSingleton(typeof(IDiagnosticsLogger<>), typeof(DiagnosticsLogger<>))
+                    .AddSingleton<IRelationalTypeMappingSource, FallbackRelationalTypeMappingSource>()
+                    .AddSingleton<IValueConverterSelector, ValueConverterSelector>()
+                    .AddLogging(x => x.SetMinimumLevel(LogLevel.Debug).AddProvider(new ListLoggerProvider(Log)));
+                new SqliteDesignTimeServices().ConfigureDesignTimeServices(services);
+                var databaseModelFactory = services
+                    .BuildServiceProvider()
+                    .GetRequiredService<IDatabaseModelFactory>();
 
                 var databaseModel = databaseModelFactory.Create(Fixture.TestStore.ConnectionString, tables, schemas);
                 Assert.NotNull(databaseModel);
@@ -321,8 +337,8 @@ CREATE TABLE Nullable (
                 @"
 CREATE TABLE DefaultValue (
     Id int,
-    NullText text DEFAULT NULL,
-    RealColumn real DEFAULT 0.0,
+    SomeText text DEFAULT 'Something',
+    RealColumn real DEFAULT 3.14,
     Created datetime DEFAULT('October 20, 2015 11am')
 );",
                 Enumerable.Empty<string>(),
@@ -331,11 +347,33 @@ CREATE TABLE DefaultValue (
                     {
                         var columns = dbModel.Tables.Single().Columns;
 
-                        Assert.Equal("NULL", columns.Single(c => c.Name == "NullText").DefaultValueSql);
-                        Assert.Equal("0.0", columns.Single(c => c.Name == "RealColumn").DefaultValueSql);
+                        Assert.Equal("'Something'", columns.Single(c => c.Name == "SomeText").DefaultValueSql);
+                        Assert.Equal("3.14", columns.Single(c => c.Name == "RealColumn").DefaultValueSql);
                         Assert.Equal("'October 20, 2015 11am'", columns.Single(c => c.Name == "Created").DefaultValueSql);
                     },
                 @"DROP TABLE DefaultValue;");
+        }
+
+        [Theory]
+        [InlineData("DOUBLE NOT NULL DEFAULT 0")]
+        [InlineData("FLOAT NOT NULL DEFAULT 0")]
+        [InlineData("INT NOT NULL DEFAULT 0")]
+        [InlineData("INTEGER NOT NULL DEFAULT 0")]
+        [InlineData("REAL NOT NULL DEFAULT 0")]
+        [InlineData("NULL DEFAULT NULL")]
+        [InlineData("NOT NULL DEFAULT NULL")]
+        public void Column_default_value_is_ignored_when_clr_default(string columnSql)
+        {
+            Test(
+                $"CREATE TABLE DefaultValueClr (IgnoredDefault {columnSql})",
+                Enumerable.Empty<string>(),
+                Enumerable.Empty<string>(),
+                dbModel =>
+                {
+                    var column = Assert.Single(Assert.Single(dbModel.Tables).Columns);
+                    Assert.Null(column.DefaultValueSql);
+                },
+                "DROP TABLE DefaultValueClr");
         }
 
         #endregion
@@ -713,10 +751,10 @@ DROP TABLE PrincipalTable;");
                 new[] { "dbo" },
                 dbModel =>
                     {
-                        var warning = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
+                        var (Level, Id, Message) = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
 
-                        Assert.Equal(SqliteStrings.LogUsingSchemaSelectionsWarning.EventId, warning.Id);
-                        Assert.Equal(SqliteStrings.LogUsingSchemaSelectionsWarning.GenerateMessage(), warning.Message);
+                        Assert.Equal(SqliteStrings.LogUsingSchemaSelectionsWarning.EventId, Id);
+                        Assert.Equal(SqliteStrings.LogUsingSchemaSelectionsWarning.GenerateMessage(), Message);
                     },
                 @"DROP TABLE Everest;");
         }
@@ -732,10 +770,10 @@ DROP TABLE PrincipalTable;");
                     {
                         Assert.Empty(dbModel.Tables);
 
-                        var warning = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
+                        var (Level, Id, Message) = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
 
-                        Assert.Equal(SqliteStrings.LogMissingTable.EventId, warning.Id);
-                        Assert.Equal(SqliteStrings.LogMissingTable.GenerateMessage("MyTable"), warning.Message);
+                        Assert.Equal(SqliteStrings.LogMissingTable.EventId, Id);
+                        Assert.Equal(SqliteStrings.LogMissingTable.GenerateMessage("MyTable"), Message);
                     },
                 @"DROP TABLE Blank;");
         }
@@ -758,10 +796,10 @@ CREATE TABLE DependentTable (
                 Enumerable.Empty<string>(),
                 dbModel =>
                     {
-                        var warning = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
+                        var (Level, Id, Message) = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
 
-                        Assert.Equal(SqliteStrings.LogForeignKeyScaffoldErrorPrincipalTableNotFound.EventId, warning.Id);
-                        Assert.Equal(SqliteStrings.LogForeignKeyScaffoldErrorPrincipalTableNotFound.GenerateMessage("0"), warning.Message);
+                        Assert.Equal(SqliteStrings.LogForeignKeyScaffoldErrorPrincipalTableNotFound.EventId, Id);
+                        Assert.Equal(SqliteStrings.LogForeignKeyScaffoldErrorPrincipalTableNotFound.GenerateMessage("0"), Message);
                     },
                 @"
 DROP TABLE DependentTable;
@@ -786,10 +824,10 @@ CREATE TABLE DependentTable (
                 Enumerable.Empty<string>(),
                 dbModel =>
                     {
-                        var warning = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
+                        var (Level, Id, Message) = Assert.Single(Log.Where(t => t.Level == LogLevel.Warning));
 
-                        Assert.Equal(SqliteStrings.LogPrincipalColumnNotFound.EventId, warning.Id);
-                        Assert.Equal(SqliteStrings.LogPrincipalColumnNotFound.GenerateMessage("0", "DependentTable", "ImaginaryId", "PrincipalTable"), warning.Message);
+                        Assert.Equal(SqliteStrings.LogPrincipalColumnNotFound.EventId, Id);
+                        Assert.Equal(SqliteStrings.LogPrincipalColumnNotFound.GenerateMessage("0", "DependentTable", "ImaginaryId", "PrincipalTable"), Message);
                     },
                 @"
 DROP TABLE DependentTable;

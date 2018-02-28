@@ -1,14 +1,13 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
-using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Extensions.Internal;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -47,12 +46,15 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             ValidateNonNullPrimaryKeys(model);
             ValidateNoShadowKeys(model);
             ValidateNoMutableKeys(model);
+            ValidateNoCycles(model);
             ValidateClrInheritance(model);
             ValidateChangeTrackingStrategy(model);
-            ValidateOwnership(model);
             ValidateDefiningNavigations(model);
+            ValidateOwnership(model);
             ValidateFieldMapping(model);
             ValidateQueryFilters(model);
+            ValidateSeedData(model);
+            LogShadowProperties(model);
         }
 
         /// <summary>
@@ -63,8 +65,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             Check.NotNull(model, nameof(model));
 
-            var filterValidatingExppressionVisitor = new FilterValidatingExppressionVisitor();
-
             foreach (var entityType in model.GetEntityTypes())
             {
                 if (entityType.QueryFilter != null)
@@ -74,59 +74,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                         throw new InvalidOperationException(
                             CoreStrings.BadFilterDerivedType(entityType.QueryFilter, entityType.DisplayName()));
                     }
-
-                    if (!filterValidatingExppressionVisitor.IsValid(entityType))
-                    {
-                        throw new InvalidOperationException(
-                            CoreStrings.BadFilterExpression(entityType.QueryFilter, entityType.DisplayName(), entityType.ClrType));
-                    }
                 }
-            }
-        }
-
-        private sealed class FilterValidatingExppressionVisitor : ExpressionVisitor
-        {
-            private IEntityType _entityType;
-
-            private bool _valid = true;
-
-            public bool IsValid(IEntityType entityType)
-            {
-                _entityType = entityType;
-
-                Visit(entityType.QueryFilter.Body);
-
-                return _valid;
-            }
-
-            protected override Expression VisitMember(MemberExpression memberExpression)
-            {
-                if (memberExpression.Expression == _entityType.QueryFilter.Parameters[0]
-                    && memberExpression.Member is PropertyInfo propertyInfo
-                    && _entityType.FindNavigation(propertyInfo) != null)
-                {
-                    _valid = false;
-
-                    return memberExpression;
-                }
-
-                return base.VisitMember(memberExpression);
-            }
-
-            protected override Expression VisitMethodCall(MethodCallExpression methodCallExpression)
-            {
-                if (methodCallExpression.IsEFProperty()
-                    && methodCallExpression.Arguments[0] == _entityType.QueryFilter.Parameters[0]
-                    && (!(methodCallExpression.Arguments[1] is ConstantExpression constantExpression)
-                        || !(constantExpression.Value is string propertyName)
-                        || _entityType.FindNavigation(propertyName) != null))
-                {
-                    _valid = false;
-
-                    return methodCallExpression;
-                }
-
-                return base.VisitMethodCall(methodCallExpression);
             }
         }
 
@@ -210,11 +158,57 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        protected virtual void ValidateNoCycles([NotNull] IModel model)
+        {
+            var unvalidatedEntityTypes = new HashSet<IEntityType>(model.GetEntityTypes());
+            foreach (var entityType in model.GetEntityTypes())
+            {
+                var primaryKey = entityType.FindPrimaryKey();
+                if (primaryKey != null)
+                {
+                    var identifyingForeignKeys = new Queue<IForeignKey>(
+                        entityType.FindForeignKeys(primaryKey.Properties).Where(fk => fk.PrincipalEntityType != entityType));
+                    while (identifyingForeignKeys.Count > 0)
+                    {
+                        var fk = identifyingForeignKeys.Dequeue();
+                        if (!fk.PrincipalKey.IsPrimaryKey()
+                            || !unvalidatedEntityTypes.Contains(fk.PrincipalEntityType))
+                        {
+                            continue;
+                        }
+
+                        if (fk.PrincipalEntityType == entityType)
+                        {
+                            throw new InvalidOperationException(CoreStrings.IdentifyingRelationshipCycle(entityType.DisplayName()));
+                        }
+
+                        foreach (var principalFk in fk.PrincipalEntityType.FindForeignKeys(fk.PrincipalKey.Properties))
+                        {
+                            if (principalFk.PrincipalEntityType != principalFk.DeclaringEntityType)
+                            {
+                                identifyingForeignKeys.Enqueue(principalFk);
+                            }
+                        }
+                    }
+                }
+
+                unvalidatedEntityTypes.Remove(entityType);
+            }
+        }
+
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         protected virtual void ValidateNonNullPrimaryKeys([NotNull] IModel model)
         {
             Check.NotNull(model, nameof(model));
 
-            var entityTypeWithNullPk = model.GetEntityTypes().FirstOrDefault(et => et.FindPrimaryKey() == null);
+            var entityTypeWithNullPk
+                = model.GetEntityTypes()
+                    .FirstOrDefault(et => !et.IsQueryType && et.FindPrimaryKey() == null);
+
             if (entityTypeWithNullPk != null)
             {
                 throw new InvalidOperationException(
@@ -253,21 +247,25 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 return;
             }
 
-            var baseClrType = entityType.ClrType?.GetTypeInfo().BaseType;
-            while (baseClrType != null)
+            if (!entityType.HasDefiningNavigation()
+                && entityType.FindDeclaredOwnership() == null
+                && entityType.BaseType != null)
             {
-                var baseEntityType = model.FindEntityType(baseClrType);
-                if (baseEntityType != null)
+                var baseClrType = entityType.ClrType?.GetTypeInfo().BaseType;
+                while (baseClrType != null)
                 {
-                    if (!baseEntityType.IsAssignableFrom(entityType))
+                    var baseEntityType = model.FindEntityType(baseClrType);
+                    if (baseEntityType != null)
                     {
-                        throw new InvalidOperationException(
-                            CoreStrings.InconsistentInheritance(entityType.DisplayName(), baseEntityType.DisplayName()));
+                        if (!baseEntityType.IsAssignableFrom(entityType))
+                        {
+                            throw new InvalidOperationException(
+                                CoreStrings.InconsistentInheritance(entityType.DisplayName(), baseEntityType.DisplayName()));
+                        }
+                        break;
                     }
-                    ValidateClrInheritance(model, baseEntityType, validEntityTypes);
-                    break;
+                    baseClrType = baseClrType.GetTypeInfo().BaseType;
                 }
-                baseClrType = baseClrType.GetTypeInfo().BaseType;
             }
 
             if (entityType.ClrType?.IsInstantiable() == false
@@ -288,25 +286,13 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         {
             Check.NotNull(model, nameof(model));
 
-            var detectChangesNeeded = false;
             foreach (var entityType in model.GetEntityTypes())
             {
-                var changeTrackingStrategy = entityType.GetChangeTrackingStrategy();
-                if (changeTrackingStrategy == ChangeTrackingStrategy.Snapshot)
-                {
-                    detectChangesNeeded = true;
-                }
-
-                var errorMessage = entityType.CheckChangeTrackingStrategy(changeTrackingStrategy);
+                var errorMessage = entityType.CheckChangeTrackingStrategy(entityType.GetChangeTrackingStrategy());
                 if (errorMessage != null)
                 {
                     throw new InvalidOperationException(errorMessage);
                 }
-            }
-
-            if (!detectChangesNeeded)
-            {
-                (model as IMutableModel)?.GetOrAddAnnotation(ChangeDetector.SkipDetectChangesAnnotation, "true");
             }
         }
 
@@ -324,6 +310,41 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 if (ownerships.Count > 1)
                 {
                     throw new InvalidOperationException(CoreStrings.MultipleOwnerships(entityType.DisplayName()));
+                }
+
+                if (ownerships.Count == 1)
+                {
+                    var ownership = ownerships[0];
+                    if (entityType.BaseType != null
+                        && ownership.DeclaringEntityType == entityType)
+                    {
+                        throw new InvalidOperationException(CoreStrings.OwnedDerivedType(entityType.DisplayName()));
+                    }
+
+                    foreach (var referencingFk in entityType.GetReferencingForeignKeys().Where(fk => !fk.IsOwnership))
+                    {
+                        throw new InvalidOperationException(
+                            CoreStrings.PrincipalOwnedType(
+                                referencingFk.DeclaringEntityType.DisplayName() +
+                                (referencingFk.DependentToPrincipal == null
+                                    ? ""
+                                    : "." + referencingFk.DependentToPrincipal.Name),
+                                referencingFk.PrincipalEntityType.DisplayName() +
+                                (referencingFk.PrincipalToDependent == null
+                                    ? ""
+                                    : "." + referencingFk.PrincipalToDependent.Name),
+                                entityType.DisplayName()));
+                    }
+
+                    foreach (var fk in entityType.GetDeclaredForeignKeys().Where(fk => !fk.IsOwnership && fk.PrincipalToDependent != null))
+                    {
+                        throw new InvalidOperationException(
+                            CoreStrings.InverseToOwnedType(
+                                fk.PrincipalEntityType.DisplayName(),
+                                fk.PrincipalToDependent.Name,
+                                entityType.DisplayName(),
+                                ownership.PrincipalEntityType.DisplayName()));
+                    }
                 }
             }
         }
@@ -371,30 +392,6 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                                     CoreStrings.InconsistentOwnership(entityType.DisplayName(), otherEntityType.DisplayName()));
                             }
                         }
-
-                        foreach (var referencingFk in entityType.GetReferencingForeignKeys().Where(fk => !fk.IsOwnership))
-                        {
-                            throw new InvalidOperationException(
-                                CoreStrings.PrincipalOwnedType(
-                                    referencingFk.DeclaringEntityType.DisplayName() +
-                                    (referencingFk.DependentToPrincipal == null
-                                        ? ""
-                                        : "." + referencingFk.DependentToPrincipal.Name),
-                                    referencingFk.PrincipalEntityType.DisplayName() +
-                                    (referencingFk.PrincipalToDependent == null
-                                        ? ""
-                                        : "." + referencingFk.PrincipalToDependent.Name),
-                                    entityType.DisplayName()));
-                        }
-
-                        foreach (var fk in entityType.GetDeclaredForeignKeys().Where(fk => !fk.IsOwnership && fk.PrincipalToDependent != null))
-                        {
-                            throw new InvalidOperationException(
-                                CoreStrings.InverseToOwnedType(
-                                    fk.PrincipalEntityType.DisplayName(),
-                                    fk.PrincipalToDependent.Name,
-                                    entityType.DisplayName()));
-                        }
                     }
                 }
             }
@@ -410,11 +407,24 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             foreach (var entityType in model.GetEntityTypes())
             {
-                foreach (var propertyBase in entityType
-                    .GetDeclaredProperties()
-                    .Where(e => !e.IsShadowProperty)
-                    .Cast<IPropertyBase>()
-                    .Concat(entityType.GetDeclaredNavigations()))
+                var properties = new HashSet<IPropertyBase>(
+                    entityType
+                        .GetDeclaredProperties()
+                        .Cast<IPropertyBase>()
+                        .Concat(entityType.GetDeclaredNavigations())
+                        .Where(p => !p.IsShadowProperty));
+
+                var constructorBinding = (ConstructorBinding)entityType[CoreAnnotationNames.ConstructorBinding];
+
+                if (constructorBinding != null)
+                {
+                    foreach (var consumedProperty in constructorBinding.ParameterBindings.SelectMany(p => p.ConsumedProperties))
+                    {
+                        properties.Remove(consumedProperty);
+                    }
+                }
+
+                foreach (var propertyBase in properties)
                 {
                     if (!propertyBase.TryGetMemberInfo(
                         forConstruction: true,
@@ -441,6 +451,126 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                         errorMessage: out errorMessage))
                     {
                         throw new InvalidOperationException(errorMessage);
+                    }
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void ValidateSeedData([NotNull] IModel model)
+        {
+            Check.NotNull(model, nameof(model));
+
+            var identityMaps = new Dictionary<IKey, IIdentityMap>();
+            var sensitiveDataLogged = Dependencies.Logger.ShouldLogSensitiveData();
+
+            foreach (var entityType in model.GetEntityTypes().Where(et => !et.IsQueryType))
+            {
+                var key = entityType.FindPrimaryKey();
+                if (!identityMaps.TryGetValue(key, out var identityMap))
+                {
+                    identityMap = key.GetIdentityMapFactory()(sensitiveDataLogged);
+                    identityMaps[key] = identityMap;
+                }
+
+                foreach (var seedDatum in entityType.GetSeedData())
+                {
+                    foreach (var property in entityType.GetProperties())
+                    {
+                        if (!seedDatum.TryGetValue(property.Name, out var value)
+                            || value == null)
+                        {
+                            if (!property.IsNullable)
+                            {
+                                throw new InvalidOperationException(CoreStrings.SeedDatumMissingValue(entityType.DisplayName(), property.Name));
+                            }
+                        } else if (property.RequiresValueGenerator()
+                                   && property.ClrType.IsDefaultValue(value))
+                        {
+                            throw new InvalidOperationException(CoreStrings.SeedDatumMissingValue(entityType.DisplayName(), property.Name));
+                        }
+                        else
+                        {
+                            if (!property.ClrType.GetTypeInfo().IsAssignableFrom(value.GetType().GetTypeInfo()))
+                            {
+                                if (sensitiveDataLogged)
+                                {
+                                    throw new InvalidOperationException(CoreStrings.SeedDatumIncompatibleValueSensitive(
+                                        entityType.DisplayName(), value, property.Name, property.ClrType.DisplayName()));
+                                }
+                                throw new InvalidOperationException(CoreStrings.SeedDatumIncompatibleValue(
+                                    entityType.DisplayName(), property.Name, property.ClrType.DisplayName()));
+                            }
+                        }
+                    }
+
+                    var keyValues = new object[key.Properties.Count];
+                    for (var i = 0; i < key.Properties.Count; i++)
+                    {
+                        keyValues[i] = seedDatum[key.Properties[i].Name];
+                    }
+
+                    foreach (var navigation in entityType.GetNavigations())
+                    {
+                        if (seedDatum.TryGetValue(navigation.Name, out var value)
+                            && ((navigation.IsCollection() && value is IEnumerable collection && collection.Any())
+                                || (!navigation.IsCollection() && value != null)))
+                        {
+                            if (sensitiveDataLogged)
+                            {
+                                throw new InvalidOperationException(CoreStrings.SeedDatumNavigationSensitive(
+                                    entityType.DisplayName(),
+                                    string.Join(", ", key.Properties.Select((p, i) => p.Name + ":" + keyValues[i])),
+                                    navigation.Name,
+                                    navigation.GetTargetType().DisplayName(),
+                                    Property.Format(navigation.ForeignKey.Properties)));
+                            }
+
+                            throw new InvalidOperationException(CoreStrings.SeedDatumNavigation(
+                                entityType.DisplayName(),
+                                navigation.Name,
+                                navigation.GetTargetType().DisplayName(),
+                                Property.Format(navigation.ForeignKey.Properties)));
+                        }
+                    }
+
+                    var entry = identityMap.TryGetEntry(keyValues);
+                    if (entry != null)
+                    {
+                        if (sensitiveDataLogged)
+                        {
+                            throw new InvalidOperationException(CoreStrings.SeedDatumDuplicateSensitive(
+                                entityType.DisplayName(), string.Join(", ", key.Properties.Select((p, i) => p.Name + ":" + keyValues[i]))));
+                        }
+                        throw new InvalidOperationException(CoreStrings.SeedDatumDuplicate(
+                            entityType.DisplayName(), Property.Format(key.Properties)));
+                    }
+
+                    entry = new InternalShadowEntityEntry(null, entityType);
+
+                    identityMap.Add(keyValues, entry);
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        protected virtual void LogShadowProperties([NotNull] IModel model)
+        {
+            Check.NotNull(model, nameof(model));
+
+            foreach (var entityType in model.GetEntityTypes().Where(t => t.ClrType != null))
+            {
+                foreach (var property in entityType.GetDeclaredProperties())
+                {
+                    if (property.IsShadowProperty)
+                    {
+                        Dependencies.ModelLogger.ShadowPropertyCreated(property);
                     }
                 }
             }

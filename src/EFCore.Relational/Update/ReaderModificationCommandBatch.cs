@@ -252,8 +252,7 @@ namespace Microsoft.EntityFrameworkCore.Update
             try
             {
                 using (var dataReader = storeCommand.RelationalCommand.ExecuteReader(
-                    connection,
-                    parameterValues: storeCommand.ParameterValues))
+                    connection, storeCommand.ParameterValues))
                 {
                     Consume(dataReader);
                 }
@@ -277,7 +276,7 @@ namespace Microsoft.EntityFrameworkCore.Update
         /// <returns> A task that represents the asynchronous operation. </returns>
         public override async Task ExecuteAsync(
             IRelationalConnection connection,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             Check.NotNull(connection, nameof(connection));
 
@@ -317,7 +316,7 @@ namespace Microsoft.EntityFrameworkCore.Update
         /// <returns> A task that represents the asynchronous operation. </returns>
         protected abstract Task ConsumeAsync(
             [NotNull] RelationalDataReader reader,
-            CancellationToken cancellationToken = default(CancellationToken));
+            CancellationToken cancellationToken = default);
 
         /// <summary>
         ///     Creates the <see cref="IRelationalValueBufferFactory" /> that will be used for creating a
@@ -333,8 +332,7 @@ namespace Microsoft.EntityFrameworkCore.Update
                 .Create(
                     Check.NotNull(columnModifications, nameof(columnModifications))
                         .Where(c => c.IsRead)
-                        .Select(c => c.Property.ClrType)
-                        .ToArray(),
-                    indexMap: null);
+                        .Select(c => new TypeMaterializationInfo(c.Property.ClrType, c.Property, null))
+                        .ToArray());
     }
 }

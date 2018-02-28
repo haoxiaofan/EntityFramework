@@ -20,14 +20,14 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
     /// </summary>
     public class SqlServerUpdateSqlGenerator : UpdateSqlGenerator, ISqlServerUpdateSqlGenerator
     {
-        private readonly IRelationalTypeMapper _typeMapper;
-
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public SqlServerUpdateSqlGenerator(
-            [NotNull] UpdateSqlGeneratorDependencies dependencies,
-            [NotNull] IRelationalTypeMapper typeMapper)
+            [NotNull] UpdateSqlGeneratorDependencies dependencies)
             : base(dependencies)
         {
-            _typeMapper = typeMapper;
         }
 
         /// <summary>
@@ -44,7 +44,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     o =>
                         !o.IsKey
                         || !o.IsRead
-                        || o.Property.SqlServer().ValueGenerationStrategy == SqlServerValueGenerationStrategy.IdentityColumn))
+                        || o.Property?.SqlServer().ValueGenerationStrategy == SqlServerValueGenerationStrategy.IdentityColumn))
             {
                 return AppendInsertOperation(commandStringBuilder, modificationCommands[0], commandPosition);
             }
@@ -55,7 +55,7 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
 
             var defaultValuesOnly = writeOperations.Count == 0;
             var nonIdentityOperations = modificationCommands[0].ColumnModifications
-                .Where(o => o.Property.SqlServer().ValueGenerationStrategy != SqlServerValueGenerationStrategy.IdentityColumn)
+                .Where(o => o.Property?.SqlServer().ValueGenerationStrategy != SqlServerValueGenerationStrategy.IdentityColumn)
                 .ToList();
 
             if (defaultValuesOnly)
@@ -346,28 +346,9 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             if (typeName == null)
             {
                 var principalProperty = property.FindPrincipal();
-                typeName = principalProperty?.SqlServer().ColumnType;
-                if (typeName == null)
-                {
-                    if (property.ClrType == typeof(string))
-                    {
-                        typeName = _typeMapper.StringMapper?.FindMapping(
-                            property.IsUnicode() ?? principalProperty?.IsUnicode() ?? true,
-                            keyOrIndex: false,
-                            maxLength: null).StoreType;
-                    }
-                    else if (property.ClrType == typeof(byte[]))
-                    {
-                        typeName = _typeMapper.ByteArrayMapper?.FindMapping(
-                            rowVersion: false,
-                            keyOrIndex: false,
-                            size: null).StoreType;
-                    }
-                    else
-                    {
-                        typeName = _typeMapper.FindMapping(property.ClrType).StoreType;
-                    }
-                }
+
+                typeName = principalProperty?.SqlServer().ColumnType
+                           ?? Dependencies.TypeMappingSource.FindMapping(property.ClrType)?.StoreType;
             }
 
             if (property.ClrType == typeof(byte[])

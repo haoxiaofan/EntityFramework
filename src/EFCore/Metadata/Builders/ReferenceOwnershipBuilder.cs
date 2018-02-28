@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
@@ -104,7 +105,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                     RelatedEntityType,
                     ConfigurationSource.Explicit),
                 this,
-                foreignKeySet: true);
+                foreignKeySet: foreignKeyPropertyNames.Any());
 
         /// <summary>
         ///     Configures the unique property(s) that this relationship targets. Typically you would only call this
@@ -128,7 +129,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
                     Check.NotNull(keyPropertyNames, nameof(keyPropertyNames)),
                     ConfigurationSource.Explicit),
                 this,
-                principalKeySet: true);
+                principalKeySet: keyPropertyNames.Any());
 
         /// <summary>
         ///     Configures how a delete operation is applied to dependent entities in the relationship when the
@@ -414,8 +415,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             Check.NotNull(relatedType, nameof(relatedType));
             Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
-            var relatedEntityType = RelatedEntityType.FindInDefinitionPath(relatedType) ??
-                                    RelatedEntityType.Builder.ModelBuilder.Entity(relatedType, ConfigurationSource.Explicit).Metadata;
+            var relatedEntityType =
+                RelatedEntityType.FindInDefinitionPath(relatedType) ??
+                Builder.ModelBuilder.Metadata.FindEntityType(relatedType, navigationName, RelatedEntityType) ??
+                RelatedEntityType.Builder.ModelBuilder.Entity(relatedType, ConfigurationSource.Explicit).Metadata;
 
             return new ReferenceNavigationBuilder(
                 RelatedEntityType,
@@ -453,8 +456,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             Check.NotEmpty(relatedTypeName, nameof(relatedTypeName));
             Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
-            var relatedEntityType = RelatedEntityType.FindInDefinitionPath(relatedTypeName) ??
-                                    RelatedEntityType.Builder.ModelBuilder.Entity(relatedTypeName, ConfigurationSource.Explicit).Metadata;
+            var relatedEntityType =
+                RelatedEntityType.FindInDefinitionPath(relatedTypeName) ??
+                Builder.ModelBuilder.Metadata.FindEntityType(relatedTypeName, navigationName, RelatedEntityType) ??
+                RelatedEntityType.Builder.ModelBuilder.Entity(relatedTypeName, ConfigurationSource.Explicit).Metadata;
 
             return new ReferenceNavigationBuilder(
                 RelatedEntityType,
@@ -577,11 +582,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for all properties of this entity type as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
-        ///         Calling this method overrrides for all properties of this entity type any access mode that was
+        ///         Calling this method overrides for all properties of this entity type any access mode that was
         ///         set on the model.
         ///     </para>
         /// </summary>
@@ -590,6 +595,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         public virtual ReferenceOwnershipBuilder UsePropertyAccessMode(PropertyAccessMode propertyAccessMode)
         {
             RelatedEntityType.Builder.UsePropertyAccessMode(propertyAccessMode, ConfigurationSource.Explicit);
+
+            return this;
+        }
+
+        /// <summary>
+        ///     Configures this entity to have seed data. It is used to generate data motion migrations.
+        /// </summary>
+        /// <param name="data">
+        ///     An array of seed data of the same type as the entity we're building.
+        /// </param>
+        public virtual ReferenceOwnershipBuilder SeedData([NotNull] params object[] data)
+        {
+            Check.NotNull(data, nameof(data));
+
+            OwnedEntityType.AddSeedData(data);
 
             return this;
         }

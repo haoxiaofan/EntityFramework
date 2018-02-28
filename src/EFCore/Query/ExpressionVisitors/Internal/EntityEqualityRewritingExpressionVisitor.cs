@@ -113,13 +113,8 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
                     }
                     else
                     {
-                        var properties = MemberAccessBindingExpressionVisitor.GetPropertyPath(
-                            nonNullExpression, _queryCompilationContext, out qsre);
-                        if (properties.Count > 0
-                            && properties[properties.Count - 1] is INavigation navigation)
-                        {
-                            entityType = navigation.GetTargetType();
-                        }
+                        entityType = MemberAccessBindingExpressionVisitor.GetEntityType(
+                            nonNullExpression, _queryCompilationContext);
                     }
                 }
 
@@ -335,17 +330,7 @@ namespace Microsoft.EntityFrameworkCore.Query.ExpressionVisitors.Internal
             // If comparing with null then we need only first PK property
             return properties.Count == 1 || nullComparison
                 ? target.CreateEFPropertyExpression(properties[0])
-                : Expression.New(
-                    AnonymousObject.AnonymousObjectCtor,
-                    Expression.NewArrayInit(
-                        typeof(object),
-                        properties
-                            .Select(
-                                p => Expression.Convert(
-                                    target.CreateEFPropertyExpression(p),
-                                    typeof(object)))
-                            .Cast<Expression>()
-                            .ToArray()));
+                : target.CreateKeyAccessExpression(properties);
         }
     }
 }

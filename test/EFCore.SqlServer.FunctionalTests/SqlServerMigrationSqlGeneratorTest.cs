@@ -9,7 +9,6 @@ using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Migrations.Operations;
 using Microsoft.EntityFrameworkCore.TestUtilities;
-using Microsoft.EntityFrameworkCore.TestUtilities.Xunit;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -294,10 +293,10 @@ namespace Microsoft.EntityFrameworkCore
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
                     .Entity(
                         "Person", x =>
-                            {
-                                x.Property<string>("FullName").HasComputedColumnSql("[FirstName] + ' ' + [LastName]");
-                                x.HasIndex("FullName");
-                            }),
+                        {
+                            x.Property<string>("FullName").HasComputedColumnSql("[FirstName] + ' ' + [LastName]");
+                            x.HasIndex("FullName");
+                        }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -333,11 +332,11 @@ namespace Microsoft.EntityFrameworkCore
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
                     .Entity(
                         "Person", x =>
-                            {
-                                x.ForSqlServerIsMemoryOptimized();
-                                x.Property<string>("Name");
-                                x.HasIndex("Name");
-                            }),
+                        {
+                            x.ForSqlServerIsMemoryOptimized();
+                            x.Property<string>("Name");
+                            x.HasIndex("Name");
+                        }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -371,10 +370,10 @@ namespace Microsoft.EntityFrameworkCore
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
                     .Entity(
                         "Person", x =>
-                            {
-                                x.Property<string>("Name");
-                                x.HasIndex("Name");
-                            }),
+                        {
+                            x.Property<string>("Name");
+                            x.HasIndex("Name");
+                        }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -407,10 +406,10 @@ namespace Microsoft.EntityFrameworkCore
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
                     .Entity(
                         "Person", x =>
-                            {
-                                x.Property<string>("Name").HasMaxLength(30);
-                                x.HasIndex("Name");
-                            }),
+                        {
+                            x.Property<string>("Name").HasMaxLength(30);
+                            x.HasIndex("Name");
+                        }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -446,10 +445,10 @@ namespace Microsoft.EntityFrameworkCore
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.0.0-rtm")
                     .Entity(
                         "Person", x =>
-                            {
-                                x.Property<string>("Name").HasMaxLength(30);
-                                x.HasIndex("Name");
-                            }),
+                        {
+                            x.Property<string>("Name").HasMaxLength(30);
+                            x.HasIndex("Name");
+                        }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -479,11 +478,11 @@ namespace Microsoft.EntityFrameworkCore
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
                     .Entity(
                         "Person", x =>
-                            {
-                                x.Property<string>("FirstName").IsRequired();
-                                x.Property<string>("LastName");
-                                x.HasIndex("FirstName", "LastName");
-                            }),
+                        {
+                            x.Property<string>("FirstName").IsRequired();
+                            x.Property<string>("LastName");
+                            x.HasIndex("FirstName", "LastName");
+                        }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -518,10 +517,10 @@ namespace Microsoft.EntityFrameworkCore
                     .HasAnnotation(CoreAnnotationNames.ProductVersionAnnotation, "1.1.0")
                     .Entity(
                         "Person", x =>
-                            {
-                                x.Property<string>("Name").HasMaxLength(30);
-                                x.HasIndex("Name");
-                            }),
+                        {
+                            x.Property<string>("Name").HasMaxLength(30);
+                            x.HasIndex("Name");
+                        }),
                 new AlterColumnOperation
                 {
                     Table = "Person",
@@ -636,7 +635,10 @@ namespace Microsoft.EntityFrameworkCore
                 "CREATE DATABASE [Northwind];" + EOL +
                 "GO" + EOL +
                 EOL +
-                "IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;');" + EOL,
+                "IF SERVERPROPERTY('EngineEdition') <> 5" + EOL +
+                "BEGIN" + EOL +
+                "    ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;" + EOL +
+                "END;" + EOL,
                 Sql);
         }
 
@@ -654,7 +656,10 @@ namespace Microsoft.EntityFrameworkCore
                 "LOG ON (NAME = 'Narf_log', FILENAME = '" + expectedLog + "');" + EOL +
                 "GO" + EOL +
                 EOL +
-                "IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;');" + EOL,
+                "IF SERVERPROPERTY('EngineEdition') <> 5" + EOL +
+                "BEGIN" + EOL +
+                "    ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;" + EOL +
+                "END;" + EOL,
                 Sql);
         }
 
@@ -674,12 +679,14 @@ namespace Microsoft.EntityFrameworkCore
                 "LOG ON (NAME = 'Narf_log', FILENAME = '" + expectedLog + "');" + EOL +
                 "GO" + EOL +
                 EOL +
-                "IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;');" + EOL,
+                "IF SERVERPROPERTY('EngineEdition') <> 5" + EOL +
+                "BEGIN" + EOL +
+                "    ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;" + EOL +
+                "END;" + EOL,
                 Sql);
         }
 
-        [ConditionalFact]
-        [FrameworkSkipCondition(RuntimeFrameworks.CoreCLR, SkipReason = "Blocked by dotnet/coreclr#11453")]
+        [Fact]
         public virtual void CreateDatabaseOperation_with_filename_and_custom_datadirectory()
         {
             var dataDirectory = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "Data");
@@ -699,7 +706,10 @@ namespace Microsoft.EntityFrameworkCore
                 "LOG ON (NAME = 'Narf_log', FILENAME = '" + expectedLog + "');" + EOL +
                 "GO" + EOL +
                 EOL +
-                "IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;');" + EOL,
+                "IF SERVERPROPERTY('EngineEdition') <> 5" + EOL +
+                "BEGIN" + EOL +
+                "    ALTER DATABASE [Northwind] SET READ_COMMITTED_SNAPSHOT ON;" + EOL +
+                "END;" + EOL,
                 Sql);
         }
 
@@ -788,17 +798,18 @@ namespace Microsoft.EntityFrameworkCore
         public virtual void CreateIndexOperation_memoryOptimized_unique_nullable()
         {
             Generate(
-                modelBuilder => modelBuilder.Entity("People").ForSqlServerIsMemoryOptimized().Property<string>("Name"),
+                modelBuilder => modelBuilder.Entity("People").ToTable("People", "dbo").ForSqlServerIsMemoryOptimized().Property<string>("Name"),
                 new CreateIndexOperation
                 {
                     Name = "IX_People_Name",
+                    Schema = "dbo",
                     Table = "People",
                     Columns = new[] { "Name" },
                     IsUnique = true
                 });
 
             Assert.Equal(
-                "ALTER TABLE [People] ADD INDEX [IX_People_Name] ([Name]);" + EOL,
+                "ALTER TABLE [dbo].[People] ADD INDEX [IX_People_Name] ([Name]);" + EOL,
                 Sql);
         }
 
@@ -881,7 +892,11 @@ namespace Microsoft.EntityFrameworkCore
             Generate(new SqlServerDropDatabaseOperation { Name = "Northwind" });
 
             Assert.Equal(
-                "IF SERVERPROPERTY('EngineEdition') <> 5 EXEC(N'ALTER DATABASE [Northwind] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;');" + EOL +
+
+                "IF SERVERPROPERTY('EngineEdition') <> 5" + EOL +
+                "BEGIN" + EOL +
+                "    ALTER DATABASE [Northwind] SET SINGLE_USER WITH ROLLBACK IMMEDIATE;" + EOL +
+                "END;" + EOL +
                 "GO" + EOL +
                 EOL +
                 "DROP DATABASE [Northwind];" + EOL,
@@ -1117,12 +1132,87 @@ namespace Microsoft.EntityFrameworkCore
                 "    SET IDENTITY_INSERT [People] ON;" + EOL +
                 "INSERT INTO [People] ([Id], [Full Name])" + EOL +
                 "VALUES (0, NULL)," + EOL +
-                "       (1, N'Daenerys Targaryen')," + EOL +
-                "       (2, N'John Snow')," + EOL +
-                "       (3, N'Arya Stark')," + EOL +
-                "       (4, N'Harry Strickland');" + EOL +
+                "(1, N'Daenerys Targaryen')," + EOL +
+                "(2, N'John Snow')," + EOL +
+                "(3, N'Arya Stark')," + EOL +
+                "(4, N'Harry Strickland');" + EOL +
                 "IF EXISTS (SELECT * FROM [sys].[identity_columns] WHERE [object_id] = OBJECT_ID(N'People'))" + EOL +
                 "    SET IDENTITY_INSERT [People] OFF;" + EOL,
+                Sql);
+        }
+
+        public override void DeleteDataOperation_simple_key()
+        {
+            base.DeleteDataOperation_simple_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "DELETE FROM [People]" + EOL +
+                "WHERE [Id] = 2;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "DELETE FROM [People]" + EOL +
+                "WHERE [Id] = 4;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void DeleteDataOperation_composite_key()
+        {
+            base.DeleteDataOperation_composite_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "DELETE FROM [People]" + EOL +
+                "WHERE [First Name] = N'Hodor' AND [Last Name] IS NULL;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "DELETE FROM [People]" + EOL +
+                "WHERE [First Name] = N'Daenerys' AND [Last Name] = N'Targaryen';" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void UpdateDataOperation_simple_key()
+        {
+            base.UpdateDataOperation_simple_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "UPDATE [People] SET [Full Name] = N'Daenerys Stormborn'" + EOL +
+                "WHERE [Id] = 1;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "UPDATE [People] SET [Full Name] = N'Homeless Harry Strickland'" + EOL +
+                "WHERE [Id] = 4;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void UpdateDataOperation_composite_key()
+        {
+            base.UpdateDataOperation_composite_key();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "UPDATE [People] SET [First Name] = N'Hodor'" + EOL +
+                "WHERE [Id] = 0 AND [Last Name] IS NULL;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "UPDATE [People] SET [First Name] = N'Harry'" + EOL +
+                "WHERE [Id] = 4 AND [Last Name] = N'Strickland';" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
+                Sql);
+        }
+
+        public override void UpdateDataOperation_multiple_columns()
+        {
+            base.UpdateDataOperation_multiple_columns();
+
+            // TODO remove rowcount
+            Assert.Equal(
+                "UPDATE [People] SET [First Name] = N'Daenerys', [Nickname] = N'Dany'" + EOL +
+                "WHERE [Id] = 1;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL +
+                "UPDATE [People] SET [First Name] = N'Harry', [Nickname] = N'Homeless'" + EOL +
+                "WHERE [Id] = 4;" + EOL +
+                "SELECT @@ROWCOUNT;" + EOL + EOL,
                 Sql);
         }
 

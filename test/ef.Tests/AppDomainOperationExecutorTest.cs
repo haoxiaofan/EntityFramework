@@ -12,12 +12,16 @@ using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.Tools.TestUtilities;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Tools
 {
     [Collection("OperationExecutorTests")]
     public class AppDomainOperationExecutorTest
     {
-        private IOperationExecutor CreateExecutorFromBuildResult(BuildFileResult build, string rootNamespace = null)
+        private IOperationExecutor CreateExecutorFromBuildResult(
+            BuildFileResult build,
+            string rootNamespace,
+            string language)
         {
             File.Copy(AppDomain.CurrentDomain.SetupInformation.ConfigurationFile, build.TargetPath + ".config");
 
@@ -26,14 +30,15 @@ namespace Microsoft.EntityFrameworkCore.Tools
                 build.TargetPath,
                 build.TargetDir,
                 build.TargetDir,
-                rootNamespace);
+                rootNamespace,
+                language);
         }
 
         [Fact]
         public void Assembly_load_errors_are_wrapped()
         {
             var targetDir = AppDomain.CurrentDomain.BaseDirectory;
-            using (var executor = new AppDomainOperationExecutor(Assembly.GetExecutingAssembly().Location, Path.Combine(targetDir, "Unknown.dll"), targetDir, null, null))
+            using (var executor = new AppDomainOperationExecutor(Assembly.GetExecutingAssembly().Location, Path.Combine(targetDir, "Unknown.dll"), targetDir, null, null, null))
             {
                 Assert.Throws<WrappedException>(() => executor.GetContextTypes());
             }
@@ -53,6 +58,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                         BuildReference.ByName("System.Diagnostics.DiagnosticSource", true),
                         BuildReference.ByName("System.Interactive.Async", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore", true),
+                        BuildReference.ByName("Microsoft.EntityFrameworkCore.Attributes", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Design", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Relational", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.SqlServer", true),
@@ -119,7 +125,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                 };
 
                 var build = source.Build();
-                using (var executor = CreateExecutorFromBuildResult(build, "MyProject"))
+                using (var executor = CreateExecutorFromBuildResult(build, "MyProject", "C#"))
                 {
                     var migrations = executor.GetMigrations("Context1");
 
@@ -165,6 +171,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     References =
                     {
                         BuildReference.ByName("Microsoft.EntityFrameworkCore"),
+                        BuildReference.ByName("Microsoft.EntityFrameworkCore.Attributes", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Design", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Relational", true),
                         BuildReference.ByName("Microsoft.Extensions.DependencyInjection", true),
@@ -216,7 +223,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     }
                 };
                 var build = migrationsSource.Build();
-                using (var executor = CreateExecutorFromBuildResult(build, "MyProject"))
+                using (var executor = CreateExecutorFromBuildResult(build, "MyProject", "C#"))
                 {
                     var contextTypes = executor.GetContextTypes();
 
@@ -239,6 +246,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                         BuildReference.ByName("System.Diagnostics.DiagnosticSource", true),
                         BuildReference.ByName("System.Interactive.Async", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore", true),
+                        BuildReference.ByName("Microsoft.EntityFrameworkCore.Attributes", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Design", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Relational", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.SqlServer", true),
@@ -293,7 +301,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     }
                 };
                 var build = source.Build();
-                using (var executor = CreateExecutorFromBuildResult(build, "MyProject"))
+                using (var executor = CreateExecutorFromBuildResult(build, "MyProject", "C#"))
                 {
                     var artifacts = executor.AddMigration("MyMigration", /*outputDir:*/ null, "MySecondContext");
                     Assert.Equal(3, artifacts.Keys.Count);
@@ -314,6 +322,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     References =
                     {
                         BuildReference.ByName("Microsoft.EntityFrameworkCore", true),
+                        BuildReference.ByName("Microsoft.EntityFrameworkCore.Attributes", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Design", true),
                         BuildReference.ByName("Microsoft.EntityFrameworkCore.Relational", true),
                         BuildReference.ByName("Microsoft.Extensions.DependencyInjection", true),
@@ -338,7 +347,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
                     }
                 };
                 var build = source.Build();
-                using (var executor = CreateExecutorFromBuildResult(build, "MyProject"))
+                using (var executor = CreateExecutorFromBuildResult(build, "MyProject", "C#"))
                 {
                     var ex = Assert.Throws<WrappedException>(
                         () => executor.GetMigrations("MyContext"));
@@ -351,7 +360,7 @@ namespace Microsoft.EntityFrameworkCore.Tools
         }
     }
 }
-#elif NETCOREAPP2_0
+#elif NETCOREAPP2_0 || NETCOREAPP2_1
 #else
 #error target frameworks need to be updated.
 #endif

@@ -2,11 +2,13 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.ComponentModel;
 using System.Diagnostics;
 using System.Linq.Expressions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -31,6 +33,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         public EntityTypeBuilder([NotNull] InternalEntityTypeBuilder builder)
         {
             Check.NotNull(builder, nameof(builder));
+
+            if (builder.Metadata.IsQueryType)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.CannotAccessQueryAsEntity(builder.Metadata.DisplayName()));
+            }
 
             Builder = builder;
         }
@@ -357,6 +365,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.Metadata.FindInDefinitionPath(relatedType) ??
+                                    Builder.ModelBuilder.Metadata.FindEntityType(relatedType, navigationName, Builder.Metadata) ??
                                     Builder.ModelBuilder.Entity(relatedType, ConfigurationSource.Explicit).Metadata;
 
             return new ReferenceNavigationBuilder(
@@ -396,6 +405,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
             Check.NullButNotEmpty(navigationName, nameof(navigationName));
 
             var relatedEntityType = Builder.Metadata.FindInDefinitionPath(relatedTypeName) ??
+                                    Builder.ModelBuilder.Metadata.FindEntityType(relatedTypeName, navigationName, Builder.Metadata) ??
                                     Builder.ModelBuilder.Entity(relatedTypeName, ConfigurationSource.Explicit).Metadata;
 
             return new ReferenceNavigationBuilder(
@@ -519,11 +529,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
         ///     <para>
         ///         By default, the backing field, if one is found by convention or has been specified, is used when
         ///         new objects are constructed, typically when entities are queried from the database.
-        ///         Properties are used for all other accesses.  Calling this method witll change that behavior
+        ///         Properties are used for all other accesses.  Calling this method will change that behavior
         ///         for all properties of this entity type as described in the <see cref="PropertyAccessMode" /> enum.
         ///     </para>
         ///     <para>
-        ///         Calling this method overrrides for all properties of this entity type any access mode that was
+        ///         Calling this method overrides for all properties of this entity type any access mode that was
         ///         set on the model.
         ///     </para>
         /// </summary>
@@ -535,5 +545,46 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Builders
 
             return this;
         }
+
+        /// <summary>
+        ///     Configures this entity to have seed data. It is used to generate data motion migrations.
+        /// </summary>
+        /// <param name="data">
+        ///     An array of seed data of the same type as the entity we're building.
+        /// </param>
+        public virtual EntityTypeBuilder SeedData([NotNull] params object[] data)
+        {
+            Check.NotNull(data, nameof(data));
+
+            Metadata.AddSeedData(data);
+
+            return this;
+        }
+
+        #region Hidden System.Object members
+
+        /// <summary>
+        ///     Returns a string that represents the current object.
+        /// </summary>
+        /// <returns> A string that represents the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override string ToString() => base.ToString();
+
+        /// <summary>
+        ///     Determines whether the specified object is equal to the current object.
+        /// </summary>
+        /// <param name="obj"> The object to compare with the current object. </param>
+        /// <returns> true if the specified object is equal to the current object; otherwise, false. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override bool Equals(object obj) => base.Equals(obj);
+
+        /// <summary>
+        ///     Serves as the default hash function.
+        /// </summary>
+        /// <returns> A hash code for the current object. </returns>
+        [EditorBrowsable(EditorBrowsableState.Never)]
+        public override int GetHashCode() => base.GetHashCode();
+
+        #endregion
     }
 }

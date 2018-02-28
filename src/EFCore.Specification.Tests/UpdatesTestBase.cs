@@ -1,4 +1,4 @@
-﻿// Copyright (c) .NET Foundation. All rights reserved.
+// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
@@ -32,9 +32,10 @@ namespace Microsoft.EntityFrameworkCore
                             new Product
                             {
                                 Id = productId,
-                                Price = 1.99M
+                                Price = 1.49M
                             });
 
+                        entry.Property(c => c.Price).CurrentValue = 1.99M;
                         entry.Property(p => p.Price).IsModified = true;
 
                         Assert.False(entry.Property(p => p.DependentId).IsModified);
@@ -47,7 +48,6 @@ namespace Microsoft.EntityFrameworkCore
                         var product = context.Products.First(p => p.Id == productId);
 
                         Assert.Equal(1.99M, product.Price);
-                        Assert.Null(product.DependentId);
                         Assert.Equal("Apple Cider", product.Name);
                     });
         }
@@ -74,6 +74,33 @@ namespace Microsoft.EntityFrameworkCore
                     });
         }
 
+#if !Test20
+        [Fact]
+        public virtual void Save_partial_update_on_concurrency_token_original_value_mismatch_throws()
+        {
+            var productId = new Guid("984ade3c-2f7b-4651-a351-642e92ab7146");
+
+            ExecuteWithStrategyInTransaction(
+                context =>
+                    {
+                        var entry = context.Products.Attach(
+                            new Product
+                            {
+                                Id = productId,
+                                Name = "Apple Fritter",
+                                Price = 3.49M // Not the same as the value stored in the database
+                            });
+
+                        entry.Property(c => c.Name).IsModified = true;
+
+                        Assert.Equal(
+                            UpdateConcurrencyTokenMessage,
+                            Assert.Throws<DbUpdateConcurrencyException>(
+                                () => context.SaveChanges()).Message);
+                    });
+        }
+#endif
+
         [Fact]
         public virtual void Can_remove_partial()
         {
@@ -85,7 +112,8 @@ namespace Microsoft.EntityFrameworkCore
                         context.Products.Remove(
                             new Product
                             {
-                                Id = productId
+                                Id = productId,
+                                Price = 1.49M
                             });
 
                         context.SaveChanges();
@@ -117,6 +145,57 @@ namespace Microsoft.EntityFrameworkCore
                     });
         }
 
+#if !Test20
+        [Fact]
+        public virtual void Remove_partial_on_concurrency_token_original_value_mismatch_throws()
+        {
+            var productId = new Guid("984ade3c-2f7b-4651-a351-642e92ab7146");
+
+            ExecuteWithStrategyInTransaction(
+                context =>
+                    {
+                        context.Products.Remove(
+                            new Product
+                            {
+                                Id = productId,
+                                Price = 3.49M // Not the same as the value stored in the database
+                            });
+
+                        Assert.Equal(
+                            UpdateConcurrencyTokenMessage,
+                            Assert.Throws<DbUpdateConcurrencyException>(
+                                () => context.SaveChanges()).Message);
+                    });
+        }
+
+        [Fact]
+        public virtual void Save_replaced_principal()
+        {
+            ExecuteWithStrategyInTransaction(
+                context =>
+                    {
+                        var category = context.Categories.Single();
+                        var products = context.Products.Where(p => p.DependentId == category.PrincipalId).ToList();
+
+                        Assert.Equal(2, products.Count);
+
+                        var newCategory = new Category { Id = category.Id, PrincipalId = category.PrincipalId, Name = "New Category" };
+                        context.Remove(category);
+                        context.Add(newCategory);
+
+                        context.SaveChanges();
+                    },
+                context =>
+                    {
+                        var category = context.Categories.Single();
+                        var products = context.Products.Where(p => p.DependentId == category.PrincipalId).ToList();
+
+                        Assert.Equal("New Category", category.Name);
+                        Assert.Equal(2, products.Count);
+                    });
+        }
+#endif
+
         [Fact]
         public virtual void SaveChanges_processes_all_tracked_entities()
         {
@@ -131,7 +210,7 @@ namespace Microsoft.EntityFrameworkCore
                         var entry1 = stateManager.GetOrCreateEntry(new Category { Id = 77, PrincipalId = 777 });
                         var entry2 = stateManager.GetOrCreateEntry(new Category { Id = 78, PrincipalId = 778 });
                         var entry3 = stateManager.GetOrCreateEntry(new Product { Id = productId1 });
-                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2 });
+                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2, Price = 2.49M });
 
                         entry1.SetEntityState(EntityState.Added);
                         entry2.SetEntityState(EntityState.Modified);
@@ -166,7 +245,7 @@ namespace Microsoft.EntityFrameworkCore
                         var entry1 = stateManager.GetOrCreateEntry(new Category { Id = 77, PrincipalId = 777 });
                         var entry2 = stateManager.GetOrCreateEntry(new Category { Id = 78, PrincipalId = 778 });
                         var entry3 = stateManager.GetOrCreateEntry(new Product { Id = productId1 });
-                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2 });
+                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2, Price = 2.49M });
 
                         entry1.SetEntityState(EntityState.Added);
                         entry2.SetEntityState(EntityState.Modified);
@@ -203,7 +282,7 @@ namespace Microsoft.EntityFrameworkCore
                         var entry1 = stateManager.GetOrCreateEntry(new Category { Id = 77, PrincipalId = 777 });
                         var entry2 = stateManager.GetOrCreateEntry(new Category { Id = 78, PrincipalId = 778 });
                         var entry3 = stateManager.GetOrCreateEntry(new Product { Id = productId1 });
-                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2 });
+                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2, Price = 2.49M });
 
                         entry1.SetEntityState(EntityState.Added);
                         entry2.SetEntityState(EntityState.Modified);
@@ -238,7 +317,7 @@ namespace Microsoft.EntityFrameworkCore
                         var entry1 = stateManager.GetOrCreateEntry(new Category { Id = 77, PrincipalId = 777 });
                         var entry2 = stateManager.GetOrCreateEntry(new Category { Id = 78, PrincipalId = 778 });
                         var entry3 = stateManager.GetOrCreateEntry(new Product { Id = productId1 });
-                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2 });
+                        var entry4 = stateManager.GetOrCreateEntry(new Product { Id = productId2, Price = 2.49M });
 
                         entry1.SetEntityState(EntityState.Added);
                         entry2.SetEntityState(EntityState.Modified);
@@ -262,6 +341,10 @@ namespace Microsoft.EntityFrameworkCore
         }
 
         protected abstract string UpdateConcurrencyMessage { get; }
+
+#if !Test20
+        protected abstract string UpdateConcurrencyTokenMessage { get; }
+#endif
 
         protected virtual void ExecuteWithStrategyInTransaction(
             Action<UpdatesContext> testOperation,

@@ -47,17 +47,27 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             get
             {
-                _context.CheckDisposed();
-
                 if (_entityType != null)
                 {
                     return _entityType;
                 }
 
                 _entityType = _context.Model.FindEntityType(typeof(TEntity));
+
                 if (_entityType == null)
                 {
+                    if (_context.Model.HasEntityTypeWithDefiningNavigation(typeof(TEntity)))
+                    {
+                        throw new InvalidOperationException(CoreStrings.InvalidSetTypeWeak(typeof(TEntity).ShortDisplayName()));
+                    }
                     throw new InvalidOperationException(CoreStrings.InvalidSetType(typeof(TEntity).ShortDisplayName()));
+                }
+
+                if (_entityType.IsQueryType)
+                {
+                    _entityType = null;
+
+                    throw new InvalidOperationException(CoreStrings.InvalidSetTypeQuery(typeof(TEntity).ShortDisplayName()));
                 }
 
                 return _entityType;
@@ -134,7 +144,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public override Task<EntityEntry<TEntity>> AddAsync(
             TEntity entity,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => _context.AddAsync(entity, cancellationToken);
 
         /// <summary>
@@ -211,7 +221,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public override Task AddRangeAsync(
             IEnumerable<TEntity> entities,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => _context.AddRangeAsync(entities, cancellationToken);
 
         /// <summary>
@@ -236,7 +246,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             => _context.UpdateRange(entities);
 
         private IEntityFinder<TEntity> Finder
-            => (IEntityFinder<TEntity>)_context.GetDependencies().EntityFinderSource.Create(_context, EntityType);
+            => (IEntityFinder<TEntity>)_context.GetDependencies().EntityFinderFactory.Create(EntityType);
 
         IEnumerator<TEntity> IEnumerable<TEntity>.GetEnumerator() => EntityQueryable.GetEnumerator();
 

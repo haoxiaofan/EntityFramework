@@ -18,6 +18,10 @@ namespace Microsoft.EntityFrameworkCore
 
         protected override bool SnapshotSupported => true;
 
+#if NET461
+        protected override bool AmbientTransactionsSupported => true;
+#endif
+
         public virtual void Dispose()
         {
             TestSqlServerRetryingExecutionStrategy.Suspended = false;
@@ -60,7 +64,9 @@ namespace Microsoft.EntityFrameworkCore
             {
                 new SqlServerDbContextOptionsBuilder(
                         base.AddOptions(builder)
-                            .ConfigureWarnings(w => w.Log(RelationalEventId.QueryClientEvaluationWarning)))
+                            .ConfigureWarnings(
+                                w => w.Log(RelationalEventId.QueryClientEvaluationWarning)
+                                      .Log(CoreEventId.FirstWithoutOrderByAndFilterWarning)))
                     .MaxBatchSize(1);
                 return builder;
             }

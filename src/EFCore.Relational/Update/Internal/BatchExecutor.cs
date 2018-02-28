@@ -1,10 +1,10 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
-using System;
 using System.Collections.Generic;
 using System.Threading;
 using System.Threading.Tasks;
+using System.Transactions;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
@@ -47,10 +47,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             IEnumerable<ModificationCommandBatch> commandBatches,
             IRelationalConnection connection)
             => CurrentContext.Context.Database.AutoTransactionsEnabled
-                ? ExecutionStrategyFactory.Create().Execute(Tuple.Create(commandBatches, connection), Execute)
-                : Execute(Tuple.Create(commandBatches, connection));
+                ? ExecutionStrategyFactory.Create().Execute((commandBatches, connection), Execute, null)
+                : Execute(CurrentContext.Context, (commandBatches, connection));
 
-        private int Execute(Tuple<IEnumerable<ModificationCommandBatch>, IRelationalConnection> parameters)
+        private int Execute(DbContext _, (IEnumerable<ModificationCommandBatch>, IRelationalConnection) parameters)
         {
             var commandBatches = parameters.Item1;
             var connection = parameters.Item2;
@@ -59,6 +59,8 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             try
             {
                 if (connection.CurrentTransaction == null
+                    && (connection as ITransactionEnlistmentManager)?.EnlistedTransaction == null
+                    && Transaction.Current == null
                     && CurrentContext.Context.Database.AutoTransactionsEnabled)
                 {
                     startedTransaction = connection.BeginTransaction();
@@ -68,10 +70,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     connection.Open();
                 }
 
-                foreach (var commandbatch in commandBatches)
+                foreach (var batch in commandBatches)
                 {
-                    commandbatch.Execute(connection);
-                    rowsAffected += commandbatch.ModificationCommands.Count;
+                    batch.Execute(connection);
+                    rowsAffected += batch.ModificationCommands.Count;
                 }
 
                 startedTransaction?.Commit();
@@ -98,14 +100,15 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
         public virtual Task<int> ExecuteAsync(
             IEnumerable<ModificationCommandBatch> commandBatches,
             IRelationalConnection connection,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
             => CurrentContext.Context.Database.AutoTransactionsEnabled
-                ? ExecutionStrategyFactory.Create().ExecuteAsync(Tuple.Create(commandBatches, connection), ExecuteAsync, cancellationToken)
-                : ExecuteAsync(Tuple.Create(commandBatches, connection), cancellationToken);
+                ? ExecutionStrategyFactory.Create().ExecuteAsync((commandBatches, connection), ExecuteAsync, null, cancellationToken)
+                : ExecuteAsync(CurrentContext.Context, (commandBatches, connection), cancellationToken);
 
         private async Task<int> ExecuteAsync(
-            Tuple<IEnumerable<ModificationCommandBatch>, IRelationalConnection> parameters,
-            CancellationToken cancellationToken = default(CancellationToken))
+            DbContext _,
+            (IEnumerable<ModificationCommandBatch>, IRelationalConnection) parameters,
+            CancellationToken cancellationToken = default)
         {
             var commandBatches = parameters.Item1;
             var connection = parameters.Item2;
@@ -114,6 +117,8 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             try
             {
                 if (connection.CurrentTransaction == null
+                    && (connection as ITransactionEnlistmentManager)?.EnlistedTransaction == null
+                    && Transaction.Current == null
                     && CurrentContext.Context.Database.AutoTransactionsEnabled)
                 {
                     startedTransaction = await connection.BeginTransactionAsync(cancellationToken);
@@ -123,10 +128,10 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                     await connection.OpenAsync(cancellationToken);
                 }
 
-                foreach (var commandbatch in commandBatches)
+                foreach (var batch in commandBatches)
                 {
-                    await commandbatch.ExecuteAsync(connection, cancellationToken);
-                    rowsAffected += commandbatch.ModificationCommands.Count;
+                    await batch.ExecuteAsync(connection, cancellationToken);
+                    rowsAffected += batch.ModificationCommands.Count;
                 }
 
                 startedTransaction?.Commit();

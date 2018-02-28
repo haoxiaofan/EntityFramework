@@ -104,7 +104,7 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
         /// </summary>
         public virtual async Task MigrateAsync(
             string targetMigration = null,
-            CancellationToken cancellationToken = default(CancellationToken))
+            CancellationToken cancellationToken = default)
         {
             _logger.MigrateUsingConnection(this, _connection);
 
@@ -355,19 +355,6 @@ namespace Microsoft.EntityFrameworkCore.Migrations.Internal
                 .Generate(migration.DownOperations, previousMigration?.TargetModel)
                 .Concat(new[] { new MigrationCommand(deleteCommand) })
                 .ToList();
-        }
-
-        private string FormatCommandsForReporting(IEnumerable<MigrationCommand> commands)
-        {
-            var builder = new IndentedStringBuilder();
-            foreach (var command in commands)
-            {
-                builder
-                    .AppendLine(command.CommandText)
-                    .Append(_sqlGenerationHelper.BatchTerminator);
-            }
-
-            return builder.ToString();
         }
     }
 }

@@ -12,6 +12,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Extensions.Internal;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
@@ -62,7 +64,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         private readonly QueryCompilationContext _queryCompilationContext;
 
-        private readonly FilterApplyingExpressionVisitor _filterApplyingExpressionVisitor;
+        private readonly ModelExpressionApplyingExpressionVisitor _modelExpressionApplyingExpressionVisitor;
 
         private Expression _expression;
         private ParameterExpression _currentParameter;
@@ -101,7 +103,11 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             LinqOperatorProvider = queryCompilationContext.LinqOperatorProvider;
 
-            _filterApplyingExpressionVisitor = new FilterApplyingExpressionVisitor(_queryCompilationContext);
+            _modelExpressionApplyingExpressionVisitor
+                = new ModelExpressionApplyingExpressionVisitor(
+                    _queryCompilationContext,
+                    dependencies.QueryModelGenerator,
+                    this);
         }
 
         /// <summary>
@@ -109,7 +115,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         /// </summary>
         public virtual Expression Expression
         {
-            get { return _expression; }
+            get => _expression;
             [param: NotNull]
             set
             {
@@ -124,7 +130,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         /// </summary>
         public virtual ParameterExpression CurrentParameter
         {
-            get { return _currentParameter; }
+            get => _currentParameter;
             [param: NotNull]
             set
             {
@@ -156,11 +162,10 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             using (QueryCompilationContext.Logger.Logger.BeginScope(this))
             {
+                QueryCompilationContext.IsAsyncQuery = false;
                 QueryCompilationContext.Logger.QueryModelCompiling(queryModel);
 
                 _blockTaskExpressions = false;
-
-                ExtractQueryAnnotations(queryModel);
 
                 OptimizeQueryModel(queryModel, asyncQuery: false);
 
@@ -192,11 +197,10 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             using (QueryCompilationContext.Logger.Logger.BeginScope(this))
             {
+                QueryCompilationContext.IsAsyncQuery = true;
                 QueryCompilationContext.Logger.QueryModelCompiling(queryModel);
 
                 _blockTaskExpressions = false;
-
-                ExtractQueryAnnotations(queryModel);
 
                 OptimizeQueryModel(queryModel, asyncQuery: true);
 
@@ -232,6 +236,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         ///     Rewrites collection navigation projections so that they can be handled by the Include pipeline.
         /// </summary>
         /// <param name="queryModel"> The query. </param>
+        [Obsolete("This is now handled by correlated collection optimization.")]
         protected virtual void RewriteProjectedCollectionNavigationsToIncludes([NotNull] QueryModel queryModel)
         {
             Check.NotNull(queryModel, nameof(queryModel));
@@ -253,6 +258,14 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         /// <summary>
+        ///     Pre-processes query model before we rewrite its navigations.
+        /// </summary>
+        /// <param name="queryModel">Query model to process. </param>
+        protected virtual void OnBeforeNavigationRewrite([NotNull] QueryModel queryModel)
+        {
+        }
+
+        /// <summary>
         ///     Applies optimizations to the query.
         /// </summary>
         /// <param name="queryModel"> The query. </param>
@@ -263,6 +276,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             Check.NotNull(queryModel, nameof(queryModel));
 
+            ExtractQueryAnnotations(queryModel);
+
             new EagerLoadingExpressionVisitor(_queryCompilationContext, _querySourceTracingExpressionVisitorFactory)
                 .VisitQueryModel(queryModel);
 
@@ -270,20 +285,27 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             _queryOptimizer.Optimize(QueryCompilationContext, queryModel);
 
-            new NondeterministicResultCheckingVisitor(QueryCompilationContext.Logger).VisitQueryModel(queryModel);
+            new NondeterministicResultCheckingVisitor(QueryCompilationContext.Logger, this).VisitQueryModel(queryModel);
+
+            OnBeforeNavigationRewrite(queryModel);
 
             // Rewrite includes/navigations
 
-            RewriteProjectedCollectionNavigationsToIncludes(queryModel);
-
             var includeCompiler = new IncludeCompiler(QueryCompilationContext, _querySourceTracingExpressionVisitorFactory);
-
             includeCompiler.CompileIncludes(queryModel, TrackResults(queryModel), asyncQuery);
 
             queryModel.TransformExpressions(new CollectionNavigationSubqueryInjector(this).Visit);
             queryModel.TransformExpressions(new CollectionNavigationSetOperatorSubqueryInjector(this).Visit);
 
             var navigationRewritingExpressionVisitor = _navigationRewritingExpressionVisitorFactory.Create(this);
+            navigationRewritingExpressionVisitor.InjectSubqueryToCollectionsInProjection(queryModel);
+
+            var correlatedCollectionFinder = new CorrelatedCollectionFindingExpressionVisitor(this, TrackResults(queryModel));
+
+            if (!queryModel.ResultOperators.Any(r => r is GroupResultOperator))
+            {
+                queryModel.SelectClause.TransformExpressions(correlatedCollectionFinder.Visit);
+            }
 
             navigationRewritingExpressionVisitor.Rewrite(queryModel, parentQueryModel: null);
 
@@ -291,16 +313,17 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             navigationRewritingExpressionVisitor.Rewrite(queryModel, parentQueryModel: null);
 
-            includeCompiler.RewriteCollectionQueries(queryModel);
+            includeCompiler.RewriteCollectionQueries();
 
             includeCompiler.LogIgnoredIncludes();
 
-            if (!_queryCompilationContext.IgnoreQueryFilters)
-            {
-                queryModel.TransformExpressions(_filterApplyingExpressionVisitor.Visit);
-            }
+            _modelExpressionApplyingExpressionVisitor.ApplyModelExpressions(queryModel);
 
             // Second pass of optimizations
+            
+            ExtractQueryAnnotations(queryModel);
+            
+            navigationRewritingExpressionVisitor.Rewrite(queryModel, parentQueryModel: null);
 
             _queryOptimizer.Optimize(QueryCompilationContext, queryModel);
 
@@ -308,6 +331,16 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             QueryCompilationContext.Logger.QueryModelOptimized(queryModel);
         }
+
+        /// <summary>
+        ///     Determine whether a defining query should be applied when querying the target entity type.
+        /// </summary>
+        /// <param name="entityType">The target entity type.</param>
+        /// <param name="querySource">The target query source.</param>
+        /// <returns>true if the target type should have a defining query applied.</returns>
+        public virtual bool ShouldApplyDefiningQuery(
+            [NotNull] IEntityType entityType, [NotNull] IQuerySource querySource)
+            => true;
 
         private class EagerLoadingExpressionVisitor : QueryModelVisitorBase
         {
@@ -372,7 +405,10 @@ namespace Microsoft.EntityFrameworkCore.Query
                     _queryCompilationContext.AddAnnotations(
                         new[]
                         {
-                            new IncludeResultOperator(stack.Reverse().ToArray(), querySourceReferenceExpression)
+                            new IncludeResultOperator(
+                                stack.Reverse().ToArray(),
+                                querySourceReferenceExpression,
+                                implicitLoad: true)
                         });
                 }
                 else
@@ -392,9 +428,15 @@ namespace Microsoft.EntityFrameworkCore.Query
         private class NondeterministicResultCheckingVisitor : QueryModelVisitorBase
         {
             private readonly IDiagnosticsLogger<DbLoggerCategory.Query> _logger;
+            private readonly EntityQueryModelVisitor _queryModelVisitor;
 
-            public NondeterministicResultCheckingVisitor([NotNull] IDiagnosticsLogger<DbLoggerCategory.Query> logger)
-                => _logger = logger;
+            public NondeterministicResultCheckingVisitor(
+                [NotNull] IDiagnosticsLogger<DbLoggerCategory.Query> logger,
+                [NotNull] EntityQueryModelVisitor queryModelVisitor)
+            {
+                _logger = logger;
+                _queryModelVisitor = queryModelVisitor;
+            }
 
             public override void VisitQueryModel(QueryModel queryModel)
             {
@@ -403,17 +445,35 @@ namespace Microsoft.EntityFrameworkCore.Query
                 base.VisitQueryModel(queryModel);
             }
 
+            private bool IsModelProperty(Expression expression)
+            {
+                var isModelProperty = false;
+                if (expression is MemberExpression fromMember)
+                {
+                    _queryModelVisitor.BindMemberExpression(fromMember, (p, qs) => isModelProperty = qs != null && p != null);
+                }
+
+                if (!isModelProperty && expression is MethodCallExpression fromMethodCall)
+                {
+                    _queryModelVisitor.BindMethodCallExpression(fromMethodCall, (p, qs) => isModelProperty = qs != null && p != null);
+                }
+
+                return isModelProperty;
+            }
+
             protected override void VisitResultOperators(ObservableCollection<ResultOperatorBase> resultOperators, QueryModel queryModel)
             {
                 if (resultOperators.Any(o => o is SkipResultOperator || o is TakeResultOperator)
-                    && !queryModel.BodyClauses.OfType<OrderByClause>().Any())
+                    && !queryModel.BodyClauses.OfType<OrderByClause>().Any()
+                    && !IsModelProperty(queryModel.MainFromClause.FromExpression))
                 {
                     _logger.RowLimitingOperationWithoutOrderByWarning(queryModel);
                 }
 
-                if (resultOperators.Any(o => o is FirstResultOperator)
+                if (resultOperators.Any(o => o is FirstResultOperator || o is LastResultOperator)
                     && !queryModel.BodyClauses.OfType<OrderByClause>().Any()
-                    && !queryModel.BodyClauses.OfType<WhereClause>().Any())
+                    && !queryModel.BodyClauses.OfType<WhereClause>().Any()
+                    && !IsModelProperty(queryModel.MainFromClause.FromExpression))
                 {
                     _logger.FirstWithoutOrderByAndFilterWarning(queryModel);
                 }
@@ -502,7 +562,6 @@ namespace Microsoft.EntityFrameworkCore.Query
                 MethodInfo trackingMethod;
 
                 if (isGrouping)
-
                 {
                     trackingMethod
                         = LinqOperatorProvider.TrackGroupedEntities
@@ -540,16 +599,25 @@ namespace Microsoft.EntityFrameworkCore.Query
 
         private class IncludeRemovingExpressionVisitor : RelinqExpressionVisitor
         {
-            protected override Expression VisitMethodCall(MethodCallExpression node)
-                => IncludeCompiler.IsIncludeMethod(node)
-                    ? node.Arguments[1]
-                    : base.VisitMethodCall(node);
-
-            protected override Expression VisitMember(MemberExpression node)
+            protected override Expression VisitMethodCall(MethodCallExpression methodCallExpression)
             {
-                var newExpression = Visit(node.Expression);
+                if (IncludeCompiler.IsIncludeMethod(methodCallExpression))
+                {
+                    return methodCallExpression.Arguments[1];
+                }
 
-                return newExpression != node.Expression ? newExpression : node;
+                if (methodCallExpression.Method
+                    .MethodIsClosedFormOf(TaskBlockingExpressionVisitor.ResultMethodInfo))
+                {
+                    var newArguments = VisitAndConvert(methodCallExpression.Arguments, nameof(VisitMethodCall));
+
+                    if (newArguments != methodCallExpression.Arguments)
+                    {
+                        return newArguments[0];
+                    }
+                }
+
+                return base.VisitMethodCall(methodCallExpression);
             }
         }
 
@@ -562,7 +630,8 @@ namespace Microsoft.EntityFrameworkCore.Query
                     .OfType<TrackingResultOperator>()
                     .LastOrDefault();
 
-            return !(queryModel.GetOutputDataInfo() is StreamedScalarValueInfo)
+            return !_modelExpressionApplyingExpressionVisitor.IsViewTypeQuery
+                   && !(queryModel.GetOutputDataInfo() is StreamedScalarValueInfo)
                    && (QueryCompilationContext.TrackQueryResults || lastTrackingModifier != null)
                    && (lastTrackingModifier == null
                        || lastTrackingModifier.IsTracking);
@@ -640,7 +709,7 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             contextVariableExpression = null;
 
-            if (_filterApplyingExpressionVisitor.ContextParameters.Count == 0)
+            if (_modelExpressionApplyingExpressionVisitor.ContextParameters.Count == 0)
             {
                 return null;
             }
@@ -661,7 +730,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                 };
 
             // ReSharper disable once LoopCanBeConvertedToQuery
-            foreach (var keyValuePair in _filterApplyingExpressionVisitor.ContextParameters)
+            foreach (var keyValuePair in _modelExpressionApplyingExpressionVisitor.ContextParameters)
             {
                 blockExpressions.Add(
                     Expression.Call(
@@ -1000,6 +1069,82 @@ namespace Microsoft.EntityFrameworkCore.Query
                     Expression.Constant(ordering.OrderingDirection));
         }
 
+
+        private bool TryOptimizeCorrelatedCollections([NotNull] QueryModel queryModel)
+        {
+            // TODO: disabled for cross joins - problem is outer query containing cross join can produce duplicate results
+            if (queryModel.BodyClauses.OfType<AdditionalFromClause>().Where(c => !IsPartOfLeftJoinPattern(c, queryModel)).Any())
+            {
+                return false;
+            }
+
+            var correlatedCollectionOptimizer = new CorrelatedCollectionOptimizingVisitor(
+                this,
+                queryModel);
+
+            var newSelector = correlatedCollectionOptimizer.Visit(queryModel.SelectClause.Selector);
+            if (newSelector != queryModel.SelectClause.Selector)
+            {
+                queryModel.SelectClause.Selector = newSelector;
+
+                if (correlatedCollectionOptimizer.ParentOrderings.Count > 0)
+                {
+                    var existingOrderByClauses = queryModel.BodyClauses.OfType<OrderByClause>().ToList();
+                    foreach (var existingOrderByClause in existingOrderByClauses)
+                    {
+                        queryModel.BodyClauses.Remove(existingOrderByClause);
+                    }
+
+                    var orderByClause = new OrderByClause();
+
+                    foreach (var ordering in correlatedCollectionOptimizer.ParentOrderings)
+                    {
+                        orderByClause.Orderings.Add(ordering);
+                    }
+
+                    queryModel.BodyClauses.Add(orderByClause);
+
+                    VisitOrderByClause(orderByClause, queryModel, queryModel.BodyClauses.IndexOf(orderByClause));
+                }
+
+                return true;
+            }
+
+            return false;
+        }
+
+        private bool IsPartOfLeftJoinPattern(AdditionalFromClause additionalFromClause, QueryModel queryModel)
+        {
+            var index = queryModel.BodyClauses.IndexOf(additionalFromClause);
+            var groupJoinClause = queryModel.BodyClauses.ElementAtOrDefault(index - 1) as GroupJoinClause;
+
+            var subQueryModel
+                = (additionalFromClause?.FromExpression as SubQueryExpression)
+                ?.QueryModel;
+
+            var referencedQuerySource
+                = subQueryModel?.MainFromClause.FromExpression.TryGetReferencedQuerySource();
+
+            if (groupJoinClause != null
+                && groupJoinClause == referencedQuerySource
+                && queryModel.CountQuerySourceReferences(groupJoinClause) == 1
+                && subQueryModel.BodyClauses.Count == 0
+                && subQueryModel.ResultOperators.Count == 1
+                && subQueryModel.ResultOperators[0] is DefaultIfEmptyResultOperator)
+            {
+                return true;
+            }
+
+            return false;
+        }
+
+        /// <summary>
+        ///     Determines whether correlated collections (if any) can be optimized.
+        /// </summary>
+        /// <returns>True if optimization is allowed, false otherwise.</returns>
+        protected virtual bool CanOptimizeCorrelatedCollections()
+            => true;
+
         /// <summary>
         ///     Visits <see cref="SelectClause" /> nodes.
         /// </summary>
@@ -1012,12 +1157,15 @@ namespace Microsoft.EntityFrameworkCore.Query
             Check.NotNull(selectClause, nameof(selectClause));
             Check.NotNull(queryModel, nameof(queryModel));
 
-            var sequenceType = _expression.Type.GetSequenceType();
-
-            if (selectClause.Selector.Type == sequenceType
+            if (selectClause.Selector.Type == _expression.Type.GetSequenceType()
                 && selectClause.Selector is QuerySourceReferenceExpression)
             {
                 return;
+            }
+
+            if (CanOptimizeCorrelatedCollections())
+            {
+                TryOptimizeCorrelatedCollections(queryModel);
             }
 
             var selector
@@ -1027,7 +1175,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                         .Visit(selectClause.Selector),
                     inProjection: true);
 
-            if ((selector.Type != sequenceType
+            if ((selector.Type != _expression.Type.GetSequenceType()
                  || !(selectClause.Selector is QuerySourceReferenceExpression))
                 && !queryModel.ResultOperators
                     .Select(ro => ro.GetType())
@@ -1231,16 +1379,11 @@ namespace Microsoft.EntityFrameworkCore.Query
 
             for (var i = 0; i < index; i++)
             {
-                var bodyClause = queryModel.BodyClauses[i] as IQuerySource;
-
-                if (bodyClause != null)
+                if (queryModel.BodyClauses[i] is IQuerySource bodyClause)
                 {
                     RescopeTransparentAccess(bodyClause, outerAccessExpression);
 
-                    var groupJoinClause = bodyClause as GroupJoinClause;
-
-                    if (groupJoinClause != null
-                        && QueryCompilationContext.QuerySourceMapping
+                    if (bodyClause is GroupJoinClause groupJoinClause && QueryCompilationContext.QuerySourceMapping
                             .ContainsMapping(groupJoinClause.JoinClause))
                     {
                         RescopeTransparentAccess(groupJoinClause.JoinClause, outerAccessExpression);
@@ -1476,7 +1619,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                         return property != null
                             ? memberBinder(property, qs)
-                            : default(TResult);
+                            : default;
                     });
         }
 
@@ -1506,7 +1649,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                         return property != null
                             ? methodCallBinder(property, qs)
-                            : default(TResult);
+                            : default;
                     });
         }
 
@@ -1534,7 +1677,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                     null);
             }
 
-            return default(TResult);
+            return default;
         }
 
         /// <summary>

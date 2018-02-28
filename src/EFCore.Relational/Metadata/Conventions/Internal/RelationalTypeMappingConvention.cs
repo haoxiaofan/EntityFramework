@@ -14,14 +14,17 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     /// </summary>
     public class RelationalTypeMappingConvention : IModelBuiltConvention
     {
-        private readonly IRelationalTypeMapper _typeMapper;
+        private readonly IRelationalTypeMappingSource _typeMappingSource;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public RelationalTypeMappingConvention([NotNull] IRelationalTypeMapper typeMapper)
-            => _typeMapper = typeMapper;
+        public RelationalTypeMappingConvention(
+            [NotNull] IRelationalTypeMappingSource typeMappingSource)
+        {
+            _typeMappingSource = typeMappingSource;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -32,8 +35,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
             foreach (var property in modelBuilder.Metadata.GetEntityTypes().SelectMany(e => e.GetDeclaredProperties()))
             {
                 property.Builder.HasAnnotation(
-                    RelationalAnnotationNames.TypeMapping,
-                    _typeMapper.FindMapping(property),
+                    CoreAnnotationNames.TypeMapping,
+                    _typeMappingSource.FindMapping(property),
                     ConfigurationSource.Convention);
             }
 

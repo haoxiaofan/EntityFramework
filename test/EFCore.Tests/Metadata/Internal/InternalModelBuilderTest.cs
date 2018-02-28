@@ -1,11 +1,16 @@
 // Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
+using System;
 using System.Linq;
 using System.Reflection;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Xunit;
 
+// ReSharper disable UnusedMember.Local
+// ReSharper disable MemberCanBePrivate.Local
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     public class InternalModelBuilderTest
@@ -21,6 +26,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             Assert.NotNull(entityBuilder);
             Assert.NotNull(model.FindEntityType(typeof(Customer)));
             Assert.Same(entityBuilder, modelBuilder.Entity(typeof(Customer).FullName, ConfigurationSource.DataAnnotation));
+        }
+        [Fact]
+        public void Query_throws_when_entity_type()
+        {
+            var model = new Model();
+            var modelBuilder = CreateModelBuilder(model);
+
+            modelBuilder.Entity(typeof(Customer), ConfigurationSource.Explicit);
+
+            Assert.Equal(
+                CoreStrings.CannotAccessEntityAsQuery(nameof(Customer)),
+                Assert.Throws<InvalidOperationException>(
+                    () => modelBuilder.Query(typeof(Customer))).Message);
         }
 
         [Fact]
@@ -270,6 +288,55 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             Assert.Equal(typeof(Product), orderEntityTypeBuilder.Metadata.GetForeignKeys().Single().PrincipalEntityType.ClrType);
         }
 
+        [Fact]
+        public void Can_mark_type_as_owned_type()
+        {
+            var model = new Model();
+            var modelBuilder = CreateModelBuilder(model);
+
+            var entityBuilder = modelBuilder.Entity(typeof(Customer), ConfigurationSource.Explicit);
+
+            Assert.NotNull(modelBuilder.Entity(typeof(Details), ConfigurationSource.Convention));
+
+            Assert.False(model.ShouldBeOwnedType(typeof(Details)));
+
+            Assert.NotNull(entityBuilder.Owns(typeof(Details), nameof(Customer.Details), ConfigurationSource.Convention));
+
+            Assert.True(modelBuilder.Ignore(typeof(Details), ConfigurationSource.Convention));
+
+            Assert.Empty(model.GetEntityTypes(typeof(Details)));
+
+            Assert.Null(entityBuilder.Owns(typeof(Details), nameof(Customer.Details), ConfigurationSource.Convention));
+
+            Assert.False(modelBuilder.Owned(typeof(Details), ConfigurationSource.Convention));
+
+            Assert.NotNull(entityBuilder.Owns(typeof(Details), nameof(Customer.Details), ConfigurationSource.DataAnnotation));
+
+            Assert.True(modelBuilder.Owned(typeof(Details), ConfigurationSource.Convention));
+
+            Assert.True(modelBuilder.Owned(typeof(Details), ConfigurationSource.DataAnnotation));
+
+            Assert.True(model.ShouldBeOwnedType(typeof(Details)));
+
+            Assert.NotNull(modelBuilder.Entity(typeof(Product), ConfigurationSource.Explicit)
+                .Owns(typeof(Details), nameof(Product.Details), ConfigurationSource.Convention));
+
+            Assert.False(modelBuilder.Ignore(typeof(Details), ConfigurationSource.Convention));
+
+            Assert.Equal(2, model.GetEntityTypes(typeof(Details)).Count);
+
+            Assert.NotNull(modelBuilder.Entity(typeof(Details), ConfigurationSource.Explicit));
+
+            Assert.False(model.ShouldBeOwnedType(typeof(Details)));
+
+            Assert.Empty(model.GetEntityTypes(typeof(Details)).Where(e => e.DefiningNavigationName != null));
+
+            Assert.False(modelBuilder.Owned(typeof(Details), ConfigurationSource.Convention));
+
+            Assert.Equal(CoreStrings.ClashingNonOwnedEntityType(typeof(Details).Name),
+                Assert.Throws<InvalidOperationException>(() => modelBuilder.Owned(typeof(Details), ConfigurationSource.Explicit)).Message);
+        }
+
         protected virtual InternalModelBuilder CreateModelBuilder(Model model = null)
             => new InternalModelBuilder(model ?? new Model());
 
@@ -283,6 +350,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             public static readonly PropertyInfo IdProperty = typeof(Customer).GetProperty("Id");
 
             public string Name { get; set; }
+            public Details Details { get; set; }
         }
 
         private class SpecialCustomer : Customer
@@ -300,6 +368,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             public Customer Customer { get; set; }
             public int ProductId { get; set; }
             public Product Product { get; set; }
+            public Details Details { get; set; }
         }
 
         private class Product
@@ -307,6 +376,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             public static readonly PropertyInfo IdProperty = typeof(Product).GetProperty("Id");
             public int Id { get; set; }
             public Order Order { get; set; }
+            public Details Details { get; set; }
+        }
+
+        private class Details
+        {
+            public string Name { get; set; }
         }
     }
 }

@@ -36,6 +36,12 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         private readonly SortedDictionary<IReadOnlyList<IProperty>, Key> _keys
             = new SortedDictionary<IReadOnlyList<IProperty>, Key>(PropertyListComparer.Instance);
 
+        private readonly HashSet<object> _seedData
+            = new HashSet<object>();
+
+        private readonly SortedDictionary<string, ServiceProperty> _serviceProperties
+            = new SortedDictionary<string, ServiceProperty>(StringComparer.Ordinal);
+
         private Key _primaryKey;
         private EntityType _baseType;
         private LambdaExpression _queryFilter;
@@ -71,7 +77,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         public EntityType([NotNull] Type clrType, [NotNull] Model model, ConfigurationSource configurationSource)
             : base(clrType, model, configurationSource)
         {
-            Check.ValidEntityType(clrType, nameof(clrType));
+            if (!clrType.IsValidEntityType())
+            {
+                throw new ArgumentException(CoreStrings.InvalidEntityType(clrType, nameof(clrType)));
+            }
 
             _properties = new SortedDictionary<string, Property>(new PropertyComparer(this));
             Builder = new InternalEntityTypeBuilder(this, model.Builder);
@@ -148,6 +157,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public virtual LambdaExpression DefiningQuery { get; set; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual bool IsQueryType { get; set; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public virtual string DefiningNavigationName { get; }
 
         /// <summary>
@@ -173,14 +194,22 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 
             if (this.HasDefiningNavigation())
             {
-                throw new InvalidOperationException(CoreStrings.DependentDerivedType(this.DisplayName()));
+                throw new InvalidOperationException(CoreStrings.WeakDerivedType(this.DisplayName()));
             }
 
             var originalBaseType = _baseType;
+
             _baseType?._directlyDerivedTypes.Remove(this);
             _baseType = null;
+
             if (entityType != null)
             {
+                if (IsQueryType != entityType.IsQueryType)
+                {
+                    throw new InvalidOperationException(
+                        CoreStrings.ErrorMixedQueryEntityTypeInheritance(entityType.DisplayName(), this.DisplayName()));
+                }
+
                 if (this.HasClrType())
                 {
                     if (!entityType.HasClrType())
@@ -195,7 +224,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 
                     if (entityType.HasDefiningNavigation())
                     {
-                        throw new InvalidOperationException(CoreStrings.DependentBaseType(this.DisplayName(), entityType.DisplayName()));
+                        throw new InvalidOperationException(CoreStrings.WeakBaseType(this.DisplayName(), entityType.DisplayName()));
                     }
                 }
 
@@ -256,6 +285,18 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             entityType?.UpdateConfigurationSource(configurationSource);
 
             Model.ConventionDispatcher.OnBaseEntityTypeChanged(Builder, originalBaseType);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual void OnTypeRemoved()
+        {
+            Builder = null;
+            _baseType?._directlyDerivedTypes.Remove(this);
+
+            Model.ConventionDispatcher.OnEntityTypeRemoved(Model.Builder, this);
         }
 
         /// <summary>
@@ -323,6 +364,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        [DebuggerStepThrough]
         public virtual EntityType RootType() => (EntityType)((IEntityType)this).RootType();
 
         /// <summary>
@@ -385,15 +427,17 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
 
             var oldPrimaryKey = _primaryKey;
+            var propertiesNullOrEmpty = (properties?.Count ?? 0) == 0;
             if (oldPrimaryKey == null
-                && (properties?.Count ?? 0) == 0)
+                && propertiesNullOrEmpty)
             {
                 return null;
             }
 
             Key newKey = null;
-            if ((properties?.Count ?? 0) != 0)
+            if (!propertiesNullOrEmpty)
             {
+                // ReSharper disable once AssignNullToNotNullAttribute
                 newKey = GetOrAddKey(properties);
                 if (oldPrimaryKey == newKey)
                 {
@@ -418,7 +462,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 }
             }
 
-            if ((properties?.Count ?? 0) != 0)
+            if (!propertiesNullOrEmpty)
             {
                 foreach (var property in newKey.Properties)
                 {
@@ -441,7 +485,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
 
             PropertyMetadataChanged();
-            Model.ConventionDispatcher.OnPrimaryKeyChanged(Builder, oldPrimaryKey);
+            if (Builder != null)
+            {
+                Model.ConventionDispatcher.OnPrimaryKeyChanged(Builder, oldPrimaryKey);
+            }
 
             return _primaryKey;
         }
@@ -556,7 +603,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     throw new InvalidOperationException(CoreStrings.KeyPropertiesWrongEntity(Property.Format(properties), this.DisplayName()));
                 }
 
-                if (property.GetContainingForeignKeys().Any(k => k.DeclaringEntityType != this))
+                if (property.ValueGenerated != ValueGenerated.Never
+                    && property.GetContainingForeignKeys().Any(k => k.DeclaringEntityType != this))
                 {
                     throw new InvalidOperationException(CoreStrings.KeyPropertyInForeignKey(property.Name, this.DisplayName()));
                 }
@@ -683,7 +731,10 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 
             PropertyMetadataChanged();
 
-            Model.ConventionDispatcher.OnKeyRemoved(Builder, key);
+            if (Builder != null)
+            {
+                Model.ConventionDispatcher.OnKeyRemoved(Builder, key);
+            }
             return key;
         }
 
@@ -804,24 +855,27 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 }
             }
 
-            if (principalKey.ReferencingForeignKeys == null)
+            if (!IsQueryType)
             {
-                principalKey.ReferencingForeignKeys = new SortedSet<ForeignKey>(ForeignKeyComparer.Instance) { foreignKey };
-            }
-            else
-            {
-                var added = principalKey.ReferencingForeignKeys.Add(foreignKey);
-                Debug.Assert(added);
-            }
+                if (principalKey.ReferencingForeignKeys == null)
+                {
+                    principalKey.ReferencingForeignKeys = new SortedSet<ForeignKey>(ForeignKeyComparer.Instance) { foreignKey };
+                }
+                else
+                {
+                    var added = principalKey.ReferencingForeignKeys.Add(foreignKey);
+                    Debug.Assert(added);
+                }
 
-            if (principalEntityType.DeclaredReferencingForeignKeys == null)
-            {
-                principalEntityType.DeclaredReferencingForeignKeys = new SortedSet<ForeignKey>(ForeignKeyComparer.Instance) { foreignKey };
-            }
-            else
-            {
-                var added = principalEntityType.DeclaredReferencingForeignKeys.Add(foreignKey);
-                Debug.Assert(added);
+                if (principalEntityType.DeclaredReferencingForeignKeys == null)
+                {
+                    principalEntityType.DeclaredReferencingForeignKeys = new SortedSet<ForeignKey>(ForeignKeyComparer.Instance) { foreignKey };
+                }
+                else
+                {
+                    var added = principalEntityType.DeclaredReferencingForeignKeys.Add(foreignKey);
+                    Debug.Assert(added);
+                }
             }
 
             PropertyMetadataChanged();
@@ -1044,7 +1098,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         Builder,
                         foreignKey.PrincipalEntityType.Builder,
                         foreignKey.DependentToPrincipal.Name,
-                        foreignKey.DependentToPrincipal.PropertyInfo);
+                        foreignKey.DependentToPrincipal.GetIdentifyingMemberInfo());
                 }
 
                 if (foreignKey.PrincipalToDependent != null)
@@ -1053,7 +1107,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         foreignKey.PrincipalEntityType.Builder,
                         Builder,
                         foreignKey.PrincipalToDependent.Name,
-                        foreignKey.PrincipalToDependent.PropertyInfo);
+                        foreignKey.PrincipalToDependent.GetIdentifyingMemberInfo());
                 }
 
                 Model.ConventionDispatcher.OnForeignKeyRemoved(Builder, foreignKey);
@@ -1112,7 +1166,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public virtual Navigation AddNavigation(
-            [NotNull] PropertyInfo navigationProperty,
+            [NotNull] MemberInfo navigationProperty,
             [NotNull] ForeignKey foreignKey,
             bool pointsToPrincipal)
         {
@@ -1151,6 +1205,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         duplicateProperty.DeclaringEntityType.DisplayName()));
             }
 
+            var duplicateServiceProperty = FindServicePropertiesInHierarchy(name).FirstOrDefault();
+            if (duplicateServiceProperty != null)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.ConflictingServiceProperty(
+                        name, this.DisplayName(),
+                        duplicateServiceProperty.DeclaringEntityType.DisplayName()));
+            }
+
             Debug.Assert(
                 !GetNavigations().Any(n => n.ForeignKey == foreignKey && n.IsDependentToPrincipal() == pointsToPrincipal),
                 "There is another navigation corresponding to the same foreign key and pointing in the same direction.");
@@ -1170,7 +1233,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     !pointsToPrincipal && !foreignKey.IsUnique,
                     shouldThrow: true);
             }
-            var navigation = new Navigation(name, propertyIdentity.Property, null, foreignKey);
+
+            var navigation = new Navigation(name, propertyIdentity.Property as PropertyInfo, propertyIdentity.Property as FieldInfo, foreignKey);
 
             _navigations.Add(name, navigation);
 
@@ -1194,8 +1258,8 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual Navigation FindNavigation([NotNull] PropertyInfo propertyInfo)
-            => FindNavigation(Check.NotNull(propertyInfo, nameof(propertyInfo)).Name);
+        public virtual Navigation FindNavigation([NotNull] MemberInfo memberInfo)
+            => FindNavigation(Check.NotNull(memberInfo, nameof(memberInfo)).Name);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -1529,6 +1593,15 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                         name, this.DisplayName(),
                         duplicateNavigation.DeclaringEntityType.DisplayName()));
             }
+
+            var duplicateServiceProperty = FindServicePropertiesInHierarchy(name).FirstOrDefault();
+            if (duplicateServiceProperty != null)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.ConflictingServiceProperty(
+                        name, this.DisplayName(),
+                        duplicateServiceProperty.DeclaringEntityType.DisplayName()));
+            }
         }
 
         private Property AddProperty(
@@ -1766,6 +1839,150 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 
         #endregion
 
+        #region Service properties
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual ServiceProperty AddServiceProperty(
+            [NotNull] MemberInfo memberInfo,
+            // ReSharper disable once MethodOverloadWithOptionalParameter
+            ConfigurationSource configurationSource = ConfigurationSource.Explicit,
+            ConfigurationSource? typeConfigurationSource = ConfigurationSource.Explicit)
+        {
+            Check.NotNull(memberInfo, nameof(memberInfo));
+
+            var name = memberInfo.Name;
+
+            var duplicateProperty = FindPropertiesInHierarchy(name).FirstOrDefault();
+            if (duplicateProperty != null)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.ConflictingProperty(
+                        name, this.DisplayName(), duplicateProperty.DeclaringEntityType.DisplayName()));
+            }
+
+            var duplicateNavigation = FindNavigationsInHierarchy(name).FirstOrDefault();
+            if (duplicateNavigation != null)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.ConflictingNavigation(
+                        name, this.DisplayName(),
+                        duplicateNavigation.DeclaringEntityType.DisplayName()));
+            }
+
+            var duplicateServiceProperty = FindServicePropertiesInHierarchy(name).FirstOrDefault();
+            if (duplicateServiceProperty != null)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.DuplicateServiceProperty(
+                        name, this.DisplayName(),
+                        duplicateServiceProperty.DeclaringEntityType.DisplayName()));
+            }
+
+            var serviceProperty = new ServiceProperty(
+                name,
+                memberInfo as PropertyInfo,
+                memberInfo as FieldInfo,
+                this);
+
+            duplicateServiceProperty = GetServiceProperties().FirstOrDefault(p => p.ClrType == serviceProperty.ClrType);
+            if (duplicateServiceProperty != null)
+            {
+                throw new InvalidOperationException(
+                    CoreStrings.DuplicateServicePropertyType(
+                        name,
+                        serviceProperty.ClrType.ShortDisplayName(),
+                        this.DisplayName(),
+                        duplicateServiceProperty.Name,
+                        duplicateServiceProperty.DeclaringEntityType.DisplayName()));
+            }
+
+            _serviceProperties[serviceProperty.Name] = serviceProperty;
+
+            return serviceProperty;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual ServiceProperty FindServiceProperty([NotNull] string name)
+            => FindDeclaredServiceProperty(Check.NotEmpty(name, nameof(name))) ?? _baseType?.FindServiceProperty(name);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual ServiceProperty FindDeclaredServiceProperty([NotNull] string name)
+            => _serviceProperties.TryGetValue(Check.NotEmpty(name, nameof(name)), out var property)
+                ? property
+                : null;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<ServiceProperty> FindDerivedServiceProperties([NotNull] string propertyName)
+        {
+            Check.NotNull(propertyName, nameof(propertyName));
+
+            return GetDerivedTypes().Select(et => et.FindDeclaredServiceProperty(propertyName)).Where(p => p != null);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<ServiceProperty> FindServicePropertiesInHierarchy([NotNull] string propertyName)
+            => ToEnumerable(FindServiceProperty(propertyName)).Concat(FindDerivedServiceProperties(propertyName));
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual ServiceProperty GetOrAddServiceProperty([NotNull] MemberInfo memberInfo)
+            => FindServiceProperty(memberInfo.Name) ?? AddServiceProperty(memberInfo);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual ServiceProperty RemoveServiceProperty([NotNull] string name)
+        {
+            Check.NotEmpty(name, nameof(name));
+
+            var property = FindServiceProperty(name);
+            return property == null
+                ? null
+                : RemoveServiceProperty(property);
+        }
+
+        private ServiceProperty RemoveServiceProperty(ServiceProperty property)
+        {
+            _serviceProperties.Remove(property.Name);
+
+            return property;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<ServiceProperty> GetServiceProperties()
+            => _baseType?.GetServiceProperties().Concat(_serviceProperties.Values) ?? _serviceProperties.Values;
+
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<ServiceProperty> GetDeclaredServiceProperties()
+            => _serviceProperties.Values;
+
+        #endregion
+
         #region Ignore
 
         /// <summary>
@@ -1785,6 +2002,47 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public override void OnTypeMemberIgnored(string name)
             => Model.ConventionDispatcher.OnEntityTypeMemberIgnored(Builder, name);
+
+        #endregion
+
+        #region SeedData
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IEnumerable<IDictionary<string, object>> GetSeedData()
+            => _seedData.Select(seed =>
+                this.GetPropertiesAndNavigations() // we'll ignore unmapped properties on the seeds
+                    .Select(p => seed.GetType().GetRuntimeProperty(p.Name))
+                    .Where(p => p != null)
+                    .ToDictionary(p => p.Name, p => p.GetValue(seed)));
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual void AddSeedData([NotNull] params object[] data)
+        {
+            foreach (var entity in data)
+            {
+                if (ClrType != null
+                    && ClrType != entity.GetType()
+                    && ClrType.GetTypeInfo().IsAssignableFrom(entity.GetType().GetTypeInfo()))
+                {
+                    throw new InvalidOperationException(CoreStrings.SeedDatumDerivedType(
+                        this.DisplayName(), entity.GetType().ShortDisplayName()));
+                }
+            }
+            _seedData.UnionWith(data);
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public virtual IReadOnlyCollection<object> GetRawSeedData()
+            => _seedData;
 
         #endregion
 
@@ -1859,6 +2117,13 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         IEnumerable<IProperty> IEntityType.GetProperties() => GetProperties();
         IEnumerable<IMutableProperty> IMutableEntityType.GetProperties() => GetProperties();
         IMutableProperty IMutableEntityType.RemoveProperty(string name) => RemoveProperty(name);
+
+        IMutableServiceProperty IMutableEntityType.AddServiceProperty(MemberInfo memberInfo) => AddServiceProperty(memberInfo);
+        IServiceProperty IEntityType.FindServiceProperty(string name) => FindServiceProperty(name);
+        IMutableServiceProperty IMutableEntityType.FindServiceProperty(string name) => FindServiceProperty(name);
+        IEnumerable<IServiceProperty> IEntityType.GetServiceProperties() => GetServiceProperties();
+        IEnumerable<IMutableServiceProperty> IMutableEntityType.GetServiceProperties() => GetServiceProperties();
+        IMutableServiceProperty IMutableEntityType.RemoveServiceProperty(string name) => RemoveServiceProperty(name);
 
         #endregion
 

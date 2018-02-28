@@ -1,4 +1,4 @@
-// Copyright (c) .NET Foundation. All rights reserved.
+﻿// Copyright (c) .NET Foundation. All rights reserved.
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
@@ -16,6 +16,8 @@ using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.Utilities;
 
+// ReSharper disable ArgumentsStyleOther
+// ReSharper disable ArgumentsStyleNamedExpression
 namespace Microsoft.EntityFrameworkCore.Metadata.Internal
 {
     /// <summary>
@@ -75,11 +77,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             return builder.ToString();
         }
 
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static IEnumerable<IEntityType> GetAllBaseTypesInclusive([NotNull] this IEntityType entityType)
+            => new List<IEntityType>(GetAllBaseTypes(entityType)) { entityType };
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static IEnumerable<IEntityType> GetAllBaseTypes([NotNull] this IEntityType entityType)
         {
             var baseTypes = new List<IEntityType>();
             var currentEntityType = entityType;
@@ -90,7 +100,6 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
 
             baseTypes.Reverse();
-            baseTypes.Add(entityType);
 
             return baseTypes;
         }
@@ -122,8 +131,43 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static IForeignKey FindOwnership([NotNull] this IEntityType entityType)
+            => ((EntityType)entityType).FindOwnership();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static ForeignKey FindOwnership([NotNull] this EntityType entityType)
+            => entityType.GetForeignKeys().FirstOrDefault(fk => fk.IsOwnership);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static IForeignKey FindDeclaredOwnership([NotNull] this IEntityType entityType)
+            => ((EntityType)entityType).FindDeclaredOwnership();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static ForeignKey FindDeclaredOwnership([NotNull] this EntityType entityType)
+            => entityType.GetDeclaredForeignKeys().FirstOrDefault(fk => fk.IsOwnership);
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static INavigation FindDefiningNavigation([NotNull] this IEntityType entityType)
-            => entityType.HasDefiningNavigation() ? entityType.DefiningEntityType.FindNavigation(entityType.DefiningNavigationName) : null;
+        {
+            if (!entityType.HasDefiningNavigation())
+            {
+                return null;
+            }
+            var definingNavigation = entityType.DefiningEntityType.FindNavigation(entityType.DefiningNavigationName);
+            return definingNavigation?.GetTargetType() == entityType ? definingNavigation : null;
+        }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -202,6 +246,38 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static bool IsInDefinitionPath([NotNull] this IEntityType entityType, [NotNull] IEntityType targetType)
+            => targetType.ClrType == null
+                ? FindInDefinitionPath(entityType, targetType.Name) != null
+                : FindInDefinitionPath(entityType, targetType.ClrType) != null;
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static bool IsInOwnershipPath([NotNull] this EntityType entityType, [NotNull] EntityType entityTypeToOwn)
+        {
+            var owner = entityType;
+            while (true)
+            {
+                var ownOwnership = owner.FindOwnership();
+                if (ownOwnership == null)
+                {
+                    return false;
+                }
+
+                owner = ownOwnership.PrincipalEntityType;
+                if (owner == entityTypeToOwn)
+                {
+                    return true;
+                }
+            }
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static bool UseEagerSnapshots([NotNull] this IEntityType entityType)
         {
             var changeTrackingStrategy = entityType.GetChangeTrackingStrategy();
@@ -265,36 +341,57 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         /// </summary>
         public static PropertyCounts CalculateCounts([NotNull] this IEntityType entityType)
         {
-            var properties = entityType.GetDeclaredProperties().ToList();
-            var navigations = entityType.GetDeclaredNavigations();
+            var index = 0;
+            var navigationIndex = 0;
+            var originalValueIndex = 0;
+            var shadowIndex = 0;
+            var relationshipIndex = 0;
+            var storeGenerationIndex = 0;
+
+            var baseCounts = entityType.BaseType?.GetCounts();
+            if (baseCounts != null)
+            {
+                index = baseCounts.PropertyCount;
+                navigationIndex = baseCounts.NavigationCount;
+                originalValueIndex = baseCounts.OriginalValueCount;
+                shadowIndex = baseCounts.ShadowCount;
+                relationshipIndex = baseCounts.RelationshipCount;
+                storeGenerationIndex = baseCounts.StoreGeneratedCount;
+            }
+
+            foreach (var property in entityType.GetDeclaredProperties())
+            {
+                var indexes = new PropertyIndexes(
+                    index: index++,
+                    originalValueIndex: property.RequiresOriginalValue() ? originalValueIndex++ : -1,
+                    shadowIndex: property.IsShadowProperty ? shadowIndex++ : -1,
+                    relationshipIndex: property.IsKeyOrForeignKey() ? relationshipIndex++ : -1,
+                    storeGenerationIndex: property.MayBeStoreGenerated() ? storeGenerationIndex++ : -1);
+
+                property.SetIndexes(indexes);
+            }
 
             var isNotifying = entityType.GetChangeTrackingStrategy() != ChangeTrackingStrategy.Snapshot;
 
-            var propertyCount = properties.Count;
-            var navigationCount = navigations.Count();
-            var originalValueCount = properties.Count(p => p.RequiresOriginalValue());
-            var shadowCount = properties.Count(p => p.IsShadowProperty);
-            var relationshipCount = (isNotifying ? navigations.Count(n => !n.IsCollection()) : navigationCount)
-                                    + properties.Count(p => p.IsKeyOrForeignKey());
-            var storeGeneratedCount = properties.Count(p => p.MayBeStoreGenerated());
+            foreach (var navigation in entityType.GetDeclaredNavigations())
+            {
+                var indexes = new PropertyIndexes(
+                    index: navigationIndex++,
+                    originalValueIndex: -1,
+                    shadowIndex: navigation.IsShadowProperty ? shadowIndex++ : -1,
+                    relationshipIndex: navigation.IsCollection() && isNotifying ? -1 : relationshipIndex++,
+                    storeGenerationIndex: -1);
 
-            var baseCounts = entityType.BaseType?.CalculateCounts();
+                navigation.SetIndexes(indexes);
+            }
 
-            return baseCounts == null
-                ? new PropertyCounts(
-                    propertyCount,
-                    navigationCount,
-                    originalValueCount,
-                    shadowCount,
-                    relationshipCount,
-                    storeGeneratedCount)
-                : new PropertyCounts(
-                    baseCounts.PropertyCount + propertyCount,
-                    baseCounts.NavigationCount + navigationCount,
-                    baseCounts.OriginalValueCount + originalValueCount,
-                    baseCounts.ShadowCount + shadowCount,
-                    baseCounts.RelationshipCount + relationshipCount,
-                    baseCounts.StoreGeneratedCount + storeGeneratedCount);
+            return new PropertyCounts(
+                index,
+                navigationIndex,
+                originalValueIndex,
+                shadowIndex,
+                relationshipIndex,
+                storeGenerationIndex);
         }
 
         /// <summary>
@@ -394,15 +491,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         public static IEnumerable<INavigation> FindDerivedNavigations(
             [NotNull] this IEntityType entityType, [NotNull] string navigationName)
             => entityType.GetDerivedTypes().SelectMany(
-                et =>
-                    et.GetDeclaredNavigations().Where(navigation => navigationName == navigation.Name));
+                et => et.GetDeclaredNavigations().Where(navigation => navigationName == navigation.Name));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static IEnumerable<IProperty> GetDeclaredProperties([NotNull] this IEntityType entityType)
-            => entityType.GetProperties().Where(p => p.DeclaringEntityType == entityType);
+            => entityType.AsEntityType().GetDeclaredProperties();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static IEnumerable<IServiceProperty> GetDeclaredServiceProperties([NotNull] this IEntityType entityType)
+            => entityType.AsEntityType().GetDeclaredServiceProperties();
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -411,8 +514,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         public static IEnumerable<IProperty> FindDerivedProperties(
             [NotNull] this IEntityType entityType, [NotNull] string propertyName)
             => entityType.GetDerivedTypes().SelectMany(
-                et =>
-                    et.GetDeclaredProperties().Where(property => propertyName.Equals(property.Name)));
+                et => et.GetDeclaredProperties().Where(property => propertyName.Equals(property.Name)));
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -476,6 +578,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
             }
             else
             {
+                // ReSharper disable once AssignNullToNotNullAttribute
                 var property = (IPropertyBase)entityType.FindProperty(propertyName)
                                ?? entityType.FindNavigation(propertyName);
                 if (property != null)
@@ -489,11 +592,21 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static IEnumerable<IDictionary<string, object>> GetSeedData([NotNull] this IEntityType entityType)
+            => entityType.AsEntityType().GetSeedData();
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static string ToDebugString([NotNull] this IEntityType entityType, bool singleLine = true, [NotNull] string indent = "")
         {
             var builder = new StringBuilder();
 
-            builder.Append(indent).Append("EntityType: ").Append(entityType.DisplayName());
+            builder
+                .Append(indent)
+                .Append(!entityType.IsQueryType ? "EntityType: " : "QueryType: ")
+                .Append(entityType.DisplayName());
 
             if (entityType.BaseType != null)
             {
@@ -529,6 +642,16 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                     foreach (var navigation in navigations)
                     {
                         builder.AppendLine().Append(navigation.ToDebugString(false, indent + "    "));
+                    }
+                }
+
+                var serviceProperties = entityType.GetDeclaredServiceProperties().ToList();
+                if (serviceProperties.Count != 0)
+                {
+                    builder.AppendLine().Append(indent).Append("  Service properties: ");
+                    foreach (var serviceProperty in serviceProperties)
+                    {
+                        builder.AppendLine().Append(serviceProperty.ToDebugString(false, indent + "    "));
                     }
                 }
 

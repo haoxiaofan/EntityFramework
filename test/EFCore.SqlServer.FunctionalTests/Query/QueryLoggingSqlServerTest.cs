@@ -3,8 +3,11 @@
 
 using System;
 using System.Linq;
+using Microsoft.EntityFrameworkCore.Diagnostics;
+using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.TestModels.Northwind;
+using Microsoft.Extensions.DependencyInjection;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -12,7 +15,7 @@ namespace Microsoft.EntityFrameworkCore.Query
 {
     public class QueryLoggingSqlServerTest : IClassFixture<IncludeSqlServerFixture>
     {
-        private static readonly string EOL = Environment.NewLine;
+        private static readonly string _eol = Environment.NewLine;
 
         public QueryLoggingSqlServerTest(IncludeSqlServerFixture fixture)
         {
@@ -33,10 +36,10 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 Assert.NotNull(customers);
                 Assert.Contains(
-                    @"    Compiling query model: " + EOL +
-                    @"'from Customer <generated>_0 in DbSet<Customer>" + EOL +
-                    @"select [<generated>_0]'" + EOL +
-                    @"    Optimized query model: " + EOL +
+                    @"    Compiling query model: " + _eol +
+                    @"'from Customer <generated>_0 in DbSet<Customer>" + _eol +
+                    @"select [<generated>_0]'" + _eol +
+                    @"    Optimized query model: " + _eol +
                     @"'from Customer <generated>_0 in DbSet<Customer>",
                     Fixture.TestSqlLoggerFactory.Log);
             }
@@ -47,6 +50,8 @@ namespace Microsoft.EntityFrameworkCore.Query
         {
             using (var context = CreateContext())
             {
+                context.GetInfrastructure().GetRequiredService<IDiagnosticsLogger<DbLoggerCategory.Query>>()
+                    .Options.IsSensitiveDataLoggingWarned = false;
                 // ReSharper disable once ConvertToConstant.Local
                 var city = "Redmond";
 
@@ -88,14 +93,62 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 Assert.NotNull(customers);
                 Assert.Contains(
-                    @"    Compiling query model: " + EOL +
-                    @"'(from Customer c in DbSet<Customer>" + EOL +
-                    @"select [c]).Include(""Orders"")'" + EOL +
-                    @"    Including navigation: '[c].Orders'" + EOL +
-                    @"    Optimized query model: " + EOL +
+                    @"    Compiling query model: " + _eol +
+                    @"'(from Customer c in DbSet<Customer>" + _eol +
+                    @"select [c]).Include(""Orders"")'" + _eol +
+                    @"    Including navigation: '[c].Orders'" + _eol +
+                    @"    Optimized query model: " + _eol +
                     @"'from Customer c in DbSet<Customer>"
                     ,
                     Fixture.TestSqlLoggerFactory.Log);
+            }
+        }
+
+        [Fact]
+        public virtual void Concat_Include_collection_ignored()
+        {
+            using (var context = CreateContext())
+            {
+                var orders = context.Orders
+                    .Where(o => o.OrderID < 10250)
+                    .Concat(context.Orders.Where(o => o.CustomerID == "ALFKI"))
+                    .Include(o => o.OrderDetails)
+                    .ToList();
+
+                Assert.NotNull(orders);
+                Assert.Contains(CoreStrings.LogIgnoredInclude.GenerateMessage("[o].OrderDetails"), Fixture.TestSqlLoggerFactory.Log);
+            }
+        }
+
+        [Fact]
+        public virtual void Union_Include_collection_ignored()
+        {
+            using (var context = CreateContext())
+            {
+                var orders = context.Orders
+                    .Where(o => o.OrderID < 10250)
+                    .Union(context.Orders.Where(o => o.CustomerID == "ALFKI"))
+                    .Include(o => o.OrderDetails)
+                    .ToList();
+
+                Assert.NotNull(orders);
+                Assert.Contains(CoreStrings.LogIgnoredInclude.GenerateMessage("[o].OrderDetails"), Fixture.TestSqlLoggerFactory.Log);
+            }
+        }
+
+        [Fact]
+        public virtual void GroupBy_Include_collection_ignored()
+        {
+            using (var context = CreateContext())
+            {
+                var orders = context.Orders
+                    .GroupBy(o => o.OrderID)
+                    .Select(g => g.OrderBy(o => o.OrderID).FirstOrDefault())
+                    .Include(o => o.OrderDetails)
+                    .ToList();
+
+                Assert.NotNull(orders);
+                Assert.Contains(CoreStrings.LogIgnoredInclude.GenerateMessage("{from Order o in [g] orderby [o].OrderID asc select [o] => FirstOrDefault()}.OrderDetails"), Fixture.TestSqlLoggerFactory.Log);
             }
         }
 

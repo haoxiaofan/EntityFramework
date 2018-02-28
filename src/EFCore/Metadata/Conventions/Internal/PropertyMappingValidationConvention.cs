@@ -19,17 +19,22 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
     /// </summary>
     public class PropertyMappingValidationConvention : IModelBuiltConvention
     {
-        private readonly ITypeMapper _typeMapper;
+        private readonly ITypeMappingSource _typeMappingSource;
+        private readonly IParameterBindingFactories _parameterBindingFactories;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public PropertyMappingValidationConvention([NotNull] ITypeMapper typeMapper)
+        public PropertyMappingValidationConvention(
+            [NotNull] ITypeMappingSource typeMappingSource,
+            [NotNull] IParameterBindingFactories parameterBindingFactories)
         {
-            Check.NotNull(typeMapper, nameof(typeMapper));
+            Check.NotNull(typeMappingSource, nameof(typeMappingSource));
+            Check.NotNull(parameterBindingFactories, nameof(parameterBindingFactories));
 
-            _typeMapper = typeMapper;
+            _typeMappingSource = typeMappingSource;
+            _parameterBindingFactories = parameterBindingFactories;
         }
 
         /// <summary>
@@ -42,7 +47,9 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
             foreach (var entityType in modelBuilder.Metadata.GetEntityTypes())
             {
-                var unmappedProperty = entityType.GetProperties().FirstOrDefault(p => !IsMappedPrimitiveProperty(p.ClrType));
+                var unmappedProperty = entityType.GetProperties().FirstOrDefault(p =>
+                    (!ConfigurationSource.Convention.Overrides(p.GetConfigurationSource()) || !p.IsShadowProperty)
+                    && !IsMappedPrimitiveProperty(p));
 
                 if (unmappedProperty != null)
                 {
@@ -62,6 +69,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
 
                     clrProperties.ExceptWith(entityType.GetProperties().Select(p => p.Name));
                     clrProperties.ExceptWith(entityType.GetNavigations().Select(p => p.Name));
+                    clrProperties.ExceptWith(entityType.GetServiceProperties().Select(p => p.Name));
                     clrProperties.RemoveWhere(p => entityType.Builder.IsIgnored(p, ConfigurationSource.Convention));
 
                     if (clrProperties.Count > 0)
@@ -73,28 +81,26 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
                             var targetSequenceType = propertyType.TryGetSequenceType();
 
                             if (modelBuilder.IsIgnored(propertyType.DisplayName(), ConfigurationSource.Convention)
-                                || targetSequenceType != null
-                                && modelBuilder.IsIgnored(targetSequenceType.DisplayName(), ConfigurationSource.Convention))
+                                || (targetSequenceType != null
+                                && modelBuilder.IsIgnored(targetSequenceType.DisplayName(), ConfigurationSource.Convention)))
                             {
                                 continue;
                             }
 
                             var targetType = FindCandidateNavigationPropertyType(actualProperty);
 
-                            var targetEntityType
-                                = targetType == null
-                                    ? null
-                                    : modelBuilder.Metadata.FindEntityType(targetType);
-
-                            var isDependentEntityType
+                            var isTargetWeakOrOwned
                                 = targetType != null
-                                  && modelBuilder.Metadata.HasEntityTypeWithDefiningNavigation(targetType);
+                                  && (modelBuilder.Metadata.HasEntityTypeWithDefiningNavigation(targetType)
+                                      || modelBuilder.Metadata.ShouldBeOwnedType(targetType));
 
                             if (targetType != null
-                                && (targetEntityType != null
-                                    || isDependentEntityType))
+                                && targetType.IsValidEntityType()
+                                && (isTargetWeakOrOwned
+                                    || modelBuilder.Metadata.FindEntityType(targetType) != null
+                                    || targetType.GetRuntimeProperties().Any(p => p.IsCandidateProperty())))
                             {
-                                if ((!isDependentEntityType
+                                if ((!isTargetWeakOrOwned
                                      || !targetType.GetTypeInfo().Equals(entityType.ClrType.GetTypeInfo()))
                                     && entityType.GetDerivedTypes().All(dt => dt.FindDeclaredNavigation(actualProperty.Name) == null)
                                     && !entityType.IsInDefinitionPath(targetType))
@@ -129,11 +135,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual bool IsMappedPrimitiveProperty([NotNull] Type clrType)
+        public virtual bool IsMappedPrimitiveProperty([NotNull] IProperty property)
         {
-            Check.NotNull(clrType, nameof(clrType));
+            Check.NotNull(property, nameof(property));
 
-            return _typeMapper.IsTypeMapped(clrType);
+            return _typeMappingSource.FindMapping(property) != null;
         }
 
         /// <summary>
@@ -144,7 +150,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal
         {
             Check.NotNull(propertyInfo, nameof(propertyInfo));
 
-            return propertyInfo.FindCandidateNavigationPropertyType(_typeMapper.IsTypeMapped);
+            return propertyInfo.FindCandidateNavigationPropertyType(_typeMappingSource, _parameterBindingFactories);
         }
     }
 }

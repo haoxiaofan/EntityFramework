@@ -47,11 +47,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
             private readonly RelationalQueryContext _relationalQueryContext;
             private readonly ShaperCommandContext _shaperCommandContext;
             private readonly IShaper<T> _shaper;
+            private readonly Func<DbContext, bool, CancellationToken, Task<bool>> _bufferlessMoveNext;
 
             private RelationalDataReader _dataReader;
             private Queue<ValueBuffer> _buffer;
             private DbDataReader _dbDataReader;
             private IRelationalValueBufferFactory _valueBufferFactory;
+            private IExecutionStrategy _executionStrategy;
 
             private bool _disposed;
 
@@ -61,6 +63,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 _valueBufferFactory = _shaperCommandContext.ValueBufferFactory;
                 _relationalQueryContext = queryingEnumerable._relationalQueryContext;
                 _shaper = queryingEnumerable._shaper;
+                _bufferlessMoveNext = BufferlessMoveNext;
             }
 
             public async Task<bool> MoveNext(CancellationToken cancellationToken)
@@ -73,10 +76,13 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
 
                     if (_buffer == null)
                     {
-                        var executionStrategy = _relationalQueryContext.ExecutionStrategyFactory.Create();
+                        if (_executionStrategy == null)
+                        {
+                            _executionStrategy = _relationalQueryContext.ExecutionStrategyFactory.Create();
+                        }
 
-                        return await executionStrategy
-                            .ExecuteAsync(executionStrategy.RetriesOnFailure, BufferlessMoveNext, cancellationToken);
+                        return await _executionStrategy
+                            .ExecuteAsync(_executionStrategy.RetriesOnFailure, _bufferlessMoveNext, null, cancellationToken);
                     }
 
                     if (_buffer.Count > 0)
@@ -94,14 +100,14 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                 }
             }
 
-            private async Task<bool> BufferlessMoveNext(bool buffer, CancellationToken cancellationToken)
+            private async Task<bool> BufferlessMoveNext(DbContext _, bool buffer, CancellationToken cancellationToken)
             {
-                try
+                if (_dataReader == null)
                 {
-                    if (_dataReader == null)
-                    {
-                        await _relationalQueryContext.Connection.OpenAsync(cancellationToken);
+                    await _relationalQueryContext.Connection.OpenAsync(cancellationToken);
 
+                    try
+                    {
                         var relationalCommand
                             = _shaperCommandContext
                                 .GetRelationalCommand(_relationalQueryContext.ParameterValues);
@@ -114,33 +120,34 @@ namespace Microsoft.EntityFrameworkCore.Query.Internal
                                 _relationalQueryContext.Connection,
                                 _relationalQueryContext.ParameterValues,
                                 cancellationToken);
-
-                        _dbDataReader = _dataReader.DbDataReader;
-                        _shaperCommandContext.NotifyReaderCreated(_dbDataReader);
-                        _valueBufferFactory = _shaperCommandContext.ValueBufferFactory;
                     }
-
-                    var hasNext = await _dataReader.ReadAsync(cancellationToken);
-
-                    Current
-                        = hasNext
-                            ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader))
-                            : default(T);
-
-                    if (buffer)
+                    catch
                     {
-                        await BufferAllAsync(cancellationToken);
+                        // If failure happens creating the data reader, then it won't be available to
+                        // handle closing the connection, so do it explicitly here to preserve ref counting.
+                        _relationalQueryContext.Connection.Close();
+
+                        throw;
                     }
 
-                    return hasNext;
+                    _dbDataReader = _dataReader.DbDataReader;
+                    _shaperCommandContext.NotifyReaderCreated(_dbDataReader);
+                    _valueBufferFactory = _shaperCommandContext.ValueBufferFactory;
                 }
-                catch (Exception)
-                {
-                    _dataReader = null;
-                    _dbDataReader = null;
 
-                    throw;
+                var hasNext = await _dataReader.ReadAsync(cancellationToken);
+
+                Current
+                    = hasNext
+                        ? _shaper.Shape(_relationalQueryContext, _valueBufferFactory.Create(_dbDataReader))
+                        : default;
+
+                if (buffer)
+                {
+                    await BufferAllAsync(cancellationToken);
                 }
+
+                return hasNext;
             }
 
             public T Current { get; private set; }

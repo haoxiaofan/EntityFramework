@@ -6,9 +6,12 @@ using Microsoft.EntityFrameworkCore.Metadata.Conventions;
 using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
+using Microsoft.EntityFrameworkCore.Storage.Internal;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.EntityFrameworkCore.TestUtilities.FakeProvider;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.Metadata
 {
     public class RelationalEntityTypeAttributeConventionTest
@@ -16,7 +19,7 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         [Fact]
         public void TableAttribute_sets_column_name_order_and_type_with_conventional_builder()
         {
-            var modelBuilder = new ModelBuilder(TestRelationalConventionSetBuilder.Build());
+            var modelBuilder = CreateConventionalModelBuilder();
 
             var entityBuilder = modelBuilder.Entity<A>();
 
@@ -55,12 +58,19 @@ namespace Microsoft.EntityFrameworkCore.Metadata
         private InternalEntityTypeBuilder CreateInternalEntityTypeBuilder<T>()
         {
             var conventionSet = new ConventionSet();
-            conventionSet.EntityTypeAddedConventions.Add(new PropertyDiscoveryConvention(new CoreTypeMapper(new CoreTypeMapperDependencies())));
+            conventionSet.EntityTypeAddedConventions.Add(
+                new PropertyDiscoveryConvention(
+                    new TestRelationalTypeMappingSource(
+                        TestServiceFactory.Instance.Create<TypeMappingSourceDependencies>(),
+                        TestServiceFactory.Instance.Create<RelationalTypeMappingSourceDependencies>())));
 
             var modelBuilder = new InternalModelBuilder(new Model(conventionSet));
 
             return modelBuilder.Entity(typeof(T), ConfigurationSource.Explicit);
         }
+
+        protected virtual ModelBuilder CreateConventionalModelBuilder()
+            => RelationalTestHelpers.Instance.CreateConventionBuilder();
 
         [Table("MyTable", Schema = "MySchema")]
         private class A

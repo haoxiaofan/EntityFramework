@@ -3,20 +3,41 @@
 
 using System;
 using System.Collections.Generic;
+using System.Diagnostics;
+using System.Linq;
 using System.Linq.Expressions;
 using Microsoft.EntityFrameworkCore.Infrastructure;
+using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Metadata.Builders;
+using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
+using Microsoft.EntityFrameworkCore.Storage.Converters;
 using Microsoft.EntityFrameworkCore.TestUtilities;
 using Microsoft.EntityFrameworkCore.ValueGeneration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
+// ReSharper disable InconsistentNaming
 namespace Microsoft.EntityFrameworkCore.ModelBuilding
 {
     public abstract partial class ModelBuilderTest
     {
         public abstract class ModelBuilderTestBase
         {
+            [Fact]
+            public void Entity_throws_when_called_for_query()
+            {
+                var modelBuilder = CreateModelBuilder();
+
+                modelBuilder.Query<Customer>();
+
+                Assert.Equal(
+                    CoreStrings.CannotAccessQueryAsEntity(nameof(Customer)),
+                    Assert.Throws<InvalidOperationException>(
+                        () => modelBuilder.Entity<Customer>()).Message);
+            }
+
             protected void AssertEqual(
                 IEnumerable<string> expectedNames,
                 IEnumerable<string> actualNames,
@@ -109,13 +130,32 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
         {
             protected TestModelBuilder(TestHelpers testHelpers)
             {
-                ModelBuilder = testHelpers.CreateConventionBuilder();
-                ModelValidator = testHelpers.CreateModelValidator();
+                Log = new List<(LogLevel, EventId, string)>();
+                var options = new LoggingOptions();
+                options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(false).Options);
+                var validationLogger = new DiagnosticsLogger<DbLoggerCategory.Model.Validation>(
+                    new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Validation.Name),
+                    options,
+                    new DiagnosticListener("Fake"));
+                var modelLogger = new DiagnosticsLogger<DbLoggerCategory.Model>(
+                    new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Name),
+                    options,
+                    new DiagnosticListener("Fake"));
+
+                var contextServices = testHelpers.CreateContextServices();
+
+                ModelBuilder = new ModelBuilder(new CompositeConventionSetBuilder(contextServices.GetRequiredService<IEnumerable<IConventionSetBuilder>>().ToList())
+                    .AddConventions(new CoreConventionSetBuilder(
+                    contextServices.GetRequiredService<CoreConventionSetBuilderDependencies>().With(modelLogger))
+                    .CreateConventionSet()));
+
+                ModelValidator = new ModelValidator(new ModelValidatorDependencies(validationLogger, modelLogger));
             }
 
             public virtual IMutableModel Model => ModelBuilder.Model;
             protected ModelBuilder ModelBuilder { get; }
             protected IModelValidator ModelValidator { get; }
+            public List<(LogLevel Level, EventId Id, string Message)> Log { get; }
 
             public TestModelBuilder HasAnnotation(string annotation, object value)
             {
@@ -126,8 +166,16 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
             public abstract TestEntityTypeBuilder<TEntity> Entity<TEntity>()
                 where TEntity : class;
 
+
+            public abstract void Owned<TEntity>()
+                where TEntity : class;
+
             public abstract TestModelBuilder Entity<TEntity>(Action<TestEntityTypeBuilder<TEntity>> buildAction)
                 where TEntity : class;
+
+            public virtual void Query<TQuery>()
+                where TQuery : class
+                => ModelBuilder.Query<TQuery>();
 
             public abstract TestModelBuilder Ignore<TEntity>()
                 where TEntity : class;
@@ -252,6 +300,16 @@ namespace Microsoft.EntityFrameworkCore.ModelBuilding
 
             public abstract TestPropertyBuilder<TProperty> HasField(string fieldName);
             public abstract TestPropertyBuilder<TProperty> UsePropertyAccessMode(PropertyAccessMode propertyAccessMode);
+
+            public abstract TestPropertyBuilder<TProperty> HasConversion<TStore>();
+            public abstract TestPropertyBuilder<TProperty> HasConversion(Type storeType);
+
+            public abstract TestPropertyBuilder<TProperty> HasConversion<TStore>(
+                Expression<Func<TProperty, TStore>> convertToStoreExpression,
+                Expression<Func<TStore, TProperty>> convertFromStoreExpression);
+
+            public abstract TestPropertyBuilder<TProperty> HasConversion<TStore>(ValueConverter<TProperty, TStore> converter);
+            public abstract TestPropertyBuilder<TProperty> HasConversion(ValueConverter converter);
         }
 
         public abstract class TestCollectionNavigationBuilder<TEntity, TRelatedEntity>

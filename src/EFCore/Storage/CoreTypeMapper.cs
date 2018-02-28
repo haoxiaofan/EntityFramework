@@ -2,6 +2,7 @@
 // Licensed under the Apache License, Version 2.0. See License.txt in the project root for license information.
 
 using System;
+using System.Linq;
 using System.Reflection;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.Utilities;
@@ -11,6 +12,7 @@ namespace Microsoft.EntityFrameworkCore.Storage
     /// <summary>
     ///     A simple default implementation of <see cref="ITypeMapper" />
     /// </summary>
+    [Obsolete("Use TypeMappingSource")]
     public class CoreTypeMapper : ITypeMapper
     {
         /// <summary>
@@ -20,7 +22,14 @@ namespace Microsoft.EntityFrameworkCore.Storage
         public CoreTypeMapper([NotNull] CoreTypeMapperDependencies dependencies)
         {
             Check.NotNull(dependencies, nameof(dependencies));
+
+            Dependencies = dependencies;
         }
+
+        /// <summary>
+        ///     Dependencies used to create a <see cref="CoreTypeMapper" />
+        /// </summary>
+        protected virtual CoreTypeMapperDependencies Dependencies { get; }
 
         /// <summary>
         ///     Gets a value indicating whether the given .NET type is mapped.
@@ -33,7 +42,8 @@ namespace Microsoft.EntityFrameworkCore.Storage
 
             return type == typeof(string)
                    || type.GetTypeInfo().IsValueType
-                   || type == typeof(byte[]);
+                   || type == typeof(byte[])
+                   || Dependencies.ValueConverterSelector.ForTypes(type).Any(c => IsTypeMapped(c.ProviderClrType));
         }
     }
 }

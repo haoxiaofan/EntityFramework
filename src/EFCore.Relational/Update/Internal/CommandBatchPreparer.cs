@@ -4,9 +4,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using JetBrains.Annotations;
 using Microsoft.EntityFrameworkCore.ChangeTracking.Internal;
-using Microsoft.EntityFrameworkCore.Diagnostics;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Internal;
 using Microsoft.EntityFrameworkCore.Metadata;
@@ -15,9 +15,6 @@ using Microsoft.EntityFrameworkCore.Storage;
 
 namespace Microsoft.EntityFrameworkCore.Update.Internal
 {
-    using ModificationCommandIdentityMapFactory
-        = Func<string, string, Func<string>, bool, ModificationCommandIdentityMap>;
-
     /// <summary>
     ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
     ///     directly from your code. This API may change or be removed in future releases.
@@ -28,34 +25,35 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
         private readonly IParameterNameGeneratorFactory _parameterNameGeneratorFactory;
         private readonly IComparer<ModificationCommand> _modificationCommandComparer;
         private readonly IKeyValueIndexFactorySource _keyValueIndexFactorySource;
-        private readonly ICurrentDbContext _currentContext;
+        private readonly int _minBatchSize;
+        private IStateManager _stateManager;
         private readonly bool _sensitiveLoggingEnabled;
 
-        private IReadOnlyDictionary<IEntityType, ModificationCommandIdentityMapFactory> _tableSharingIdentityMapFactories;
+        private IReadOnlyDictionary<(string Schema, string Name), SharedTableEntryMapFactory<ModificationCommand>> _sharedTableEntryMapFactories;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public CommandBatchPreparer(
-            [NotNull] IModificationCommandBatchFactory modificationCommandBatchFactory,
-            [NotNull] IParameterNameGeneratorFactory parameterNameGeneratorFactory,
-            [NotNull] IComparer<ModificationCommand> modificationCommandComparer,
-            [NotNull] IKeyValueIndexFactorySource keyValueIndexFactorySource,
-            [NotNull] ICurrentDbContext currentContext,
-            [NotNull] ILoggingOptions loggingOptions)
+        public CommandBatchPreparer([NotNull] CommandBatchPreparerDependencies dependencies)
         {
-            _modificationCommandBatchFactory = modificationCommandBatchFactory;
-            _parameterNameGeneratorFactory = parameterNameGeneratorFactory;
-            _modificationCommandComparer = modificationCommandComparer;
-            _keyValueIndexFactorySource = keyValueIndexFactorySource;
-            _currentContext = currentContext;
+            _modificationCommandBatchFactory = dependencies.ModificationCommandBatchFactory;
+            _parameterNameGeneratorFactory = dependencies.ParameterNameGeneratorFactory;
+            _modificationCommandComparer = dependencies.ModificationCommandComparer;
+            _keyValueIndexFactorySource = dependencies.KeyValueIndexFactorySource;
+            _minBatchSize = dependencies.Options.Extensions.OfType<RelationalOptionsExtension>().FirstOrDefault()
+                ?.MinBatchSize ?? 4;
+            Dependencies = dependencies;
 
-            if (loggingOptions.IsSensitiveDataLoggingEnabled)
+            if (dependencies.LoggingOptions.IsSensitiveDataLoggingEnabled)
             {
                 _sensitiveLoggingEnabled = true;
             }
         }
+
+        private CommandBatchPreparerDependencies Dependencies { get; }
+
+        private IStateManager StateManager => _stateManager ?? (_stateManager = Dependencies.StateManager());
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -79,15 +77,62 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
 
                     if (!batch.AddCommand(modificationCommand))
                     {
-                        yield return batch;
-                        parameterNameGenerator.Reset();
-                        batch = _modificationCommandBatchFactory.Create();
-                        batch.AddCommand(modificationCommand);
+                        if (batch.ModificationCommands.Count == 1
+                            || batch.ModificationCommands.Count >= _minBatchSize)
+                        {
+                            if (batch.ModificationCommands.Count > 1)
+                            {
+                                Dependencies.UpdateLogger.BatchReadyForExecution(
+                                    batch.ModificationCommands.SelectMany(c => c.Entries), batch.ModificationCommands.Count);
+                            }
+
+                            yield return batch;
+                        }
+                        else
+                        {
+                            Dependencies.UpdateLogger.BatchSmallerThanMinBatchSize(
+                                batch.ModificationCommands.SelectMany(c => c.Entries), batch.ModificationCommands.Count, _minBatchSize);
+
+                            foreach (var command in batch.ModificationCommands)
+                            {
+                                yield return StartNewBatch(parameterNameGenerator, command);
+                            }
+                        }
+
+                        batch = StartNewBatch(parameterNameGenerator, modificationCommand);
                     }
                 }
 
-                yield return batch;
+                if (batch.ModificationCommands.Count == 1
+                    || batch.ModificationCommands.Count >= _minBatchSize)
+                {
+                    if (batch.ModificationCommands.Count > 1)
+                    {
+                        Dependencies.UpdateLogger.BatchReadyForExecution(
+                            batch.ModificationCommands.SelectMany(c => c.Entries), batch.ModificationCommands.Count);
+                    }
+
+                    yield return batch;
+                }
+                else
+                {
+                    Dependencies.UpdateLogger.BatchSmallerThanMinBatchSize(
+                        batch.ModificationCommands.SelectMany(c => c.Entries), batch.ModificationCommands.Count, _minBatchSize);
+
+                    foreach (var command in batch.ModificationCommands)
+                    {
+                        yield return StartNewBatch(parameterNameGenerator, command);
+                    }
+                }
             }
+        }
+
+        private ModificationCommandBatch StartNewBatch(ParameterNameGenerator parameterNameGenerator, ModificationCommand modificationCommand)
+        {
+            parameterNameGenerator.Reset();
+            var batch = _modificationCommandBatchFactory.Create();
+            batch.AddCommand(modificationCommand);
+            return batch;
         }
 
         /// <summary>
@@ -99,46 +144,49 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
             [NotNull] Func<string> generateParameterName)
         {
             var commands = new List<ModificationCommand>();
-            var tableSharingMapFactories = GetTableSharingIdentityMapFactories(entries[0].EntityType.Model);
-            Dictionary<(string Schema, string Name), ModificationCommandIdentityMap> sharedCommandsMap = null;
+            if (_sharedTableEntryMapFactories == null)
+            {
+                _sharedTableEntryMapFactories = SharedTableEntryMap<ModificationCommand>.CreateSharedTableEntryMapFactories(
+                    entries[0].EntityType.Model, StateManager);
+            }
+
+            Dictionary<(string Schema, string Name), SharedTableEntryMap<ModificationCommand>> sharedTablesCommandsMap = null;
             foreach (var entry in entries)
             {
                 var entityType = entry.EntityType;
-                var table = entityType.Relational().TableName;
-                var schema = entityType.Relational().Schema;
+                var relationalExtensions = entityType.Relational();
+                var table = relationalExtensions.TableName;
+                var schema = relationalExtensions.Schema;
+                var tableKey = (schema, table);
 
                 ModificationCommand command;
-                if (tableSharingMapFactories.TryGetValue(entityType, out var commandIdentityMapFactory))
+                if (_sharedTableEntryMapFactories.TryGetValue(tableKey, out var commandIdentityMapFactory))
                 {
-                    if (sharedCommandsMap == null)
+                    if (sharedTablesCommandsMap == null)
                     {
-                        sharedCommandsMap = new Dictionary<(string Schema, string Name), ModificationCommandIdentityMap>();
+                        sharedTablesCommandsMap = new Dictionary<(string Schema, string Name), SharedTableEntryMap<ModificationCommand>>();
                     }
-                    if (!sharedCommandsMap.TryGetValue((schema, table), out var sharedCommands))
+                    if (!sharedTablesCommandsMap.TryGetValue(tableKey, out var sharedCommandsMap))
                     {
-                        sharedCommands = commandIdentityMapFactory(
-                            table, schema, generateParameterName, _sensitiveLoggingEnabled);
-                        sharedCommandsMap.Add((schema, table), sharedCommands);
+                        sharedCommandsMap = commandIdentityMapFactory((t, s, c) => new ModificationCommand(
+                            t, s, generateParameterName, _sensitiveLoggingEnabled, c));
+                        sharedTablesCommandsMap.Add((schema, table), sharedCommandsMap);
                     }
 
-                    command = sharedCommands.GetOrAddCommand(entry);
+                    command = sharedCommandsMap.GetOrAddValue(entry);
                 }
                 else
                 {
-                    command = new ModificationCommand(
-                        table, schema, generateParameterName, _sensitiveLoggingEnabled, comparer: null);
+                    command = new ModificationCommand(table, schema, generateParameterName, _sensitiveLoggingEnabled, comparer: null);
                 }
 
                 command.AddEntry(entry);
                 commands.Add(command);
             }
 
-            if (sharedCommandsMap != null)
+            if (sharedTablesCommandsMap != null)
             {
-                foreach (var modificationCommandIdentityMap in sharedCommandsMap.Values)
-                {
-                    modificationCommandIdentityMap.Validate(_sensitiveLoggingEnabled);
-                }
+                Validate(sharedTablesCommandsMap);
             }
 
             return commands.Where(
@@ -146,88 +194,76 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                      || c.ColumnModifications.Any(m => m.IsWrite));
         }
 
-        private IReadOnlyDictionary<IEntityType, ModificationCommandIdentityMapFactory> GetTableSharingIdentityMapFactories(
-            IModel model)
+        private void Validate(Dictionary<(string Schema, string Name), SharedTableEntryMap<ModificationCommand>> sharedTablesCommandsMap)
         {
-            if (_tableSharingIdentityMapFactories != null)
+            foreach (var modificationCommandIdentityMap in sharedTablesCommandsMap.Values)
             {
-                return _tableSharingIdentityMapFactories;
-            }
-
-            var tables = new Dictionary<(string Schema, string TableName), HashSet<IEntityType>>();
-            foreach (var entityType in model.GetEntityTypes())
-            {
-                var fullName = (entityType.Relational().Schema, entityType.Relational().TableName);
-                if (!tables.TryGetValue(fullName, out var mappedEntityTypes))
+                foreach (var command in modificationCommandIdentityMap.Values)
                 {
-                    mappedEntityTypes = new HashSet<IEntityType>();
-                    tables.Add(fullName, mappedEntityTypes);
-                }
-
-                mappedEntityTypes.Add(entityType);
-            }
-
-            var sharedTablesMap = new Dictionary<IEntityType, ModificationCommandIdentityMapFactory>();
-            foreach (var tableMapping in tables)
-            {
-                var entityTypes = tableMapping.Value;
-                if (entityTypes.Count > 1)
-                {
-                    var principals = new Dictionary<IEntityType, IReadOnlyList<IEntityType>>(entityTypes.Count);
-                    var dependents = new Dictionary<IEntityType, IReadOnlyList<IEntityType>>(entityTypes.Count);
-                    foreach (var entityType in entityTypes)
+                    if (command.EntityState != EntityState.Added
+                         && command.EntityState != EntityState.Deleted)
                     {
-                        var principalList = new List<IEntityType>();
-                        if (!dependents.TryGetValue(entityType, out var dependentList))
-                        {
-                            dependentList = new List<IEntityType>();
-                            dependents[entityType] = dependentList;
-                        }
+                        continue;
+                    }
 
-                        foreach (var foreignKey in entityType.FindForeignKeys(entityType.FindPrimaryKey().Properties))
+                    foreach (var entry in command.Entries)
+                    {
+                        foreach (var principalEntityType in modificationCommandIdentityMap.GetPrincipals(entry.EntityType))
                         {
-                            if (foreignKey.PrincipalKey.IsPrimaryKey()
-                                && entityTypes.Contains(foreignKey.PrincipalEntityType))
+                            if (!command.Entries.Any(
+                                principalEntry => principalEntry != entry
+                                                  && principalEntityType.IsAssignableFrom(principalEntry.EntityType)))
                             {
-                                var principalEntityType = foreignKey.PrincipalEntityType;
-                                principalList.Add(principalEntityType);
-                                if (!dependents.TryGetValue(principalEntityType, out dependentList))
+                                var tableName = (string.IsNullOrEmpty(command.Schema) ? "" : command.Schema + ".") + command.TableName;
+                                if (_sensitiveLoggingEnabled)
                                 {
-                                    dependentList = new List<IEntityType>();
-                                    dependents[principalEntityType] = dependentList;
+                                    throw new InvalidOperationException(
+                                        RelationalStrings.SharedRowEntryCountMismatchSensitive(
+                                            entry.EntityType.DisplayName(),
+                                            tableName,
+                                            principalEntityType.DisplayName(),
+                                            entry.BuildCurrentValuesString(entry.EntityType.FindPrimaryKey().Properties),
+                                            command.EntityState));
                                 }
-                                ((List<IEntityType>)dependentList).Add(entityType);
+
+                                throw new InvalidOperationException(
+                                    RelationalStrings.SharedRowEntryCountMismatch(
+                                        entry.EntityType.DisplayName(),
+                                        tableName,
+                                        principalEntityType.DisplayName(),
+                                        command.EntityState));
                             }
                         }
 
-                        principals[entityType] = principalList;
-                    }
+                        foreach (var dependentEntityType in modificationCommandIdentityMap.GetDependents(entry.EntityType))
+                        {
+                            if (!command.Entries.Any(
+                                dependentEntry => dependentEntry != entry
+                                                  && dependentEntityType.IsAssignableFrom(dependentEntry.EntityType)))
+                            {
+                                var tableName = (string.IsNullOrEmpty(command.Schema) ? "" : command.Schema + ".") + command.TableName;
+                                if (_sensitiveLoggingEnabled)
+                                {
+                                    throw new InvalidOperationException(
+                                        RelationalStrings.SharedRowEntryCountMismatchSensitive(
+                                            entry.EntityType.DisplayName(),
+                                            tableName,
+                                            dependentEntityType.DisplayName(),
+                                            entry.BuildCurrentValuesString(entry.EntityType.FindPrimaryKey().Properties),
+                                            command.EntityState));
+                                }
 
-                    var stateManager = _currentContext.GetDependencies().StateManager;
-
-                    ModificationCommandIdentityMap CommandIdentityMapFactory(
-                        string name,
-                        string schema,
-                        Func<string> generateParameterName,
-                        bool sensitiveLoggingEnabled)
-                        => new ModificationCommandIdentityMap(
-                            stateManager,
-                            principals,
-                            dependents,
-                            name,
-                            schema,
-                            generateParameterName,
-                            sensitiveLoggingEnabled);
-
-                    foreach (var entityType in entityTypes)
-                    {
-                        sharedTablesMap.Add(entityType, CommandIdentityMapFactory);
+                                throw new InvalidOperationException(
+                                    RelationalStrings.SharedRowEntryCountMismatch(
+                                        entry.EntityType.DisplayName(),
+                                        tableName,
+                                        dependentEntityType.DisplayName(),
+                                        command.EntityState));
+                            }
+                        }
                     }
                 }
             }
-
-            _tableSharingIdentityMapFactories = sharedTablesMap;
-            return sharedTablesMap;
         }
 
         // To avoid violating store constraints the modification commands must be sorted
@@ -256,10 +292,171 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
 
             AddUniqueValueEdges(modificationCommandGraph);
 
-            var sortedCommands
-                = modificationCommandGraph.BatchingTopologicalSort(data => { return string.Join(", ", data.Select(d => d.Item3.First())); });
+            return modificationCommandGraph.BatchingTopologicalSort(FormatCycle);
+        }
 
-            return sortedCommands;
+        private string FormatCycle(IReadOnlyList<Tuple<ModificationCommand, ModificationCommand, IEnumerable<IAnnotatable>>> data)
+        {
+            var builder = new StringBuilder();
+            for (var i = 0; i < data.Count; i++)
+            {
+                var edge = data[i];
+                Format(edge.Item1, builder);
+
+                switch (edge.Item3.First())
+                {
+                    case IForeignKey foreignKey:
+                        Format(foreignKey, edge.Item1, edge.Item2, builder);
+                        break;
+                    case IIndex index:
+                        Format(index, edge.Item1, edge.Item2, builder);
+                        break;
+                }
+
+                if (i == data.Count - 1)
+                {
+                    Format(edge.Item2, builder);
+                }
+            }
+
+            return builder.ToString();
+        }
+
+        private void Format(ModificationCommand command, StringBuilder builder)
+        {
+            var entry = command.Entries.First();
+            var entityType = entry.EntityType;
+            builder.Append(entityType.DisplayName());
+            if (_sensitiveLoggingEnabled)
+            {
+                builder.Append(" { ");
+                var properties = entityType.FindPrimaryKey().Properties;
+                for (var i = 0; i < properties.Count; i++)
+                {
+                    var keyProperty = properties[i];
+                    builder.Append("'");
+                    builder.Append(keyProperty.Name);
+                    builder.Append("': ");
+                    builder.Append(entry.GetCurrentValue(keyProperty));
+
+                    if (i != properties.Count - 1)
+                    {
+                        builder.Append(", ");
+                    }
+                }
+                builder.Append(" } ");
+            }
+            else
+            {
+                builder.Append(" ");
+            }
+
+            builder.Append("[");
+            builder.Append(entry.EntityState);
+            builder.Append("]");
+        }
+
+        private void Format(IForeignKey foreignKey, ModificationCommand source, ModificationCommand target, StringBuilder builder)
+        {
+            var reverseDependency = !source.Entries.Any(e => foreignKey.DeclaringEntityType.IsAssignableFrom(e.EntityType));
+            if (reverseDependency)
+            {
+                builder.Append(" <-");
+            }
+
+            builder.Append(" ");
+            if (foreignKey.DependentToPrincipal != null
+                || foreignKey.PrincipalToDependent != null)
+            {
+                if (!reverseDependency
+                    && foreignKey.DependentToPrincipal != null)
+                {
+                    builder.Append(foreignKey.DependentToPrincipal.Name);
+                    builder.Append(" ");
+                }
+
+                if (foreignKey.PrincipalToDependent != null)
+                {
+                    builder.Append(foreignKey.PrincipalToDependent.Name);
+                    builder.Append(" ");
+                }
+
+                if (reverseDependency
+                    && foreignKey.DependentToPrincipal != null)
+                {
+                    builder.Append(foreignKey.DependentToPrincipal.Name);
+                    builder.Append(" ");
+                }
+            }
+            else
+            {
+                builder.Append("ForeignKey ");
+            }
+
+            var dependentCommand = reverseDependency ? target : source;
+            var dependentEntry = dependentCommand.Entries.First(e => foreignKey.DeclaringEntityType.IsAssignableFrom(e.EntityType));
+            builder.Append("{ ");
+            for (var i = 0; i < foreignKey.Properties.Count; i++)
+            {
+                var property = foreignKey.Properties[i];
+                builder.Append("'");
+                builder.Append(property.Name);
+                builder.Append("'");
+                if (_sensitiveLoggingEnabled)
+                {
+                    builder.Append(": ");
+                    builder.Append(dependentEntry.GetCurrentValue(property));
+                }
+
+                if (i != foreignKey.Properties.Count - 1)
+                {
+                    builder.Append(", ");
+                }
+            }
+            builder.Append(" } ");
+
+            if (!reverseDependency)
+            {
+                builder.Append("<- ");
+            }
+        }
+
+        private void Format(IIndex index, ModificationCommand source, ModificationCommand target, StringBuilder builder)
+        {
+            var reverseDependency = source.EntityState != EntityState.Deleted;
+            if (reverseDependency)
+            {
+                builder.Append(" <-");
+            }
+
+            builder.Append(" Index ");
+
+            var dependentCommand = reverseDependency ? target : source;
+            var dependentEntry = dependentCommand.Entries.First(e => index.DeclaringEntityType.IsAssignableFrom(e.EntityType));
+            builder.Append("{ ");
+            for (var i = 0; i < index.Properties.Count; i++)
+            {
+                var property = index.Properties[i];
+                builder.Append("'");
+                builder.Append(property.Name);
+                builder.Append("'");
+                if (_sensitiveLoggingEnabled)
+                {
+                    builder.Append(": ");
+                    builder.Append(dependentEntry.GetCurrentValue(property));
+                }
+
+                if (i != index.Properties.Count - 1)
+                {
+                    builder.Append(", ");
+                }
+            }
+            builder.Append(" } ");
+
+            if (!reverseDependency)
+            {
+                builder.Append("<- ");
+            }
         }
 
         // Builds a map from foreign key values to list of modification commands, with an entry for every command
@@ -416,9 +613,8 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                         {
                             var indexColumnModifications =
                                 command.ColumnModifications.Where(
-                                    cm =>
-                                        index.Properties.Contains(cm.Property)
-                                        && (cm.IsWrite || cm.IsRead));
+                                    cm => index.Properties.Contains(cm.Property)
+                                          && (cm.IsWrite || cm.IsRead));
 
                             if (command.EntityState == EntityState.Deleted
                                 || indexColumnModifications.Any())
@@ -456,9 +652,8 @@ namespace Microsoft.EntityFrameworkCore.Update.Internal
                         {
                             var indexColumnModifications =
                                 command.ColumnModifications.Where(
-                                    cm =>
-                                        index.Properties.Contains(cm.Property)
-                                        && cm.IsWrite);
+                                    cm => index.Properties.Contains(cm.Property)
+                                          && cm.IsWrite);
 
                             if (command.EntityState == EntityState.Added
                                 || indexColumnModifications.Any())

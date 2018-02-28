@@ -8,6 +8,8 @@ using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
 using JetBrains.Annotations;
+using Microsoft.EntityFrameworkCore.Extensions.Internal;
+using Microsoft.EntityFrameworkCore.Metadata;
 using Microsoft.EntityFrameworkCore.Query.Internal;
 using Microsoft.EntityFrameworkCore.Utilities;
 using Remotion.Linq.Clauses;
@@ -103,13 +105,10 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             Debug.Assert(lambdaExpression.Body != null);
 
-            var newExpression
-                = RemoveConvert(lambdaExpression.Body) as NewExpression;
-
             var parameterExpression
                 = lambdaExpression.Parameters.Single();
 
-            if (newExpression != null)
+            if (RemoveConvert(lambdaExpression.Body) is NewExpression newExpression)
             {
                 var propertyInfos
                     = newExpression
@@ -136,14 +135,16 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             var propertyInfos = MatchPropertyAccess(parameterExpression, propertyAccessExpression);
 
-            return (propertyInfos != null) && (propertyInfos.Count == 1) ? propertyInfos[0] : null;
+            return propertyInfos != null && propertyInfos.Count == 1 ? propertyInfos[0] : null;
         }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public static IReadOnlyList<PropertyInfo> GetComplexPropertyAccess([NotNull] this LambdaExpression propertyAccessExpression)
+        public static IReadOnlyList<PropertyInfo> GetComplexPropertyAccess(
+            [NotNull] this LambdaExpression propertyAccessExpression,
+            [NotNull] string methodName)
         {
             Debug.Assert(propertyAccessExpression.Parameters.Count == 1);
 
@@ -156,7 +157,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
             if (propertyPath == null)
             {
                 throw new ArgumentException(
-                    CoreStrings.InvalidComplexPropertyExpression(propertyAccessExpression));
+                    CoreStrings.InvalidIncludeLambdaExpression(methodName, propertyAccessExpression));
             }
 
             return propertyPath;
@@ -171,7 +172,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
             do
             {
-                memberExpression = RemoveConvert(propertyAccessExpression) as MemberExpression;
+                memberExpression = RemoveTypeAs(RemoveConvert(propertyAccessExpression)) as MemberExpression;
 
                 var propertyInfo = memberExpression?.Member as PropertyInfo;
 
@@ -184,7 +185,7 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
                 propertyAccessExpression = memberExpression.Expression;
             }
-            while (memberExpression.Expression.RemoveConvert() != parameterExpression);
+            while (RemoveTypeAs(RemoveConvert(memberExpression.Expression)) != parameterExpression);
 
             return propertyInfos;
         }
@@ -195,9 +196,9 @@ namespace Microsoft.EntityFrameworkCore.Internal
         /// </summary>
         public static Expression RemoveConvert([CanBeNull] this Expression expression)
         {
-            while ((expression != null)
-                   && ((expression.NodeType == ExpressionType.Convert)
-                       || (expression.NodeType == ExpressionType.ConvertChecked)))
+            while (expression != null
+                   && (expression.NodeType == ExpressionType.Convert
+                       || expression.NodeType == ExpressionType.ConvertChecked))
             {
                 expression = RemoveConvert(((UnaryExpression)expression).Operand);
             }
@@ -209,11 +210,26 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        public static Expression RemoveTypeAs([CanBeNull] this Expression expression)
+        {
+            while (expression != null
+                   && (expression.NodeType == ExpressionType.TypeAs))
+            {
+                expression = RemoveConvert(((UnaryExpression)expression).Operand);
+            }
+
+            return expression;
+        }
+
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
         public static TExpression GetRootExpression<TExpression>([NotNull] this Expression expression)
             where TExpression : Expression
         {
-            MemberExpression memberExpression;
-            while ((memberExpression = expression as MemberExpression) != null)
+            while (expression is MemberExpression memberExpression)
             {
                 expression = memberExpression.Expression;
             }
@@ -229,8 +245,8 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             Check.NotNull(expression, nameof(expression));
 
-            return (expression.NodeType == ExpressionType.AndAlso)
-                   || (expression.NodeType == ExpressionType.OrElse);
+            return expression.NodeType == ExpressionType.AndAlso
+                   || expression.NodeType == ExpressionType.OrElse;
         }
 
         /// <summary>
@@ -241,13 +257,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             Check.NotNull(expression, nameof(expression));
 
-            return (expression.NodeType == ExpressionType.Equal)
-                   || (expression.NodeType == ExpressionType.NotEqual)
-                   || (expression.NodeType == ExpressionType.LessThan)
-                   || (expression.NodeType == ExpressionType.LessThanOrEqual)
-                   || (expression.NodeType == ExpressionType.GreaterThan)
-                   || (expression.NodeType == ExpressionType.GreaterThanOrEqual)
-                   || (expression.NodeType == ExpressionType.Not);
+            return expression.Type == typeof(bool)
+                   && (expression.NodeType == ExpressionType.Equal
+                       || expression.NodeType == ExpressionType.NotEqual
+                       || expression.NodeType == ExpressionType.LessThan
+                       || expression.NodeType == ExpressionType.LessThanOrEqual
+                       || expression.NodeType == ExpressionType.GreaterThan
+                       || expression.NodeType == ExpressionType.GreaterThanOrEqual
+                       || expression.NodeType == ExpressionType.Not);
         }
 
         /// <summary>
@@ -255,19 +272,15 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static bool IsEntityQueryable([NotNull] this ConstantExpression constantExpression)
-        {
-            return constantExpression.Type.GetTypeInfo().IsGenericType
-                   && constantExpression.Type.GetGenericTypeDefinition() == typeof(EntityQueryable<>);
-        }
+            => constantExpression.Type.GetTypeInfo().IsGenericType
+            && constantExpression.Type.GetGenericTypeDefinition() == typeof(EntityQueryable<>);
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public static IQuerySource TryGetReferencedQuerySource([NotNull] this Expression expression)
-        {
-            return (expression as QuerySourceReferenceExpression)?.ReferencedQuerySource;
-        }
+            => (expression as QuerySourceReferenceExpression)?.ReferencedQuerySource;
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
@@ -319,9 +332,8 @@ namespace Microsoft.EntityFrameworkCore.Internal
 
             testExpression = null;
             resultExpression = null;
-            var binaryTest = conditionalExpression.Test as BinaryExpression;
 
-            if (binaryTest == null
+            if (!(conditionalExpression.Test is BinaryExpression binaryTest)
                 || !(binaryTest.NodeType == ExpressionType.Equal
                      || binaryTest.NodeType == ExpressionType.NotEqual))
             {
@@ -355,6 +367,32 @@ namespace Microsoft.EntityFrameworkCore.Internal
             resultExpression = binaryTest.NodeType == ExpressionType.Equal ? conditionalExpression.IfFalse : conditionalExpression.IfTrue;
 
             return true;
+        }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public static Expression CreateKeyAccessExpression(
+            [NotNull] this Expression target,
+            [NotNull] IReadOnlyList<IProperty> properties)
+        {
+            Check.NotNull(target, nameof(target));
+            Check.NotNull(properties, nameof(properties));
+
+            return properties.Count == 1
+                ? target.CreateEFPropertyExpression(properties[0])
+                : Expression.New(
+                    AnonymousObject.AnonymousObjectCtor,
+                    Expression.NewArrayInit(
+                        typeof(object),
+                        properties
+                            .Select(p =>
+                                Expression.Convert(
+                                    target.CreateEFPropertyExpression(p),
+                                    typeof(object)))
+                            .Cast<Expression>()
+                            .ToArray()));
         }
     }
 }

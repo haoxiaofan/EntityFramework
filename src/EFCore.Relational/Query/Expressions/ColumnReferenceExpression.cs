@@ -106,9 +106,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         {
             Check.NotNull(visitor, nameof(visitor));
 
-            var specificVisitor = visitor as ISqlExpressionVisitor;
-
-            return specificVisitor != null
+            return visitor is ISqlExpressionVisitor specificVisitor
                 ? specificVisitor.VisitColumnReference(this)
                 : base.Accept(visitor);
         }
@@ -137,7 +135,7 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         /// </returns>
         public override bool Equals(object obj)
         {
-            if (ReferenceEquals(null, obj))
+            if (obj is null)
             {
                 return false;
             }
@@ -172,9 +170,9 @@ namespace Microsoft.EntityFrameworkCore.Query.Expressions
         }
 
         /// <summary>
-        ///     Creates a <see cref="String" /> representation of the Expression.
+        ///     Creates a <see cref="string" /> representation of the Expression.
         /// </summary>
-        /// <returns>A <see cref="String" /> representation of the Expression.</returns>
+        /// <returns>A <see cref="string" /> representation of the Expression.</returns>
         public override string ToString() => _tableExpression.Alias + "." + Name;
     }
 }

@@ -41,6 +41,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         /// <summary>
         ///     Gets the type mapper.
         /// </summary>
+        [Obsolete("Use IRelationalTypeMappingSource.")]
         protected virtual IRelationalTypeMapper TypeMapper => RelationalDependencies.TypeMapper;
 
         /// <summary>
@@ -53,7 +54,9 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
             ValidateSharedTableCompatibility(model);
             ValidateInheritanceMapping(model);
+#pragma warning disable 618
             ValidateDataTypes(model);
+#pragma warning restore 618
             ValidateDefaultValuesOnKeys(model);
             ValidateBoolsWithDefaults(model);
             ValidateDbFunctions(model);
@@ -77,7 +80,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
                 if (dbFunction.Translation == null)
                 {
-                    if (!RelationalDependencies.TypeMapper.IsTypeMapped(methodInfo.ReturnType))
+                    if (RelationalDependencies.TypeMappingSource.FindMapping(methodInfo.ReturnType) == null)
                     {
                         throw new InvalidOperationException(
                             RelationalStrings.DbFunctionInvalidReturnType(
@@ -87,7 +90,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
 
                     foreach (var parameter in methodInfo.GetParameters())
                     {
-                        if (!RelationalDependencies.TypeMapper.IsTypeMapped(parameter.ParameterType))
+                        if (RelationalDependencies.TypeMappingSource.FindMapping(parameter.ParameterType) == null)
                         {
                             throw new InvalidOperationException(
                                 RelationalStrings.DbFunctionInvalidParameterType(
@@ -111,6 +114,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             foreach (var property in model.GetEntityTypes().SelectMany(e => e.GetDeclaredProperties()))
             {
                 if (property.ClrType == typeof(bool)
+                    && property.ValueGenerated != ValueGenerated.Never
                     && (property.Relational().DefaultValue != null
                         || property.Relational().DefaultValueSql != null))
                 {
@@ -123,19 +127,9 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
+        [Obsolete("Now happens as a part of FindTypeMapping.")]
         protected virtual void ValidateDataTypes([NotNull] IModel model)
         {
-            foreach (var entityType in model.GetEntityTypes())
-            {
-                foreach (var property in entityType.GetDeclaredProperties())
-                {
-                    var dataType = property.Relational().ColumnType;
-                    if (dataType != null)
-                    {
-                        TypeMapper.ValidateTypeName(dataType);
-                    }
-                }
-            }
         }
 
         /// <summary>
@@ -159,7 +153,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
         protected virtual void ValidateSharedTableCompatibility([NotNull] IModel model)
         {
             var tables = new Dictionary<string, List<IEntityType>>();
-            foreach (var entityType in model.GetEntityTypes())
+            foreach (var entityType in model.GetEntityTypes().Where(et => !et.IsQueryType))
             {
                 var annotations = entityType.Relational();
                 var tableName = Format(annotations.Schema, annotations.TableName);
@@ -197,20 +191,42 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 return;
             }
 
-            var firstValidatedType = mappedTypes[0];
+            var unvalidatedTypes = new HashSet<IEntityType>(mappedTypes);
+            IEntityType root = null;
+            foreach (var mappedType in mappedTypes)
+            {
+                if (mappedType.BaseType != null
+                    || mappedType.FindForeignKeys(mappedType.FindPrimaryKey().Properties)
+                        .Any(fk => fk.PrincipalKey.IsPrimaryKey()
+                                   && fk.PrincipalEntityType.RootType() != mappedType
+                                   && unvalidatedTypes.Contains(fk.PrincipalEntityType)))
+                {
+                    continue;
+                }
+
+                if (root != null)
+                {
+                    throw new InvalidOperationException(
+                        RelationalStrings.IncompatibleTableNoRelationship(
+                            tableName,
+                            mappedType.DisplayName(),
+                            root.DisplayName()));
+                }
+                root = mappedType;
+            }
+
+            unvalidatedTypes.Remove(root);
             var typesToValidate = new Queue<IEntityType>();
-            typesToValidate.Enqueue(firstValidatedType);
-            var unvalidatedTypes = new HashSet<IEntityType>(mappedTypes.Skip(1));
+            typesToValidate.Enqueue(root);
+
             while (typesToValidate.Count > 0)
             {
                 var entityType = typesToValidate.Dequeue();
                 var typesToValidateLeft = typesToValidate.Count;
-                var nextTypeSet = unvalidatedTypes.Where(
-                    unvalidatedType =>
-                        entityType.RootType() == unvalidatedType.RootType()
-                        || IsIdentifyingPrincipal(entityType, unvalidatedType)
-                        || IsIdentifyingPrincipal(unvalidatedType, entityType));
-                foreach (var nextEntityType in nextTypeSet)
+                var directlyConnectedTypes = unvalidatedTypes.Where(unvalidatedType =>
+                    entityType.IsAssignableFrom(unvalidatedType)
+                    || IsIdentifyingPrincipal(unvalidatedType, entityType));
+                foreach (var nextEntityType in directlyConnectedTypes)
                 {
                     var key = entityType.FindPrimaryKey();
                     var otherKey = nextEntityType.FindPrimaryKey();
@@ -247,44 +263,15 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                     RelationalStrings.IncompatibleTableNoRelationship(
                         tableName,
                         invalidEntityType.DisplayName(),
-                        firstValidatedType.DisplayName(),
-                        Property.Format(invalidEntityType.FindPrimaryKey().Properties),
-                        Property.Format(firstValidatedType.FindPrimaryKey().Properties)));
+                        root.DisplayName()));
             }
         }
 
-        private static bool IsIdentifyingPrincipal(IEntityType dependEntityType, IEntityType principalEntityType)
+        private static bool IsIdentifyingPrincipal(IEntityType dependentEntityType, IEntityType principalEntityType)
         {
-            var identifyingForeignKeys = new Queue<IForeignKey>(
-                dependEntityType.FindForeignKeys(dependEntityType.FindPrimaryKey().Properties));
-            while (identifyingForeignKeys.Count > 0)
-            {
-                var fk = identifyingForeignKeys.Dequeue();
-                if (fk.PrincipalKey.IsPrimaryKey())
-                {
-                    if (fk.PrincipalEntityType == principalEntityType)
-                    {
-                        if (principalEntityType.BaseType != null)
-                        {
-                            // #8973
-                            throw new InvalidOperationException(
-                                RelationalStrings.IncompatibleTableDerivedPrincipal(
-                                    dependEntityType.Relational().TableName,
-                                    dependEntityType.DisplayName(),
-                                    principalEntityType.DisplayName(),
-                                    principalEntityType.RootType().DisplayName()));
-                        }
-                        return true;
-                    }
-
-                    foreach (var principalFk in fk.PrincipalEntityType.FindForeignKeys(fk.PrincipalEntityType.FindPrimaryKey().Properties))
-                    {
-                        identifyingForeignKeys.Enqueue(principalFk);
-                    }
-                }
-            }
-
-            return false;
+            return dependentEntityType.FindForeignKeys(dependentEntityType.FindPrimaryKey().Properties)
+                .Any(fk => fk.PrincipalKey.IsPrimaryKey()
+                    && fk.PrincipalEntityType == principalEntityType);
         }
 
         /// <summary>
@@ -304,10 +291,10 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
                 {
                     var previousAnnotations = duplicateProperty.Relational();
                     var currentTypeString = propertyAnnotations.ColumnType
-                                            ?? TypeMapper.GetMapping(property).StoreType;
+                                            ?? property.FindRelationalMapping()?.StoreType;
                     var previousTypeString = previousAnnotations.ColumnType
-                                             ?? TypeMapper.GetMapping(duplicateProperty).StoreType;
-                    if (!currentTypeString.Equals(previousTypeString, StringComparison.OrdinalIgnoreCase))
+                                             ?? duplicateProperty.FindRelationalMapping()?.StoreType;
+                    if (!string.Equals(currentTypeString, previousTypeString, StringComparison.OrdinalIgnoreCase))
                     {
                         throw new InvalidOperationException(
                             RelationalStrings.DuplicateColumnNameDataTypeMismatch(
@@ -583,7 +570,7 @@ namespace Microsoft.EntityFrameworkCore.Infrastructure
             }
         }
 
-        private void ValidateDiscriminator(IEntityType entityType)
+        private static void ValidateDiscriminator(IEntityType entityType)
         {
             var annotations = entityType.Relational();
             if (annotations.DiscriminatorProperty == null)

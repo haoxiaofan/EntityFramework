@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.DataAnnotations;
 using System.ComponentModel.DataAnnotations.Schema;
+using System.Diagnostics;
 using System.Linq;
 using System.Linq.Expressions;
 using System.Reflection;
@@ -15,6 +16,7 @@ using Microsoft.EntityFrameworkCore.Metadata.Conventions.Internal;
 using Microsoft.EntityFrameworkCore.Metadata.Internal;
 using Microsoft.EntityFrameworkCore.Storage;
 using Microsoft.EntityFrameworkCore.TestUtilities;
+using Microsoft.Extensions.Logging;
 using Xunit;
 
 // ReSharper disable InconsistentNaming
@@ -26,6 +28,9 @@ namespace Microsoft.EntityFrameworkCore
         protected DataAnnotationTestBase(TFixture fixture) => Fixture = fixture;
 
         protected TFixture Fixture { get; }
+
+        protected List<(LogLevel Level, EventId Id, string Message)> Log { get; }
+            = new List<(LogLevel, EventId, string)>();
 
         protected DbContext CreateContext() => Fixture.CreateContext();
 
@@ -39,12 +44,28 @@ namespace Microsoft.EntityFrameworkCore
         public virtual ModelBuilder CreateModelBuilder()
         {
             var context = CreateContext();
-            var conventionSetBuilder = context.GetService<IConventionSetBuilder>();
-            var conventionSet = context.GetService<ICoreConventionSetBuilder>().CreateConventionSet();
+            var conventionSetBuilder = CreateConventionSetBuilder(context);
+            var conventionSet = new CoreConventionSetBuilder(
+                    context.GetService<CoreConventionSetBuilderDependencies>().With(CreateLogger()))
+                .CreateConventionSet();
             conventionSet = conventionSetBuilder == null
                 ? conventionSet
                 : conventionSetBuilder.AddConventions(conventionSet);
             return new ModelBuilder(conventionSet);
+        }
+
+        protected virtual IConventionSetBuilder CreateConventionSetBuilder(DbContext context)
+            => new CompositeConventionSetBuilder(context.GetService<IEnumerable<IConventionSetBuilder>>().ToList());
+
+        protected virtual DiagnosticsLogger<DbLoggerCategory.Model> CreateLogger()
+        {
+            var options = new LoggingOptions();
+            options.Initialize(new DbContextOptionsBuilder().EnableSensitiveDataLogging(false).Options);
+            var modelLogger = new DiagnosticsLogger<DbLoggerCategory.Model>(
+                new ListLoggerFactory(Log, l => l == DbLoggerCategory.Model.Name),
+                options,
+                new DiagnosticListener("Fake"));
+            return modelLogger;
         }
 
         protected virtual void Validate(ModelBuilder modelBuilder)
@@ -862,19 +883,6 @@ namespace Microsoft.EntityFrameworkCore
             return modelBuilder;
         }
 
-        [Fact]
-        public virtual ModelBuilder Timestamp_takes_precedence_over_MaxLength_with_value()
-        {
-            var modelBuilder = CreateModelBuilder();
-            modelBuilder.Entity<TimestampAndMaxlen>().Ignore(x => x.MaxTimestamp);
-
-            Validate(modelBuilder);
-
-            Assert.Equal(100, GetProperty<TimestampAndMaxlen>(modelBuilder, "NonMaxTimestamp").GetMaxLength());
-
-            return modelBuilder;
-        }
-
         protected class TimestampAndMaxlen
         {
             public int Id { get; set; }
@@ -1011,6 +1019,7 @@ namespace Microsoft.EntityFrameworkCore
 
         protected class Login4
         {
+            public int Id { get; set; }
             public int Login4Id { get; set; }
             public string UserName { get; set; }
 
@@ -1021,6 +1030,7 @@ namespace Microsoft.EntityFrameworkCore
 
         protected class Profile4
         {
+            public int Id { get; set; }
             public int Profile4Id { get; set; }
             public string Name { get; set; }
             public string Email { get; set; }
@@ -1172,7 +1182,8 @@ namespace Microsoft.EntityFrameworkCore
 
         protected class Login9
         {
-            public int Login9Id { get; set; }
+            public int Id { get; set; }
+            public int? Login9Id { get; set; }
             public string UserName { get; set; }
 
             [ForeignKey("Login9Id")]
@@ -1181,7 +1192,8 @@ namespace Microsoft.EntityFrameworkCore
 
         protected class Profile9
         {
-            public int Profile9Id { get; set; }
+            public int Id { get; set; }
+            public int? Profile9Id { get; set; }
             public string Name { get; set; }
             public string Email { get; set; }
 
@@ -1198,15 +1210,17 @@ namespace Microsoft.EntityFrameworkCore
 
             Validate(modelBuilder);
 
-            Assert.True(GetProperty<Login10>(modelBuilder, "Id").IsForeignKey());
-            Assert.True(GetProperty<Profile10>(modelBuilder, "Id").IsForeignKey());
+            Assert.True(GetProperty<Login10>(modelBuilder, "FkId").IsForeignKey());
+            Assert.True(GetProperty<Profile10>(modelBuilder, "FkId").IsForeignKey());
         }
 
         public class Login10
         {
             public int Id { get; set; }
 
-            [ForeignKey("Id")]
+            public int FkId { get; set; }
+
+            [ForeignKey("FkId")]
             public virtual Profile10 Login { get; set; }
         }
 
@@ -1214,7 +1228,9 @@ namespace Microsoft.EntityFrameworkCore
         {
             public int Id { get; set; }
 
-            [ForeignKey("Id")]
+            public int FkId { get; set; }
+
+            [ForeignKey("FkId")]
             public Login10 User { get; set; }
         }
 
@@ -1342,7 +1358,13 @@ namespace Microsoft.EntityFrameworkCore
             ExecuteWithStrategyInTransaction(
                 context =>
                     {
-                        context.Set<One>().Add(new One { RequiredColumn = "Third", RowVersion = new Guid("00000000-0000-0000-0000-000000000003") });
+                        context.Set<One>().Add(new One
+                        {
+                            RequiredColumn = "Third",
+                            RowVersion = new Guid("00000000-0000-0000-0000-000000000003"),
+                            Details = new Details { Name = "Third Name" },
+                            AdditionalDetails = new Details { Name = "Third Additional Name" }
+                        });
 
                         context.SaveChanges();
                     });
@@ -1354,7 +1376,14 @@ namespace Microsoft.EntityFrameworkCore
             ExecuteWithStrategyInTransaction(
                 context =>
                     {
-                        context.Set<One>().Add(new One { RequiredColumn = "ValidString", RowVersion = new Guid("00000000-0000-0000-0000-000000000001"), MaxLengthProperty = "Short" });
+                        context.Set<One>().Add(new One
+                        {
+                            RequiredColumn = "ValidString",
+                            RowVersion = new Guid("00000000-0000-0000-0000-000000000001"),
+                            MaxLengthProperty = "Short",
+                            Details = new Details { Name = "Third Name" },
+                            AdditionalDetails = new Details { Name = "Third Additional Name" }
+                        });
 
                         context.SaveChanges();
                     });
@@ -1362,7 +1391,14 @@ namespace Microsoft.EntityFrameworkCore
             ExecuteWithStrategyInTransaction(
                 context =>
                     {
-                        context.Set<One>().Add(new One { RequiredColumn = "ValidString", RowVersion = new Guid("00000000-0000-0000-0000-000000000002"), MaxLengthProperty = "VeryVeryVeryVeryVeryVeryLongString" });
+                        context.Set<One>().Add(new One
+                        {
+                            RequiredColumn = "ValidString",
+                            RowVersion = new Guid("00000000-0000-0000-0000-000000000002"),
+                            MaxLengthProperty = "VeryVeryVeryVeryVeryVeryLongString",
+                            Details = new Details { Name = "Third Name" },
+                            AdditionalDetails = new Details { Name = "Third Additional Name" }
+                        });
 
                         Assert.Equal(
                             "An error occurred while updating the entries. See the inner exception for details.",
@@ -1513,6 +1549,7 @@ namespace Microsoft.EntityFrameworkCore
             var modelBuilder = CreateModelBuilder();
             var model = modelBuilder.Model;
             modelBuilder.Ignore<BookDetails>();
+            modelBuilder.Ignore<Details>();
             modelBuilder.Entity<SpecialBookLabel>();
             modelBuilder.Ignore<BookLabel>();
 
@@ -1568,6 +1605,8 @@ namespace Microsoft.EntityFrameworkCore
             public BookLabel AlternateLabel { get; set; }
 
             public BookDetails Details { get; set; }
+
+            public Details AdditionalDetails { get; set; }
 
             [NotMapped]
             public virtual UselessBookDetails UselessBookDetails { get; set; }
@@ -1713,6 +1752,8 @@ namespace Microsoft.EntityFrameworkCore
         {
             var modelBuilder = CreateModelBuilder();
             var model = modelBuilder.Model;
+            modelBuilder.Ignore<Author>();
+            modelBuilder.Ignore<AuthorDetails>();
             modelBuilder.Entity<Post>();
 
             Assert.Null(model.FindEntityType(typeof(Post)).FindNavigation("PostDetails").ForeignKey.PrincipalToDependent);
@@ -1720,13 +1761,24 @@ namespace Microsoft.EntityFrameworkCore
 
             Assert.Null(model.FindEntityType(typeof(PostDetails)).FindNavigation("Post").ForeignKey.PrincipalToDependent);
             Assert.Equal("PostId", model.FindEntityType(typeof(PostDetails)).FindNavigation("Post").ForeignKey.Properties.First().Name);
+
+            Assert.Equal(1, Log.Count);
+            Assert.Equal(LogLevel.Information, Log[0].Level);
+            Assert.Equal(CoreStrings.LogForeignKeyAttributesOnBothProperties.GenerateMessage(
+                nameof(PostDetails), nameof(PostDetails.Post),
+                nameof(Post), nameof(Post.PostDetails),
+                nameof(PostDetails.PostId),
+                nameof(Post.PostDetailsId)),
+                Log[0].Message);
         }
 
         [Fact]
-        public virtual void ForeignKeyAttribute_creates_two_relationships_if_applied_on_navigations_on_both_side_and_values_do_not_match()
+        public virtual void ForeignKeyAttribute_creates_two_relationships_if_applied_on_navigations_on_both_sides_and_values_do_not_match()
         {
             var modelBuilder = CreateModelBuilder();
             var model = modelBuilder.Model;
+            modelBuilder.Ignore<PostDetails>();
+            modelBuilder.Ignore<AuthorDetails>();
             modelBuilder.Entity<Post>();
 
             Assert.Null(model.FindEntityType(typeof(Post)).FindNavigation("Author").ForeignKey.PrincipalToDependent);
@@ -1734,13 +1786,20 @@ namespace Microsoft.EntityFrameworkCore
 
             Assert.Null(model.FindEntityType(typeof(Author)).FindNavigation("Post").ForeignKey.PrincipalToDependent);
             Assert.Equal("PostId", model.FindEntityType(typeof(Author)).FindNavigation("Post").ForeignKey.Properties.First().Name);
+
+            Assert.Equal(1, Log.Count);
+            Assert.Equal(LogLevel.Information, Log[0].Level);
+            Assert.Equal(CoreStrings.LogForeignKeyAttributesOnBothNavigations.GenerateMessage(
+                nameof(Post), nameof(Post.Author), nameof(Author), nameof(Author.Post)), Log[0].Message);
         }
 
         [Fact]
-        public virtual void ForeignKeyAttribute_creates_two_relationships_if_applied_on_navigation_and_property_on_different_side_and_values_do_not_match()
+        public virtual void ForeignKeyAttribute_creates_two_relationships_if_applied_on_navigation_and_property_on_different_sides_and_values_do_not_match()
         {
             var modelBuilder = CreateModelBuilder();
             var model = modelBuilder.Model;
+            modelBuilder.Ignore<PostDetails>();
+            modelBuilder.Ignore<Post>();
             modelBuilder.Entity<Author>();
 
             var authorDetails = model.FindEntityType(typeof(AuthorDetails));
@@ -1754,7 +1813,12 @@ namespace Microsoft.EntityFrameworkCore
             Assert.Equal("AuthorDetailsIdByAttribute", secondFk.Properties.First().Name);
 
             Assert.Equal(new[] { "Id", "AuthorId" }, authorDetails.GetProperties().Select(p => p.Name));
-            Assert.Equal(new[] { "Id", "AuthorDetailsIdByAttribute", "PostId" }, author.GetProperties().Select(p => p.Name));
+            Assert.Equal(new[] { "Id", "AuthorDetailsIdByAttribute" }, author.GetProperties().Select(p => p.Name));
+
+            Assert.Equal(1, Log.Count);
+            Assert.Equal(LogLevel.Information, Log[0].Level);
+            Assert.Equal(CoreStrings.LogConflictingForeignKeyAttributesOnNavigationAndProperty.GenerateMessage(
+                nameof(Author), nameof(Author.AuthorDetails), nameof(AuthorDetails), nameof(AuthorDetails.AuthorId)), Log[0].Message);
         }
 
         protected class Post
@@ -1770,6 +1834,7 @@ namespace Microsoft.EntityFrameworkCore
             public Author Author { get; set; }
         }
 
+        [ComplexType]
         protected class PostDetails
         {
             public int Id { get; set; }
@@ -1898,8 +1963,14 @@ namespace Microsoft.EntityFrameworkCore
         {
             ExecuteWithStrategyInTransaction(
                 context =>
+                {
+                    context.Set<One>().Add(new One
                     {
-                        context.Set<One>().Add(new One { RequiredColumn = "ValidString", RowVersion = new Guid("00000000-0000-0000-0000-000000000001") });
+                        RequiredColumn = "ValidString",
+                        RowVersion = new Guid("00000000-0000-0000-0000-000000000001"),
+                        Details = new Details { Name = "One" },
+                        AdditionalDetails = new Details { Name = "Two" }
+                    });
 
                         context.SaveChanges();
                     });
@@ -1907,7 +1978,13 @@ namespace Microsoft.EntityFrameworkCore
             ExecuteWithStrategyInTransaction(
                 context =>
                     {
-                        context.Set<One>().Add(new One { RequiredColumn = null, RowVersion = new Guid("00000000-0000-0000-0000-000000000002") });
+                        context.Set<One>().Add(new One
+                        {
+                            RequiredColumn = null,
+                            RowVersion = new Guid("00000000-0000-0000-0000-000000000002"),
+                            Details = new Details { Name = "One" },
+                            AdditionalDetails = new Details { Name = "Two" }
+                        });
 
                         Assert.Equal(
                             "An error occurred while updating the entries. See the inner exception for details.",
@@ -1959,6 +2036,21 @@ namespace Microsoft.EntityFrameworkCore
                     });
         }
 
+        [Fact]
+        public virtual void OwnedEntityTypeAttribute_configures_all_references_as_owned()
+        {
+            var modelBuilder = CreateModelBuilder();
+            var model = modelBuilder.Model;
+
+            modelBuilder.Entity<Book>();
+            modelBuilder.Entity<One>();
+
+            Assert.True(model.FindEntityType(typeof(Book)).FindNavigation(nameof(Book.AdditionalDetails)).ForeignKey.IsOwnership);
+            var one = model.FindEntityType(typeof(One));
+            Assert.True(one.FindNavigation(nameof(One.Details)).ForeignKey.IsOwnership);
+            Assert.True(one.FindNavigation(nameof(One.AdditionalDetails)).ForeignKey.IsOwnership);
+        }
+
         public abstract class DataAnnotationFixtureBase : SharedStoreFixtureBase<DbContext>
         {
             protected override string StoreName { get; } = "DataAnnotations";
@@ -1974,13 +2066,25 @@ namespace Microsoft.EntityFrameworkCore
 
             protected override void Seed(DbContext context)
             {
-                context.Set<One>().Add(new One { RequiredColumn = "First", RowVersion = new Guid("00000001-0000-0000-0000-000000000001") });
-                context.Set<One>().Add(new One { RequiredColumn = "Second", RowVersion = new Guid("00000001-0000-0000-0000-000000000001") });
+                context.Set<One>().Add(new One
+                {
+                    RequiredColumn = "First",
+                    RowVersion = new Guid("00000001-0000-0000-0000-000000000001"),
+                    Details = new Details { Name = "First Name" },
+                    AdditionalDetails = new Details { Name = "First Additional Name" }
+                });
+                context.Set<One>().Add(new One
+                {
+                    RequiredColumn = "Second",
+                    RowVersion = new Guid("00000001-0000-0000-0000-000000000001"),
+                    Details = new Details { Name = "Second Name" },
+                    AdditionalDetails = new Details { Name = "Second Additional Name" }
+                });
 
                 context.Set<Two>().Add(new Two { Data = "First" });
                 context.Set<Two>().Add(new Two { Data = "Second" });
 
-                context.Set<Book>().Add(new Book { Id = 1 });
+                context.Set<Book>().Add(new Book { Id = 1, AdditionalDetails = new Details { Name = "Book Name" } });
 
                 context.SaveChanges();
             }
@@ -2005,6 +2109,10 @@ namespace Microsoft.EntityFrameworkCore
 
             [MaxLength(10)]
             public string MaxLengthProperty { get; set; }
+
+            public Details Details { get; set; }
+
+            public Details AdditionalDetails { get; set; }
         }
 
         protected class Two
@@ -2017,6 +2125,12 @@ namespace Microsoft.EntityFrameworkCore
 
             [Timestamp]
             public byte[] Timestamp { get; set; }
+        }
+
+        [Owned]
+        protected class Details
+        {
+            public string Name { get; set; }
         }
     }
 }

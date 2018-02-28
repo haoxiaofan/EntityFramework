@@ -27,7 +27,10 @@ namespace Microsoft.EntityFrameworkCore.Query
     public abstract class ComplexNavigationsQueryTestBase<TFixture> : QueryTestBase<TFixture>
         where TFixture : ComplexNavigationsQueryFixtureBase, new()
     {
-        protected ComplexNavigationsContext CreateContext() => Fixture.CreateContext();
+        protected ComplexNavigationsContext CreateContext()
+        {
+            return Fixture.CreateContext();
+        }
 
         protected ComplexNavigationsQueryTestBase(TFixture fixture)
             : base(fixture)
@@ -778,12 +781,16 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l1 in l1s
                     join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into groupJoin
                     from l2 in groupJoin.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                     select l2 == null ? null : l2.Name,
+#pragma warning restore IDE0031 // Use null propagation
                 (l1s, l2s) =>
                     from l1 in l1s
                     join l2 in l2s on l1.Id equals MaybeScalar(l2, () => l2.Level1_Optional_Id) into groupJoin
                     from l2 in groupJoin.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                     select l2 == null ? null : l2.Name);
+#pragma warning restore IDE0031 // Use null propagation
         }
 
         [ConditionalFact]
@@ -842,7 +849,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l2Left in groupJoinLeft.DefaultIfEmpty()
                     join l2Right in l2s on l1.Id equals l2Right.Level1_Optional_Id into groupJoinRight
                     from l2Right in groupJoinRight.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                     where (l2Left == null ? null : l2Left.Name) == "L2 05" || (l2Right == null ? null : l2Right.Name) == "L2 07"
+#pragma warning restore IDE0031 // Use null propagation
                     select l1.Id);
         }
 
@@ -870,7 +879,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l2Left in groupJoinLeft.DefaultIfEmpty()
                     join l2Right in l2s on l1.Id equals l2Right.Level1_Optional_Id into groupJoinRight
                     from l2Right in groupJoinRight.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                     where (l2Left == null ? null : l2Left.Name) == "L2 05" || (l2Right == null ? null : l2Right.Name) != "L2 42"
+#pragma warning restore IDE0031 // Use null propagation
                     select l1.Id);
         }
 
@@ -1344,7 +1355,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l1 in l1s
                     join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into groupJoin
                     from l2 in groupJoin.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                     orderby l2 == null ? null : l2.Name, l1.Id
+#pragma warning restore IDE0031 // Use null propagation
                     select l1.Id,
                 assertOrder: true);
         }
@@ -1445,7 +1458,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                          .Include(e => e.OneToMany_Optional)
                          .ThenInclude(e => e.OneToOne_Optional_FK)
                      join l2 in l2s.Include(e => e.OneToOne_Required_PK)
+#pragma warning disable IDE0031 // Use null propagation
                          on (int?)l1.Id equals l2 != null ? l2.Level1_Optional_Id : null into grouping
+#pragma warning restore IDE0031 // Use null propagation
                      where l1.Name != "L1 03"
                      orderby l1.Id
                      select new { l1, grouping }).Skip(1).Take(5),
@@ -1569,7 +1584,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                     l1 => Maybe(
                               l1.OneToMany_Optional,
                               () => l1.OneToMany_Optional.Select(l2 => l2.OneToOne_Optional_FK)) ?? new List<Level3>()),
-                e => e == null ? null : e.Id,
+                e => e?.Id,
                 (e, a) =>
                     {
                         if (e == null)
@@ -1846,7 +1861,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                             l1 => l1.Id,
                             (l2, l1g) => new { l2, l1g })
                         .Select(r => r.l2),
-                e => e != null ? e.Id : null,
+                e => e?.Id,
                 (e, a) =>
                     {
                         if (e == null)
@@ -2240,6 +2255,66 @@ namespace Microsoft.EntityFrameworkCore.Query
         }
 
         [ConditionalFact]
+        public virtual void Optional_navigation_with_order_by_and_Include()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Select(l1 => l1.OneToOne_Optional_FK)
+                    .OrderBy(l2 => l2.Name)
+                    .Include(l2 => l2.OneToMany_Optional),
+                l1s => l1s
+                    .Select(l1 => l1.OneToOne_Optional_FK)
+                    .OrderBy(l2 => Maybe(l2, () => l2.Name)),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level2>(l2 => l2.OneToMany_Optional, "OneToMany_Optional") },
+                assertOrder: true);
+        }
+
+        [ConditionalFact]
+        public virtual void Optional_navigation_with_Include_and_order()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Select(l1 => l1.OneToOne_Optional_FK)
+                    .Include(l2 => l2.OneToMany_Optional)
+                    .OrderBy(l2 => l2.Name),
+                l1s => l1s
+                    .Select(l1 => l1.OneToOne_Optional_FK)
+                    .OrderBy(l2 => Maybe(l2, () => l2.Name)),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level2>(l2 => l2.OneToMany_Optional, "OneToMany_Optional") },
+                assertOrder: true);
+        }
+
+        [ConditionalFact]
+        public virtual void SelectMany_with_order_by_and_Include()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .SelectMany(l1 => l1.OneToMany_Optional)
+                    .OrderBy(l2 => l2.Name)
+                    .Include(l2 => l2.OneToMany_Optional),
+                l1s => l1s
+                    .SelectMany(l1 => l1.OneToMany_Optional)
+                    .OrderBy(l2 => Maybe(l2, () => l2.Name)),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level2>(l2 => l2.OneToMany_Optional, "OneToMany_Optional") },
+                assertOrder: true);
+        }
+
+        [ConditionalFact]
+        public virtual void SelectMany_with_Include_and_order_by()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .SelectMany(l1 => l1.OneToMany_Optional)
+                    .Include(l2 => l2.OneToMany_Optional)
+                    .OrderBy(l2 => l2.Name),
+                l1s => l1s
+                    .SelectMany(l1 => l1.OneToMany_Optional)
+                    .OrderBy(l2 => Maybe(l2, () => l2.Name)),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level2>(l2 => l2.OneToMany_Optional, "OneToMany_Optional") },
+                assertOrder: true);
+        }
+
+        [ConditionalFact]
         public virtual void SelectMany_with_navigation_and_explicit_DefaultIfEmpty()
         {
             AssertQuery<Level1>(
@@ -2547,7 +2622,10 @@ namespace Microsoft.EntityFrameworkCore.Query
                     });
         }
 
-        private TResult ClientMethodReturnSelf<TResult>(TResult element) => element;
+        private TResult ClientMethodReturnSelf<TResult>(TResult element)
+        {
+            return element;
+        }
 
         [ConditionalFact]
         public virtual void Null_reference_protection_complex_client_eval()
@@ -2697,7 +2775,7 @@ namespace Microsoft.EntityFrameworkCore.Query
                     select subquery.Id);
         }
 
-        [ConditionalFact(Skip = "#9340")]
+        [ConditionalFact]
         public virtual void GroupJoin_on_a_subquery_containing_another_GroupJoin_projecting_outer()
         {
             AssertQuery<Level1, Level2>(
@@ -2710,10 +2788,20 @@ namespace Microsoft.EntityFrameworkCore.Query
                      select l1).Take(2)
                     join l2_outer in l2s on x.Id equals l2_outer.Level1_Optional_Id into grouping_outer
                     from l2_outer in grouping_outer.DefaultIfEmpty()
-                    select l2_outer.Name);
+                    select l2_outer.Name,
+                (l1s, l2s) =>
+                    from x in
+                    (from l1 in l1s
+                     join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into grouping
+                     from l2 in grouping.DefaultIfEmpty()
+                     orderby l1.Id
+                     select l1).Take(2)
+                    join l2_outer in l2s on x.Id equals l2_outer.Level1_Optional_Id into grouping_outer
+                    from l2_outer in grouping_outer.DefaultIfEmpty()
+                    select Maybe(l2_outer, () => l2_outer.Name));
         }
 
-        [ConditionalFact(Skip = "#9340")]
+        [ConditionalFact]
         public virtual void GroupJoin_on_a_subquery_containing_another_GroupJoin_projecting_outer_with_client_method()
         {
             AssertQuery<Level1, Level2>(
@@ -2726,7 +2814,17 @@ namespace Microsoft.EntityFrameworkCore.Query
                      select ClientLevel1(l1)).Take(2)
                     join l2_outer in l2s on x.Id equals l2_outer.Level1_Optional_Id into grouping_outer
                     from l2_outer in grouping_outer.DefaultIfEmpty()
-                    select l2_outer.Name);
+                    select l2_outer.Name,
+                (l1s, l2s) =>
+                    from x in
+                    (from l1 in l1s
+                     join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into grouping
+                     from l2 in grouping.DefaultIfEmpty()
+                     orderby l1.Id
+                     select ClientLevel1(l1)).Take(2)
+                    join l2_outer in l2s on x.Id equals l2_outer.Level1_Optional_Id into grouping_outer
+                    from l2_outer in grouping_outer.DefaultIfEmpty()
+                    select Maybe(l2_outer, () => l2_outer.Name));
         }
 
         private Level1 ClientLevel1(Level1 arg)
@@ -2734,7 +2832,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             return arg;
         }
 
-        [ConditionalFact(Skip = "#9340")]
+        [ConditionalFact]
         public virtual void GroupJoin_on_a_subquery_containing_another_GroupJoin_projecting_inner()
         {
             AssertQuery<Level1, Level2>(
@@ -2747,7 +2845,17 @@ namespace Microsoft.EntityFrameworkCore.Query
                      select l2).Take(2)
                     join l1_outer in l1s on x.Level1_Optional_Id equals l1_outer.Id into grouping_outer
                     from l1_outer in grouping_outer.DefaultIfEmpty()
-                    select l1_outer.Name);
+                    select l1_outer.Name,
+                (l1s, l2s) =>
+                    from x in
+                    (from l1 in l1s
+                     join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into grouping
+                     from l2 in grouping.DefaultIfEmpty()
+                     orderby l1.Id
+                     select l2).Take(2)
+                    join l1_outer in l1s on MaybeScalar(x, () => x.Level1_Optional_Id) equals l1_outer.Id into grouping_outer
+                    from l1_outer in grouping_outer.DefaultIfEmpty()
+                    select Maybe(l1_outer, () => l1_outer.Name));
         }
 
         [ConditionalFact]
@@ -2773,13 +2881,17 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l2 in l2s
                     join l1 in l1s.OrderBy(x => x.OneToOne_Optional_FK.Name).Take(2) on l2.Level1_Optional_Id equals l1.Id into grouping
                     from l1 in grouping.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                     select new { l2.Id, Name = l1 != null ? l1.Name : null },
+#pragma warning restore IDE0031 // Use null propagation
                 (l1s, l2s) =>
                     from l2 in l2s
                     join l1 in l1s.OrderBy(x => Maybe(x.OneToOne_Optional_FK, () => x.OneToOne_Optional_FK.Name)).Take(2)
                         on l2.Level1_Optional_Id equals l1.Id into grouping
                     from l1 in grouping.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                     select new { l2.Id, Name = l1 != null ? l1.Name : null },
+#pragma warning restore IDE0031 // Use null propagation
                 e => e.Id);
         }
 
@@ -2960,7 +3072,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l1 in (from l1 in l1s
                                 join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into grouping
                                 from l2 in grouping.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                                 where (l2 != null ? l2.Name : null) != "Foo"
+#pragma warning restore IDE0031 // Use null propagation
                                 select l1).OrderBy(l1 => l1.Id).Take(15)
                     select l1.Id);
         }
@@ -2973,7 +3087,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l1 in (from l1 in l1s
                                 join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into grouping
                                 from l2 in grouping.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                                 where (l2 != null ? l2.Name : null) != "Foo"
+#pragma warning restore IDE0031 // Use null propagation
                                 select l1).Distinct()
                     select l1.Id);
         }
@@ -2986,7 +3102,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l1 in (from l1 in l1s
                                 join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into grouping
                                 from l2 in grouping.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                                 where (l2 != null ? l2.Name : null) != "Foo"
+#pragma warning restore IDE0031 // Use null propagation
                                 select l1.Id).Distinct()
                     select l1);
         }
@@ -2999,7 +3117,9 @@ namespace Microsoft.EntityFrameworkCore.Query
                     from l1 in (from l1 in l1s
                                 join l2 in l2s on l1.Id equals l2.Level1_Optional_Id into grouping
                                 from l2 in grouping.DefaultIfEmpty()
+#pragma warning disable IDE0031 // Use null propagation
                                 where (l2 != null ? l2.Name : null) != "Foo"
+#pragma warning restore IDE0031 // Use null propagation
                                 select l1.Id).Distinct().OrderBy(id => id).Take(20)
                     select l1);
         }
@@ -3456,7 +3576,7 @@ namespace Microsoft.EntityFrameworkCore.Query
             AssertQuery<Level1>(
                 l1s => from l1 in l1s
                        where l1.Id < 3
-                       select new { l1.Id, collection = l1.OneToMany_Optional.Where(l2 => l2.Name != "Foo") },
+                       select new { l1.Id, collection = l1.OneToMany_Optional.Where(l2 => l2.Name != "Foo").ToList() },
                 elementSorter: e => e.Id,
                 elementAsserter: (e, a) =>
                     {
@@ -3631,6 +3751,247 @@ namespace Microsoft.EntityFrameworkCore.Query
 
                 Assert.Empty(context.ChangeTracker.Entries());
             }
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_with_groupby_in_subquery()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Include(l1 => l1.OneToOne_Optional_FK)
+                    .GroupBy(g => g.Name)
+                    .Select(g => g.OrderBy(e => e.Id).FirstOrDefault()),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level1>(e => e.OneToOne_Optional_FK, "OneToOne_Optional_FK") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_collection_with_groupby_in_subquery()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Include(l1 => l1.OneToMany_Optional)
+                    .GroupBy(g => g.Name)
+                    .Select(g => g.OrderBy(e => e.Id).FirstOrDefault()),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level1>(e => e.OneToMany_Optional, "OneToMany_Optional") });
+        }
+
+        [ConditionalFact]
+        public virtual void Multi_include_with_groupby_in_subquery()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<Level1>(e => e.OneToOne_Optional_FK, "OneToOne_Optional_FK"),
+                new ExpectedInclude<Level2>(e => e.OneToMany_Optional, "OneToMany_Optional", "OneToOne_Optional_FK"),
+            };
+
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Include(l1 => l1.OneToOne_Optional_FK.OneToMany_Optional)
+                    .GroupBy(g => g.Name)
+                    .Select(g => g.OrderBy(e => e.Id).FirstOrDefault()),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void Include_collection_with_groupby_in_subquery_and_filter_before_groupby()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Include(l1 => l1.OneToMany_Optional)
+                    .Where(l1 => l1.Id > 3)
+                    .GroupBy(g => g.Name)
+                    .Select(g => g.OrderBy(e => e.Id).FirstOrDefault()),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level1>(e => e.OneToMany_Optional, "OneToMany_Optional") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_collection_with_groupby_in_subquery_and_filter_after_groupby()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Include(l1 => l1.OneToMany_Optional)
+                    .GroupBy(g => g.Name)
+                    .Where(g => g.Key != "Foo")
+                    .Select(g => g.OrderBy(e => e.Id).FirstOrDefault()),
+                expectedIncludes: new List<IExpectedInclude> { new ExpectedInclude<Level1>(e => e.OneToMany_Optional, "OneToMany_Optional") });
+        }
+
+        public virtual void String_include_multiple_derived_navigation_with_same_name_and_same_type()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<InheritanceDerived1>(e => e.ReferenceSameType, "ReferenceSameType"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.ReferenceSameType, "ReferenceSameType")
+            };
+
+            AssertIncludeQuery<InheritanceBase1>(
+                i1s => i1s.Include("ReferenceSameType"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void String_include_multiple_derived_navigation_with_same_name_and_different_type()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<InheritanceDerived1>(e => e.ReferenceDifferentType, "ReferenceDifferentType"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.ReferenceDifferentType, "ReferenceDifferentType")
+            };
+
+            AssertIncludeQuery<InheritanceBase1>(
+                i1s => i1s.Include("ReferenceDifferentType"),
+                expectedIncludes);
+       }
+
+        [ConditionalFact]
+        public virtual void String_include_multiple_derived_navigation_with_same_name_and_different_type_nested_also_includes_partially_matching_navigation_chains()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<InheritanceDerived1>(e => e.ReferenceDifferentType, "ReferenceDifferentType"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.ReferenceDifferentType, "ReferenceDifferentType"),
+                new ExpectedInclude<InheritanceLeaf2>(e => e.BaseCollection, "BaseCollection", "ReferenceDifferentType")
+            };
+
+            AssertIncludeQuery<InheritanceBase1>(
+                i1s => i1s.Include("ReferenceDifferentType.BaseCollection"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void String_include_multiple_derived_collection_navigation_with_same_name_and_same_type()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<InheritanceDerived1>(e => e.CollectionSameType, "CollectionSameType"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.CollectionSameType, "CollectionSameType")
+            };
+
+            AssertIncludeQuery<InheritanceBase1>(
+                i1s => i1s.Include("CollectionSameType"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void String_include_multiple_derived_collection_navigation_with_same_name_and_different_type()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<InheritanceDerived1>(e => e.CollectionDifferentType, "CollectionDifferentType"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.CollectionDifferentType, "CollectionDifferentType")
+            };
+
+            AssertIncludeQuery<InheritanceBase1>(
+                i1s => i1s.Include("CollectionDifferentType"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void String_include_multiple_derived_collection_navigation_with_same_name_and_different_type_nested_also_includes_partially_matching_navigation_chains()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<InheritanceDerived1>(e => e.CollectionDifferentType, "CollectionDifferentType"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.CollectionDifferentType, "CollectionDifferentType"),
+                new ExpectedInclude<InheritanceLeaf2>(e => e.BaseCollection, "BaseCollection", "CollectionDifferentType")
+            };
+
+            AssertIncludeQuery<InheritanceBase1>(
+                i1s => i1s.Include("CollectionDifferentType.BaseCollection"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void String_include_multiple_derived_navigations_complex()
+        {
+            var expectedIncludes = new List<IExpectedInclude>
+            {
+                new ExpectedInclude<InheritanceBase2>(e => e.Reference, "Reference"),
+                new ExpectedInclude<InheritanceDerived1>(e => e.CollectionDifferentType, "CollectionDifferentType", "Reference"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.CollectionDifferentType, "CollectionDifferentType", "Reference"),
+
+                new ExpectedInclude<InheritanceBase2>(e => e.Collection, "Collection"),
+                new ExpectedInclude<InheritanceDerived1>(e => e.ReferenceSameType, "ReferenceSameType", "Collection"),
+                new ExpectedInclude<InheritanceDerived2>(e => e.ReferenceSameType, "ReferenceSameType", "Collection"),
+            };
+
+            AssertIncludeQuery<InheritanceBase2>(
+                i2s => i2s.Include("Reference.CollectionDifferentType").Include("Collection.ReferenceSameType"),
+                expectedIncludes);
+        }
+
+        [ConditionalFact]
+        public virtual void Include_reference_collection_order_by_reference_navigation()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s
+                    .Include(l1 => l1.OneToOne_Optional_FK.OneToMany_Optional)
+                    .OrderBy(l1 => l1.OneToOne_Optional_FK.Id),
+                l1s => l1s
+                    .Include(l1 => l1.OneToOne_Optional_FK.OneToMany_Optional)
+                    .OrderBy(l1 => MaybeScalar<int>(l1.OneToOne_Optional_FK, () => l1.OneToOne_Optional_FK.Id)),
+                expectedIncludes: new List<IExpectedInclude>
+                {
+                    new ExpectedInclude<Level1>(e => e.OneToOne_Optional_FK, "OneToOne_Optional_FK"),
+                    new ExpectedInclude<Level2>(e => e.OneToMany_Optional, "OneToMany_Optional", "OneToOne_Optional_FK")
+                });
+        }
+
+        [ConditionalFact]
+        public virtual void Nav_rewrite_doesnt_apply_null_protection_for_function_arguments()
+        {
+            AssertQueryScalar<Level1>(
+                l1s => l1s.Where(l1 => l1.OneToOne_Optional_PK != null).Select(l1 => Math.Max(l1.OneToOne_Optional_PK.Level1_Required_Id, 7)));
+        }
+
+        [ConditionalFact]
+        public virtual void Accessing_optional_property_inside_result_operator_subquery()
+        {
+            var names = new[] { "Name1", "Name2" };
+            AssertQuery<Level1>(
+                l1s => l1s.Where(l1 => names.All(n => l1.OneToOne_Optional_FK.Name != n)),
+                l1s => l1s.Where(l1 => names.All(n => Maybe(l1.OneToOne_Optional_FK, () => l1.OneToOne_Optional_FK.Name) != n)));
+        }
+
+        [ConditionalFact]
+        public virtual void Include_after_SelectMany_and_reference_navigation()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s.SelectMany(l1 => l1.OneToMany_Required).Select(l2 => l2.OneToOne_Optional_FK).Include(l3 => l3.OneToMany_Optional),
+                new List<IExpectedInclude> { new ExpectedInclude<Level3>(l3 => l3.OneToMany_Optional, "OneToMany_Optional") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_after_multiple_SelectMany_and_reference_navigation()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s.SelectMany(l1 => l1.OneToMany_Required).SelectMany(l2 => l2.OneToMany_Optional).Select(l3 => l3.OneToOne_Required_FK).Include(l4 => l4.OneToMany_Required_Self),
+                new List<IExpectedInclude> { new ExpectedInclude<Level4>(l4 => l4.OneToMany_Required_Self, "OneToMany_Required_Self") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_after_SelectMany_and_multiple_reference_navigations()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => l1s.SelectMany(l1 => l1.OneToMany_Required).Select(l2 => l2.OneToOne_Optional_FK).Select(l3 => l3.OneToOne_Required_FK).Include(l4 => l4.OneToMany_Optional_Self),
+                l1s => l1s.SelectMany(l1 => l1.OneToMany_Required).Select(l2 => l2.OneToOne_Optional_FK).Select(l3 => Maybe(l3, () => l3.OneToOne_Required_FK)),
+                new List<IExpectedInclude> { new ExpectedInclude<Level4>(l4 => l4.OneToMany_Optional_Self, "OneToMany_Optional_Self") });
+        }
+
+        [ConditionalFact]
+        public virtual void Include_after_SelectMany_and_reference_navigation_with_another_SelectMany_with_Distinct()
+        {
+            AssertIncludeQuery<Level1>(
+                l1s => from lOuter in l1s.SelectMany(l1 => l1.OneToMany_Required).Select(l2 => l2.OneToOne_Optional_FK).Include(l3 => l3.OneToMany_Optional)
+                       from lInner in lOuter.OneToMany_Optional.Distinct()
+                       where lInner != null
+                       select lOuter,
+                l1s => from lOuter in l1s.SelectMany(l1 => l1.OneToMany_Required).Select(l2 => l2.OneToOne_Optional_FK)
+                       where lOuter != null
+                       from lInner in lOuter.OneToMany_Optional.Distinct()
+                       where lInner != null
+                       select lOuter,
+                new List<IExpectedInclude> { new ExpectedInclude<Level3>(l3 => l3.OneToMany_Optional, "OneToMany_Optional") });
         }
     }
 }

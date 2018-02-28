@@ -25,8 +25,10 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
         public DbContextDependencies(
+            [NotNull] ICurrentDbContext currentContext,
             [NotNull] IChangeDetector changeDetector,
             [NotNull] IDbSetSource setSource,
+            [NotNull] IDbQuerySource querySource,
             [NotNull] IEntityFinderSource entityFinderSource,
             [NotNull] IEntityGraphAttacher entityGraphAttacher,
             [NotNull] IModel model,
@@ -37,13 +39,14 @@ namespace Microsoft.EntityFrameworkCore.Internal
         {
             ChangeDetector = changeDetector;
             SetSource = setSource;
-            EntityFinderSource = entityFinderSource;
+            QuerySource = querySource;
             EntityGraphAttacher = entityGraphAttacher;
             Model = model;
             QueryProvider = queryProvider;
             StateManager = stateManager;
             UpdateLogger = updateLogger;
             InfrastructureLogger = infrastuctureLogger;
+            EntityFinderFactory = new EntityFinderFactory(entityFinderSource, stateManager, setSource, currentContext.Context);
         }
 
         /// <summary>
@@ -62,7 +65,13 @@ namespace Microsoft.EntityFrameworkCore.Internal
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public IEntityFinderSource EntityFinderSource { get; }
+        public IDbQuerySource QuerySource { get; }
+
+        /// <summary>
+        ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
+        ///     directly from your code. This API may change or be removed in future releases.
+        /// </summary>
+        public IEntityFinderFactory EntityFinderFactory { get; }
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used

@@ -68,9 +68,11 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
                 throw new ArgumentException(RelationalStrings.DbFunctionGenericMethodNotSupported(methodInfo.DisplayName()));
             }
 
-            if (!methodInfo.IsStatic)
+            if (!methodInfo.IsStatic
+                && !typeof(DbContext).IsAssignableFrom(methodInfo.DeclaringType))
             {
-                throw new ArgumentException(RelationalStrings.DbFunctionMethodMustBeStatic(methodInfo.DisplayName()));
+                throw new ArgumentException(
+                    RelationalStrings.DbFunctionInvalidInstanceType(methodInfo.DisplayName(), methodInfo.DeclaringType.ShortDisplayName()));
             }
 
             if (methodInfo.ReturnType == null
@@ -102,14 +104,14 @@ namespace Microsoft.EntityFrameworkCore.Metadata.Internal
         }
 
         private static string BuildAnnotationName(string annotationPrefix, MethodBase methodBase)
-            => $@"{annotationPrefix}{methodBase.Name}({string.Join(",", methodBase.GetParameters().Select(p => p.ParameterType.Name))})";
+            => $@"{annotationPrefix}{methodBase.DeclaringType.ShortDisplayName()}{methodBase.Name}({string.Join(",", methodBase.GetParameters().Select(p => p.ParameterType.Name))})";
 
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
         /// </summary>
-        public virtual string DefaultSchema { get; [param: CanBeNull] set;}
-      
+        public virtual string DefaultSchema { get; [param: CanBeNull] set; }
+
         /// <summary>
         ///     This API supports the Entity Framework Core infrastructure and is not intended to be used
         ///     directly from your code. This API may change or be removed in future releases.
